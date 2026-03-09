@@ -121,7 +121,12 @@ class ClaudeCLI {
     const args = ['--print'];
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
-    if (sessionId) args.push('--resume', sessionId);
+    // Guard: only pass string UUIDs — reject objects or corrupted JSON values
+    if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) {
+      args.push('--resume', sessionId);
+    } else if (sessionId) {
+      console.warn('[claude-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
+    }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
@@ -157,27 +162,36 @@ class ClaudeCLI {
     args.push('--include-partial-messages');
 
     // Handle image/file attachments: save to temp dir, append file paths to prompt
-    // so Claude CLI can read them via its Read tool (CLI has no native content block API)
+    // so Claude CLI can read them via its Read tool (CLI has no native content block API).
+    // Text blocks (SSH info, file content) are prepended directly to the prompt string.
     const _tempFiles = [];
     let _tempDir = null;
     let finalPrompt = prompt;
     if (contentBlocks && contentBlocks.length) {
-      _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
-      fs.mkdirSync(_tempDir, { recursive: true });
       const filePaths = [];
+      const textParts = [];
       for (const block of contentBlocks) {
         if (block.type === 'image' && block.source?.data) {
+          if (!_tempDir) {
+            _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
+            fs.mkdirSync(_tempDir, { recursive: true });
+          }
           const ext = (block.source.media_type || 'image/png').split('/')[1] || 'png';
           const fname = `attachment-${_tempFiles.length + 1}.${ext}`;
           const fpath = path.join(_tempDir, fname);
           fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
           _tempFiles.push(fpath);
           filePaths.push(fpath);
+        } else if (block.type === 'text' && block.text && block.text !== prompt) {
+          // Collect SSH context, file contents, and other text blocks that are NOT
+          // the user message itself (buildUserContent appends the message as last block)
+          textParts.push(block.text);
         }
       }
-      if (filePaths.length) {
-        finalPrompt = `[Attached images — read these files to see the screenshots/images the user shared:\n${filePaths.map(f => `- ${f}`).join('\n')}\n]\n\n${prompt}`;
-      }
+      const prefixParts = [];
+      if (textParts.length) prefixParts.push(textParts.join('\n\n'));
+      if (filePaths.length) prefixParts.push(`[Attached images — read these files to see the screenshots/images the user shared:\n${filePaths.map(f => `- ${f}`).join('\n')}\n]`);
+      if (prefixParts.length) finalPrompt = prefixParts.join('\n\n') + '\n\n' + prompt;
     }
     args.push('-p', finalPrompt);
 
@@ -202,7 +216,7 @@ class ClaudeCLI {
     // Close stdin immediately (non-interactive)
     proc.stdin.end();
 
-    const h = { onText: null, onTool: null, onDone: null, onError: null, onSessionId: null, onThinking: null, onRateLimit: null, onResult: null, _deltaBlocks: new Set() };
+    const h = { onText: null, onTool: null, onDone: null, onError: null, onSessionId: null, onThinking: null, onRateLimit: null, onResult: null, _deltaBlocks: new Set(), _detectedSid: sessionId || null };
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
     let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
@@ -212,6 +226,8 @@ class ClaudeCLI {
     let globalTimer = null;
     // Track MCP config hash for ref-counted cleanup
     let mcpHash = mcpConfigHash;
+    let _finished = false;
+    let _abortListener = null;
     // Track temp attachment files + parent dir for cleanup
     let attFiles = _tempFiles.slice();
     let attDir = _tempDir;
@@ -219,7 +235,17 @@ class ClaudeCLI {
     proc.stdout.on('data', (chunk) => {
       buffer += stdoutDecoder.write(chunk);
       // Guard against a runaway line (no \n) consuming all heap
-      if (buffer.length > MAX_LINE_BUFFER) { console.warn(`[claude-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`); buffer = ''; return; }
+      if (buffer.length > MAX_LINE_BUFFER) {
+        // Process any complete lines before discarding the oversized partial line
+        const lastNl = buffer.lastIndexOf('\n');
+        if (lastNl > 0) {
+          const completeLines = buffer.slice(0, lastNl).split(/\r?\n/);
+          for (const cl of completeLines) { if (cl.trim()) { try { this._handle(JSON.parse(cl), h); } catch {} } }
+        }
+        console.warn(`[claude-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`);
+        buffer = '';
+        return;
+      }
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
       for (const line of lines) {
@@ -233,6 +259,7 @@ class ClaudeCLI {
         const sm = line.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i);
         if (sm && !detectedSid) {
           detectedSid = sm[1];
+          h._detectedSid = detectedSid;
           if (h.onSessionId) h.onSessionId(detectedSid);
         }
       }
@@ -248,11 +275,18 @@ class ClaudeCLI {
         || str.match(/Resuming session\s+([a-f0-9-]+)/i);
       if (sm && !detectedSid) {
         detectedSid = sm[1];
+        h._detectedSid = detectedSid;
         if (h.onSessionId) h.onSessionId(detectedSid);
       }
     });
 
     proc.on('close', (code) => {
+      if (_finished) return; _finished = true;
+      // Remove abort listener to prevent GC leak (listener holds proc reference)
+      if (abortController && _abortListener) {
+        abortController.signal.removeEventListener('abort', _abortListener);
+        _abortListener = null;
+      }
       // Clear both timers — process already exited
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
@@ -263,7 +297,7 @@ class ClaudeCLI {
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
-      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
+      if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
         // Filter out known non-error noise (MCP loading messages) line-by-line,
@@ -277,20 +311,26 @@ class ClaudeCLI {
           try { h.onError(realErrors.substring(0, 1000)); } catch {}
         }
       }
-      if (h.onDone) h.onDone(detectedSid);
+      if (h.onDone) h.onDone(detectedSid || h._detectedSid);
     });
 
     proc.on('error', (err) => {
+      if (_finished) return; _finished = true;
+      // Remove abort listener to prevent GC leak
+      if (abortController && _abortListener) {
+        abortController.signal.removeEventListener('abort', _abortListener);
+        _abortListener = null;
+      }
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Clean up MCP config and temp attachments even when the process fails to start
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
-      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
+      if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
       try { if (h.onError) h.onError(`Failed to start claude: ${err.message}. Binary: ${this.claudeBin}`); } catch {}
-      if (h.onDone) h.onDone(detectedSid);
+      if (h.onDone) h.onDone(detectedSid || h._detectedSid);
     });
 
     // Global timeout — must be set after all declarations to avoid TDZ with let
@@ -311,8 +351,7 @@ class ClaudeCLI {
     }, MAX_SUBPROCESS_MS);
 
     if (abortController) {
-      // { once: true } ensures the listener is auto-removed after firing
-      abortController.signal.addEventListener('abort', () => {
+      _abortListener = () => {
         killProc(proc);
         // Escalate to SIGKILL after 3 s (Unix only — on Windows killProc already force-kills).
         // Guard: if proc already exited (exitCode/signalCode set), skip to avoid
@@ -325,7 +364,8 @@ class ClaudeCLI {
             try { proc.kill('SIGKILL'); } catch {}
           }, 3000);
         }
-      }, { once: true });
+      };
+      abortController.signal.addEventListener('abort', _abortListener);
     }
 
     return {
@@ -345,6 +385,7 @@ class ClaudeCLI {
     // Reset per-block delta tracking at the start of each assistant turn
     if (data.type === 'message_start') {
       h._deltaBlocks = new Set();
+      h._hasEmittedText = false;
     }
 
     // Inject paragraph separator between text blocks so post-tool text doesn't
@@ -394,8 +435,13 @@ class ClaudeCLI {
     if (data.type === 'result' && h.onResult) {
       h.onResult(data);
     }
-    // Session ID in result messages
-    if (data.session_id && h.onSessionId) h.onSessionId(data.session_id);
+    // Session ID in result messages — ensure it's a clean string (not object/nested JSON)
+    if (data.session_id && !h._detectedSid && h.onSessionId) {
+      const sid = typeof data.session_id === 'string' ? data.session_id
+        : (typeof data.session_id === 'object' && data.session_id.session_id) ? data.session_id.session_id
+        : null;
+      if (sid && typeof sid === 'string') { h._detectedSid = sid; h.onSessionId(sid); }
+    }
   }
 }
 

@@ -330,6 +330,34 @@ function runDatabaseMaintenance() {
 }
 
 // ============================================
+// SESSION ID SANITIZATION
+// ============================================
+// Extracts a clean UUID string from potentially corrupted claude_session_id values.
+// Bug: runMultiAgent fallback could store { cid, completed } objects or nested JSON
+// like {"cid":"{\"cid\":\"uuid\",\"completed\":true}","completed":false}
+// This helper recursively unwraps to find the actual UUID.
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function sanitizeSessionId(val) {
+  if (!val) return null;
+  // Already a clean UUID
+  if (typeof val === 'string' && UUID_RE.test(val)) return val;
+  // Object with .cid field (from runCliSingle return value)
+  if (typeof val === 'object' && val !== null && val.cid) return sanitizeSessionId(val.cid);
+  // JSON string — try to parse and extract
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed && typeof parsed === 'object' && parsed.cid) return sanitizeSessionId(parsed.cid);
+    } catch {}
+    // Maybe a UUID is embedded somewhere in the string
+    const m = val.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// ============================================
 // DATABASE
 // ============================================
 const db = new Database(DB_PATH);
@@ -472,7 +500,16 @@ function wrapStmt(stmt, label) {
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
-  updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
+  updateClaudeId: (() => {
+    const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
+    const _origRun = _stmt.run.bind(_stmt);
+    _stmt.run = (cid, sessionId) => {
+      const clean = sanitizeSessionId(cid);
+      if (cid && !clean) log.warn('updateClaudeId: rejected non-UUID session_id', { raw: String(cid).substring(0, 80), sessionId });
+      return _origRun(clean, sessionId);
+    };
+    return _stmt;
+  })(),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
@@ -481,6 +518,8 @@ const stmts = {
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
+  // Lightweight: strip tool content (frontend only needs tool_name + agent_id for badge counts)
+  getMsgsLite: db.prepare(`SELECT id, session_id, role, type, CASE WHEN type='tool' THEN '' ELSE content END AS content, tool_name, agent_id, created_at, reply_to_id, attachments, source FROM messages WHERE session_id=? ORDER BY id ASC`),
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
@@ -536,6 +575,9 @@ const stmts = {
     FROM messages
     WHERE session_id = ?
   `),
+  // getSession endpoint helpers — pre-compiled to avoid re-prepare on every load
+  hasRunningTask: db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`),
+  getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
 };
 // Auto-sanitize ALL prepared statements — prevents "Too few parameter values"
 // on every code path (chat, tasks, queue, reconnect, telegram, etc.)
@@ -706,7 +748,7 @@ async function startTask(task) {
     }
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
-    const claudeSessionId = session?.claude_session_id || null;
+    const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
@@ -782,8 +824,10 @@ async function startTask(task) {
             broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
           })
           .onTool((name, inp) => {
-            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null); } catch {}
-            broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (inp || '').substring(0, 500), name, null, null, null); } catch {}
+            if (name !== 'ask_user' && name !== 'notify_user' && name !== 'set_ui_state') {
+              broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            }
           })
           .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
           .onResult(r => { lastTaskResult = r; })
@@ -1784,6 +1828,12 @@ function buildUserContent(text, attachments = []) {
     if (att.type && att.type.startsWith('image/')) {
       // Vision block — base64 image
       blocks.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } });
+    } else if (att.type === 'ssh') {
+      // SSH host reference — inject full connection info as text context
+      let sshText = `[SSH Host: ${att.label || att.host}]\nHost: ${att.host}:${att.port || 22}`;
+      if (att.sshKeyPath) sshText += `\nSSH Key: ${att.sshKeyPath}`;
+      else if (att.password) sshText += `\nPassword: ${att.password}`;
+      blocks.push({ type: 'text', text: sshText });
     } else {
       // Text / PDF — decode base64 and embed as readable text block
       let content = '(unable to decode)';
@@ -2168,7 +2218,11 @@ async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -2196,16 +2250,16 @@ async function runCliSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
-        if (name === 'ask_user' || name === 'notify_user') {
-          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
         if (name === 'AskUserQuestion') {
-          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
@@ -2304,7 +2358,11 @@ async function runSshSingle(p) {
   const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -2328,8 +2386,12 @@ async function runSshSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
+          return;
+        }
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
@@ -2539,7 +2601,10 @@ async function runMultiAgent(p) {
 
   if (!plan?.agents?.length) {
     ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
-    return runCliSingle(p);
+    // runCliSingle returns { cid, completed } — extract .cid to match
+    // runMultiAgent's contract of returning a plain session ID string.
+    const fallback = await runCliSingle(p);
+    return fallback?.cid || null;
   }
 
   const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
@@ -2585,7 +2650,7 @@ async function runMultiAgent(p) {
         // Agent resumes session to maintain context
         cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
@@ -2875,7 +2940,7 @@ app.get('/api/stats', (req, res) => {
   // Context size estimate: sum of all content lengths in session ÷ 4 chars/token
   let contextTokens = 0;
   if (sessionId) {
-    const { total } = stmts.contextTokens.get(sessionId);
+    const { total } = stmts.contextTokens.get(sessionId) || { total: 0 };
     contextTokens = Math.round(total / 4);
   }
 
@@ -3523,14 +3588,14 @@ app.post('/api/sessions/reorder', (req, res) => {
 app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
-  s.messages = stmts.getMsgs.all(req.params.id);
+  // Lite: strip tool content — frontend only needs tool_name + agent_id for badge counts
+  s.messages = stmts.getMsgsLite.all(req.params.id);
   // Include running-task flag so client can show spinner immediately on load
-  const rt = db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(req.params.id);
-  s.hasRunningTask = !!rt;
+  s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
   // True when a direct-chat streaming session is alive in memory (not a Kanban task)
   s.isChatRunning = activeTasks.has(req.params.id);
   // Include chain tasks dispatched FROM this session (for chain progress widget restoration)
-  const chainTasks = db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`).all(req.params.id);
+  const chainTasks = stmts.getChainTasks.all(req.params.id);
   if (chainTasks.length) {
     // Group by chain_id (a session could have dispatched multiple chains)
     const chains = {};
@@ -3591,8 +3656,9 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
 });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
-  if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });
-  const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
+  const _cleanSid = sanitizeSessionId(session?.claude_session_id);
+  if (!_cleanSid) return res.status(400).json({ error: 'No Claude session ID' });
+  const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
   const platform = process.platform;
@@ -3978,7 +4044,8 @@ app.get('/api/files/download', (req,res) => {
   try {
     const stat = fs.statSync(fp);
     if (stat.isDirectory()) return res.status(400).json({error:'Cannot download a directory'});
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(fp)}"`);
+    const _dlFilename = path.basename(fp).replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${_dlFilename}"`);
     res.setHeader('Content-Length', stat.size);
     fs.createReadStream(fp).pipe(res);
   } catch { res.status(404).json({error:'Not found'}); }
@@ -4443,7 +4510,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       ws: proxy,
       sessionId,
       abortController,
-      claudeSessionId: session.claude_session_id || undefined,
+      claudeSessionId: sanitizeSessionId(session.claude_session_id) || undefined,
       mode,
       workdir,
     };
@@ -4463,7 +4530,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       await runCliSingle(params);
     }
 
-    proxy.send(JSON.stringify({ type: 'done', duration: Date.now() - activeTasks.get(sessionId)?.startedAt }));
+    const _taskStart = activeTasks.get(sessionId)?.startedAt;
+    proxy.send(JSON.stringify({ type: 'done', duration: _taskStart ? Date.now() - _taskStart : 0 }));
   } catch (err) {
     log.error('[processTelegramChat] Error', { message: err.message, name: err.name, stack: err.stack });
     proxy.send(JSON.stringify({ type: 'error', error: err.message }));
@@ -4869,7 +4937,7 @@ wss.on('connection', (ws) => {
         stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.engine)||null,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
-        localClaudeId = existSess.claude_session_id || undefined;
+        localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
       }
 
       // For legacy (no tabId) mode, keep WS-level state in sync
@@ -4904,7 +4972,15 @@ wss.on('connection', (ws) => {
       }
       const replyToId = sqlVal(reply_to?.id ?? null);
       const engineMessage = replyQuote + userMessage;
-      const userContent = buildUserContent(engineMessage, attachments);
+      // Enrich SSH attachments with stored auth credentials (key path or decrypted password)
+      const enrichedAttachments = attachments.map(att => {
+        if (att.type !== 'ssh' || !att.hostId) return att;
+        const hosts = loadRemoteHosts();
+        const rh = hosts.find(h => h.id === att.hostId);
+        if (!rh) return att;
+        return { ...att, sshKeyPath: rh.sshKeyPath || '', password: decryptPassword(rh.password) || '' };
+      });
+      const userContent = buildUserContent(engineMessage, enrichedAttachments);
 
       if (!retry) {
         const attJson = attachments.length ? JSON.stringify(attachments.map(a => ({ type: a.type, name: a.name, base64: a.base64 }))) : null;
@@ -4930,22 +5006,28 @@ wss.on('connection', (ws) => {
       // ─── LLM-based task classification ──────────────────────────────
       // When autoSkill=true, classify the user message with haiku (~10-15s via CLI).
       // Returns both specialist skills AND a short chat title in one call.
+      // Skip on resumed sessions (localClaudeId set) — skills already baked into session
+      // context, no need to pay for a Haiku call on every subsequent message.
       let effectiveSkills = sIds;
       let classifiedTitle = '';
-      log.info('[classify] autoSkill=%s sIds=%j msgLen=%d', autoSkill, sIds, userMessage.length);
-      if (autoSkill) {
+      const shouldClassify = autoSkill && !localClaudeId;
+      log.info('[classify] start', { autoSkill, shouldClassify, sIds, msgLen: userMessage.length });
+      if (shouldClassify) {
         try {
           proxy.send(JSON.stringify({ type:'agent_status', status:'⚡ Classifying task...', statusKey:'status.classifying', tabId: effectiveTabId }));
           const classification = await classifyTask(userMessage, sIds, config, workdir || WORKDIR);
-          effectiveSkills = classification.skills;
           classifiedTitle = classification.title;
-          log.info('[classify] skills=%j title=%s', effectiveSkills, classifiedTitle);
+          // Merge classified skills into existing (not replace)
+          const merged = new Set(sIds);
+          for (const s of classification.skills) merged.add(s);
+          effectiveSkills = [...merged];
+          log.info('[classify] done', { newSkills: classification.skills, merged: effectiveSkills, title: classifiedTitle });
           if (effectiveSkills.length > 0) {
             proxy.send(JSON.stringify({ type:'skills_auto', skills: effectiveSkills, tabId: effectiveTabId }));
           }
         } catch (err) {
-          log.error('[classify] Failed: %s', err.message);
-          effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
+          log.error('[classify] Failed', { err: err.message });
+          if (!effectiveSkills.length) effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
         }
       }
 
@@ -4962,12 +5044,15 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
       }
 
-      // Build system prompt — cached by skill combination, skill files cached in memory
+      // Build system prompt — cached by skill combination, skill files cached in memory.
       // BMAD Master is always included as the default orchestrator
       if (config.skills['bmad-master'] && !effectiveSkills.includes('bmad-master')) {
         effectiveSkills = ['bmad-master', ...effectiveSkills];
       }
-      const systemPrompt = buildSystemPrompt(effectiveSkills, config);
+      // Skipped on resumed sessions (localClaudeId set): claude-cli.js blocks --system-prompt
+      // when --resume is used (cryptographic signatures on thinking blocks), so building
+      // it would be pure waste. System prompt was already set on the first turn of this session.
+      const systemPrompt = localClaudeId ? undefined : buildSystemPrompt(effectiveSkills, config);
 
       const mcpServers = {};
       for (const mid of mIds) {
@@ -5175,7 +5260,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) {
-        legacyClaudeId = existing.claude_session_id || undefined;
+        legacyClaudeId = sanitizeSessionId(existing.claude_session_id) || undefined;
         // Don't send session_started for existing sessions — the client's session_started
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
@@ -5470,7 +5555,7 @@ wss.on('connection', (ws) => {
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: session?.claude_session_id, model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
                 .onText(t => { planText += t; })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });

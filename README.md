@@ -54,7 +54,7 @@ Create a card. Describe what you want. Move it to "To Do". Claude picks it up au
 
 ![Kanban workflow](public/screenshots/kanban-diagram.png)
 
-Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built).
+Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built). **Cross-tab sync** — edit or move a task in one browser tab and every other open tab updates instantly, no refresh needed.
 
 **True parallel execution** — independent tasks now run simultaneously even in the same project directory. No artificial workdir locks holding them back. Chain tasks still respect sequential order, but standalone cards run at full speed, in parallel, the way you'd expect.
 
@@ -234,6 +234,8 @@ If Claude hits the turn limit mid-task, it **auto-continues up to 3 times** — 
 
 Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
 
+**Quick attach with `#`** — type `#` in the chat input and a popup shows your configured SSH servers. Pick one (or several — the popup stays open for multi-select), it attaches as a chip, and Claude receives full connection details including stored credentials. No context switching, no sidebar clicking — just `#` and go.
+
 ### 🔗 Remote Access — Open Your Studio to the World
 
 Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?
@@ -376,13 +378,14 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🧠 Skills & auto-skills | 28 specialist personas; auto-classified per message with ⚡ Auto |
 | ⚙️ Model & turns | Haiku / Sonnet / Opus; adjustable turn budget (1–200) with auto-continue |
 | 🔀 Auto mode switch | Claude can switch modes mid-task (e.g., planning → execution) |
-| 📁 File browser | Browse, preview, and attach files with `@filename` |
+| 📁 File browser | Browse, preview, and attach files with `@filename` — multi-select: popup stays open for picking several files |
 | 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
 | 🗂 Projects | Separate workspaces with their own file directories |
-| 🌐 Remote SSH | Work on remote servers as if they were local |
+| 🌐 Remote SSH | Work on remote servers as if local — type `#` in chat to quickly attach any SSH host |
 | 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
 | 📱 Mobile UI | Touch-optimized responsive layout for all pages — Chat, Kanban, Schedule |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
+| 🔄 Cross-tab Kanban sync | Edit or move a task in one tab — every other open tab updates instantly |
 | 🔄 Tab drag-and-drop | Reorder chat tabs by dragging — organize your workspace your way |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
@@ -392,6 +395,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
 | 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
 | ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
+| 🛡 Crash-proof storage | Atomic file writes for auth data + MCP protocol guards — no data corruption on unexpected shutdown |
 | 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
 | 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
 | 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |
