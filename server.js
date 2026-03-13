@@ -135,7 +135,7 @@ const BMAD_WORKFLOWS = {
     agent: 'master',
     skills: ['bmad-master'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context workflow from ${workdir}/_bmad/bmm/workflows/generate-project-context/\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/project-context.md`
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context workflow from ${workdir}/_bmad/bmm/workflows/generate-project-context/\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/_bmad-output/project-context.md`
   },
   'e2e-tests': {
     label: '🧪 Generate E2E Tests',
