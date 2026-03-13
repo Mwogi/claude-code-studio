@@ -3212,6 +3212,68 @@ app.post('/api/tasks', (req, res) => {
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
 });
+
+// ─── Discord BMAD Bridge API (local only) ──────────────────────────────────
+const bmadBridge = require('./discord-bmad-bridge');
+
+// POST /api/bmad/command — execute a BMAD command from Discord
+// Body: { command: "bmad quick-spec \"HMIS Lite\" Fix pharmacy" }
+app.post('/api/bmad/command', (req, res) => {
+  // Local only — reject external requests
+  const ip = req.ip || req.connection?.remoteAddress;
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+    return res.status(403).json({ error: 'Local only' });
+  }
+  
+  const parsed = bmadBridge.parseCommand(req.body.command);
+  if (!parsed) return res.json({ error: 'Not a bmad command' });
+  
+  if (parsed.action === 'list') {
+    return res.json({ ok: true, text: bmadBridge.formatWorkflowList() });
+  }
+  
+  if (parsed.action === 'status') {
+    const cookie = `token=${req.cookies?.token || ''}`;
+    bmadBridge.getTaskStatus(cookie).then(text => res.json({ ok: true, text })).catch(e => res.json({ error: e.message }));
+    return;
+  }
+  
+  if (parsed.action === 'start') {
+    const cookie = req.headers.cookie || '';
+    bmadBridge.findProject(parsed.project, 'http://127.0.0.1:3000', cookie).then(async proj => {
+      if (!proj) return res.json({ error: `Project "${parsed.project}" not found. Use \`bmad list\` to see options.` });
+      
+      const title = parsed.description 
+        ? `${parsed.description.substring(0, 80)}`
+        : `${parsed.workflow} — ${proj.name}`;
+      
+      try {
+        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie);
+        if (task.error) return res.json({ error: task.error });
+        res.json({ 
+          ok: true, 
+          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\``,
+          taskId: task.id 
+        });
+      } catch (e) {
+        res.json({ error: e.message });
+      }
+    });
+    return;
+  }
+  
+  if (parsed.action === 'reply') {
+    const cookie = req.headers.cookie || '';
+    bmadBridge.replyToTask(parsed.taskId, parsed.message, cookie)
+      .then(r => res.json({ ok: true, text: `✅ Reply sent to task \`${parsed.taskId}\`` }))
+      .catch(e => res.json({ error: e.message }));
+    return;
+  }
+  
+  // help
+  res.json({ ok: true, text: bmadBridge.formatWorkflowList() });
+});
+
 // POST /api/tasks/:id/reply — send a reply to an awaiting_input task and resume it
 app.post('/api/tasks/:id/reply', (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id);
