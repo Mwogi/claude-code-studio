@@ -61,4 +61,10 @@ function progressSummary(projectName, stats) {
   notify(lines.join('\n'));
 }
 
-module.exports = { notify, taskStarted, taskCompleted, taskFailed, progressSummary };
+function taskAwaitingInput(task, projectName, questionSnippet) {
+  const prefix = projectName ? `**[${projectName}]** ` : '';
+  const question = questionSnippet ? `\n\n> ${questionSnippet}` : '';
+  notify(`💬 ${prefix}Awaiting Input: ${task.title}${question}\n\nReply in Claude Studio to continue.`);
+}
+
+module.exports = { notify, taskStarted, taskCompleted, taskFailed, progressSummary, taskAwaitingInput };

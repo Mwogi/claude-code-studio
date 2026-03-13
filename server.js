@@ -791,7 +791,21 @@ async function startTask(task) {
     }
     // Build prompt
     let parts;
-    if (task._bmadWorkflow) {
+    // Check if this is a resumed task (has session + user replied)
+    const _replyCheck = sessionId ? db.prepare(
+      `SELECT content FROM messages WHERE session_id=? AND role='user' ORDER BY created_at DESC LIMIT 1`
+    ).get(sessionId) : null;
+    const _lastAssist = sessionId ? db.prepare(
+      `SELECT created_at FROM messages WHERE session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1`
+    ).get(sessionId) : null;
+    const _userReply = _replyCheck && _lastAssist ? db.prepare(
+      `SELECT content FROM messages WHERE session_id=? AND role='user' AND created_at > ? ORDER BY created_at DESC LIMIT 1`
+    ).get(sessionId, _lastAssist.created_at) : null;
+
+    if (_userReply && claudeSessionId) {
+      // Resuming with user's reply — use it as the prompt
+      parts = [_userReply.content];
+    } else if (task._bmadWorkflow) {
       // Use the workflow-defined prompt + include task description if provided
       const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
       parts = [wfPrompt];
@@ -987,15 +1001,21 @@ async function startTask(task) {
             tail.includes('Would you') || tail.includes('Do you') || tail.includes('Should I') ||
             tail.includes('What ') || tail.includes('Which ') || tail.includes('How ') ||
             tail.includes('please ') || tail.includes('let me know') || tail.includes('your thoughts') ||
-            tail.includes('prefer') || tail.includes('ready to')
+            tail.includes('prefer') || tail.includes('ready to') || tail.includes('like to') ||
+            tail.includes('want to') || tail.includes('option') || tail.includes('choose') ||
+            /\*\*\[.\]/.test(tail)
           );
           
-          if (isAskingQuestion && task.mode === 'planning') {
-            // Keep task visible — Claude is waiting for user input
+          if (isAskingQuestion) {
+            // Claude is waiting for user input — park the task
+            const questionSnippet = tail.slice(tail.lastIndexOf('\n', tail.lastIndexOf('?')) + 1).trim().substring(0, 500);
             db.prepare(`UPDATE tasks SET status='awaiting_input', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(task.id);
-            log.info(`[taskWorker] task ${task.id}: interactive turn complete, awaiting user input`);
+            log.info(`[taskWorker] task ${task.id}: awaiting user input`);
             wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+            // Notify via Discord
+            const projName = getProjectName(task.workdir);
+            openclawNotify.taskAwaitingInput(task, projName, questionSnippet);
           } else {
           // ✅ Success
           db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
@@ -3146,6 +3166,31 @@ app.post('/api/tasks', (req, res) => {
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
 });
+// POST /api/tasks/:id/reply — send a reply to an awaiting_input task and resume it
+app.post('/api/tasks/:id/reply', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  if (!task.session_id) return res.status(400).json({ error: 'No session linked' });
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+  
+  // Save user message to the session
+  try {
+    stmts.addMsg.run(task.session_id, 'user', 'text', message.trim(), null, null, null, null);
+  } catch (e) { log.error('reply addMsg failed', e.message); }
+  
+  // Set task back to todo so the worker picks it up and resumes with the user's reply
+  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`)
+    .run(task.id);
+  
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  
+  // Trigger queue processing
+  setTimeout(processQueue, 500);
+  
+  res.json({ ok: true, status: 'todo' });
+});
+
 app.put('/api/tasks/:id', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
