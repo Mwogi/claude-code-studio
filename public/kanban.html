@@ -1359,10 +1359,17 @@ function buildForm(tk={}){
         </optgroup>
         <optgroup label="Implementation">
           <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
+          <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
+          <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story (Implement)</option>
+          <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
+          <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
+          <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
+          <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
           <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
           <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
         </optgroup>
         <optgroup label="Tools">
+          <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
           <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Project Context</option>
           <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 Generate E2E Tests</option>
           <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>

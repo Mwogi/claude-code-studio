@@ -150,6 +150,55 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-master'],
     model: 'sonnet',
     prompt: (title, workdir) => `Run the BMAD shard-doc task. Split this document: ${title}\n\nDirectory: ${workdir}\n\nUse: npx @kayvan/markdown-tree-parser explode [source-file] [destination-folder]`
+  },
+  'document-project': {
+    label: '📚 Document Project',
+    agent: 'master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the document-project workflow from ${workdir}/_bmad/bmm/workflows/document-project/\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project codebase and generate comprehensive documentation. Save output to ${workdir}/docs/`
+  },
+  'code-review': {
+    label: '🔍 Code Review',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/code-review/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
+  },
+  'correct-course': {
+    label: '🔄 Correct Course',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the correct-course workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/correct-course/\n\nProject: ${title}\nDirectory: ${workdir}\n\nNavigate the sprint change. Ask what issue or change requires course correction.`
+  },
+  'create-story': {
+    label: '📝 Create Story',
+    agent: 'product-manager',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a new story file using the template. Save to the appropriate epic directory.`
+  },
+  'dev-story': {
+    label: '💻 Dev Story (Implement)',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story definition of done checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the story, update tasks/subtasks, file list, and dev agent record per the checklist.`
+  },
+  'retrospective': {
+    label: '🔮 Retrospective',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the retrospective workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/retrospective/\n\nProject: ${title}\nDirectory: ${workdir}\n\nFacilitate an epic completion retrospective. No blame, no time estimates. Focus on lessons learned and action items.`
+  },
+  'sprint-status': {
+    label: '📊 Sprint Status',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-status/\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
   }
 };
 
