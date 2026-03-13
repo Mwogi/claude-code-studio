@@ -174,7 +174,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-editor-actions .btn-cancel { background:var(--s3); color:var(--fg); }
 
 /* Kanban sidebar */
-.kb-sidebar-toggle { position:fixed; left:8px; top:50%; transform:translateY(-50%); z-index:100; background:var(--s2); border:1px solid var(--border); color:var(--fg); width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:opacity .2s; }
+.kb-sidebar-toggle { position:fixed; left:8px; top:70px; z-index:100; background:var(--s2); border:1px solid var(--border); color:var(--fg); width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:opacity .2s; }
 .kb-sidebar-toggle:hover { background:var(--s3); }
 .kb-sidebar { position:fixed; left:0; top:0; height:100vh; width:280px; background:var(--s1); border-right:1px solid var(--border); z-index:1500; display:flex; flex-direction:column; transition:transform .25s ease; box-shadow:2px 0 12px rgba(0,0,0,.2); }
 .kb-sidebar.collapsed { transform:translateX(-100%); }
@@ -196,6 +196,17 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .kb-sidebar-sess .sess-status { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; }
 .kb-sidebar-sess .sess-status.running { background:var(--orange); }
 .kb-sidebar-sess .sess-status.idle { background:var(--muted); }
+.kb-sidebar-section { padding:8px 16px 4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.kb-sidebar-mcp { display:flex; align-items:center; gap:8px; padding:6px 16px; font-size:12px; color:var(--fg2); cursor:pointer; transition:background .15s; }
+.kb-sidebar-mcp:hover { background:var(--s2); }
+.mcp-status { font-size:10px; }
+.mcp-status.on { color:var(--green); }
+.mcp-status.off { color:var(--muted); }
+.mcp-name { flex:1; }
+.mcp-toggle { font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; }
+.mcp-status.on + .mcp-name + .mcp-toggle { color:var(--green); background:rgba(34,197,94,.1); }
+.mcp-status.off + .mcp-name + .mcp-toggle { color:var(--muted); background:var(--s2); }
+.kb-sidebar-skill { display:flex; align-items:center; gap:8px; padding:5px 16px; font-size:12px; color:var(--fg2); }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -1637,22 +1648,21 @@ async function renderKbSidebar() {
   const body = $i('kbSidebarBody');
   body.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:12px">Loading…</div>';
   try {
-    const [projRes, taskRes, sessRes] = await Promise.all([
+    const [projRes, taskRes, sessRes, configRes] = await Promise.all([
       apiFetch('/api/projects').then(r => r.json()),
       apiFetch('/api/tasks').then(r => r.json()),
       apiFetch('/api/sessions').then(r => r.json()),
+      apiFetch('/api/config').then(r => r.json()),
     ]);
     
-    let html = '';
+    let html = '<div class="kb-sidebar-section">PROJECTS</div>';
     for (const proj of projRes) {
       const isActive = proj.workdir === curWorkdir;
       const projTasks = taskRes.filter(t => t.workdir === proj.workdir);
-      const backlog = projTasks.filter(t => t.status === 'backlog').length;
       const active = projTasks.filter(t => !['done','cancelled','backlog','todo'].includes(t.status)).length;
       const done = projTasks.filter(t => t.status === 'done').length;
       const total = projTasks.length;
       
-      // Get sessions for this project
       const projSessions = sessRes.filter(s => s.workdir === proj.workdir).slice(0, 10);
       const activeTasks = projTasks.filter(t => !['done','cancelled','backlog'].includes(t.status));
       const activeSessionIds = new Set(activeTasks.map(t => t.session_id).filter(Boolean));
@@ -1663,7 +1673,7 @@ async function renderKbSidebar() {
           <span class="proj-icon">${isActive ? '●' : '○'}</span>
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(proj.name)}</span>
           <div class="kb-sidebar-proj-stats">
-            ${active ? `<span style="color:var(--orange)">${active} active</span>` : ''}
+            ${active ? `<span style="color:var(--orange)">${active}</span>` : ''}
             <span>${done}/${total}</span>
           </div>
         </div>
@@ -1680,14 +1690,58 @@ async function renderKbSidebar() {
       } else {
         html += `<div class="kb-sidebar-sess" style="color:var(--muted);cursor:default">No sessions</div>`;
       }
-      
       html += `</div></div>`;
+    }
+    
+    // MCPs section
+    const mcps = configRes.mcpServers || {};
+    const mcpKeys = Object.keys(mcps);
+    if (mcpKeys.length) {
+      html += `<div class="kb-sidebar-section" style="margin-top:12px">MCP SERVERS</div>`;
+      for (const key of mcpKeys) {
+        const mcp = mcps[key];
+        const enabled = mcp.enabled !== false;
+        html += `<div class="kb-sidebar-mcp" onclick="toggleMcp('${escH(key)}')" title="${escH(mcp.description || key)}">
+          <span class="mcp-status ${enabled ? 'on' : 'off'}">${enabled ? '●' : '○'}</span>
+          <span class="mcp-name">${escH(mcp.label || key)}</span>
+          <span class="mcp-toggle">${enabled ? 'ON' : 'OFF'}</span>
+        </div>`;
+      }
+    }
+    
+    // Skills section
+    const skills = configRes.skills || {};
+    const skillKeys = Object.keys(skills).filter(k => skills[k]);
+    if (skillKeys.length) {
+      html += `<div class="kb-sidebar-section" style="margin-top:12px">SKILLS</div>`;
+      for (const key of skillKeys) {
+        html += `<div class="kb-sidebar-skill">
+          <span style="color:var(--accent);font-size:11px">✦</span>
+          <span>${escH(key)}</span>
+        </div>`;
+      }
     }
     
     body.innerHTML = html || '<div style="padding:16px;color:var(--muted)">No projects</div>';
   } catch (e) {
-    body.innerHTML = `<div style="padding:16px;color:var(--red)">Error loading projects</div>`;
+    body.innerHTML = `<div style="padding:16px;color:var(--red)">Error loading</div>`;
   }
+}
+
+async function toggleMcp(mcpId) {
+  try {
+    const cfgRes = await apiFetch('/api/config').then(r => r.json());
+    const mcp = cfgRes.mcpServers?.[mcpId];
+    if (!mcp) return;
+    mcp.enabled = !(mcp.enabled !== false);
+    await apiFetch(`/api/mcp/${mcpId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcp)
+    });
+    toast(`${mcpId}: ${mcp.enabled ? 'enabled' : 'disabled'}`);
+    renderKbSidebar();
+  } catch (e) { toast('Failed to toggle MCP'); }
 }
 
 function toggleSidebarProj(el, workdir) {
