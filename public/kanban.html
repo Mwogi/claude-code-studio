@@ -573,7 +573,7 @@ const TR = {
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
-    'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
+    'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'⏳ In Progress',
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
     'col.bmad_workflow':'🔮 BMAD Workflow',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
@@ -681,7 +681,7 @@ const COLS=[
   {id:'done',dot:'dot-done'},
   {id:'cancelled',dot:'dot-cancelled'},
   // Hidden but kept for data compatibility
-  {id:'in_progress',dot:'dot-in_progress',hidden:true},
+  {id:'in_progress',dot:'dot-in_progress'},
 ];
 let tasks=[],sessions=[],projects=[];
 let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
