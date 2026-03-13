@@ -1066,6 +1066,27 @@ async function startTask(task) {
             }
           }
           openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
+          
+          // Auto-commit for implementation tasks
+          const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec']);
+          const _wfType = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]);
+          const _hasBmadPhase = (task.notes || '').match(/\[bmad-phase:(implementation|qa)\]/);
+          if ((_wfType && AUTO_COMMIT_WORKFLOWS.has(_wfType)) || _hasBmadPhase) {
+            const cwd = task.workdir || WORKDIR;
+            try {
+              const { execSync: _exec } = require('child_process');
+              const hasChanges = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+              if (hasChanges) {
+                _exec('git add -A', { cwd, timeout: 10000 });
+                const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                _exec(`git commit -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                log.info(`[taskWorker] auto-committed for task ${task.id} in ${cwd}`);
+              }
+            } catch (e) {
+              log.warn(`[taskWorker] auto-commit failed for task ${task.id}: ${e.message}`);
+            }
+          }
+          
           } // end else (non-interactive success)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
