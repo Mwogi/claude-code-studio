@@ -696,6 +696,20 @@ try{
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function stripBmadTags(s){return String(s||'').replace(/\[bmad-(?:workflow|phase):[\w-]+\]/g,'').replace(/\[bmad:[^\]]+\]/g,'').trim();}
+function extractBmadTags(s){const tags=[];const re=/\[(bmad(?:-\w+)?):([^\]]+)\]/g;let m;while((m=re.exec(s||''))!==null)tags.push({type:m[1],value:m[2]});return tags;}
+function renderNotesTags(notes,workflowVal){
+  const el=$i('fNotesTags');if(!el)return;
+  const tags=extractBmadTags(notes||'');
+  if(workflowVal){const has=tags.some(t=>t.type==='bmad-workflow');if(!has)tags.unshift({type:'bmad-workflow',value:workflowVal});}
+  if(!tags.length){el.innerHTML='';return;}
+  el.innerHTML=tags.map(t=>{
+    const colors={'bmad-workflow':'#9333ea','bmad-phase':'#f59e0b','bmad':'#3b82f6'};
+    const labels={'bmad-workflow':'Workflow','bmad-phase':'Phase','bmad':'Sprint'};
+    const c=colors[t.type]||'#6b7280';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c}22;color:${c};border:1px solid ${c}44;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600"><span style="font-size:9px">${escH(labels[t.type]||t.type)}</span>${escH(t.value)}</span>`;
+  }).join('');
+}
 function $i(id){return document.getElementById(id);}
 function relTime(iso){
   if(!iso)return'';
@@ -1116,7 +1130,7 @@ function openAddModal(defaultStatus='backlog'){
   if(modal) { modal.classList.remove('has-chat'); modal.classList.add('no-chat'); }
   $i('chatContainer').innerHTML = '';
   if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
-  setTimeout(()=>$i('fTitle')?.focus(),60);
+  setTimeout(()=>{$i('fTitle')?.focus();renderNotesTags('','');},60);
 }
 
 // ─── Modal: Edit ───────────────────────────────────────────────────────────
@@ -1127,7 +1141,7 @@ async function openEditModal(id){
   try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
   $i('modalTitle').textContent=t('modal.edit');
   $i('modalBody').innerHTML=buildForm(tk);
-  setTimeout(()=>renderAttPreviews(),0);
+  setTimeout(()=>{renderAttPreviews();renderNotesTags(tk.notes||'',$i('fWorkflow')?.value||'');},0);
   $i('modalFt').innerHTML=`
     <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
     <div style="flex:1"></div>
@@ -1321,11 +1335,12 @@ function buildForm(tk={}){
         </button>
       </div>
     </div>
-    <div><label class="lbl">${t('modal.notes')}</label>
-      <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
+    <div><label class="lbl">Notes & Tags</label>
+      <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+      <textarea id="fNotes" class="inp" rows="2" placeholder="Additional context for the agent…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
     </div>
     <div><label class="lbl">BMAD Workflow</label>
-      <select id="fWorkflow" class="sel">
+      <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
         <option value=""${wfVal===''?' selected':''}>None (regular task)</option>
         <optgroup label="Analysis">
           <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
@@ -1528,9 +1543,15 @@ async function saveTask(){
   // Handle BMAD workflow selection
   const wfType=$i('fWorkflow')?.value||'';
   let rawNotes=$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||'');
+  // Preserve existing bmad sprint tags from original notes
+  const origNotes=existingTask?.notes||'';
+  const sprintTags=(origNotes.match(/\[bmad:[^\]]+\]/g)||[]).join(' ');
+  const phaseTags=(origNotes.match(/\[bmad-phase:\w+\]/g)||[]).join(' ');
   // Remove any existing workflow tag before re-tagging
-  rawNotes=rawNotes.replace(/\[bmad-workflow:[\w-]+\]/g,'').trim();
+  rawNotes=rawNotes.replace(/\[bmad-workflow:[\w-]+\]/g,'').replace(/\[bmad:[^\]]+\]/g,'').replace(/\[bmad-phase:\w+\]/g,'').trim();
   if(wfType) rawNotes=(rawNotes?rawNotes+'\n':'')+`[bmad-workflow:${wfType}]`;
+  if(sprintTags) rawNotes=(rawNotes?rawNotes+' ':'')+sprintTags;
+  if(phaseTags) rawNotes=(rawNotes?rawNotes+' ':'')+phaseTags;
   const resolvedStatus=wfType?'bmad_workflow':($i('fStatus')?.value||'backlog');
   const body={
     title,
