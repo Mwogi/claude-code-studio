@@ -743,9 +743,10 @@ async function startTask(task) {
     // Build prompt
     let parts;
     if (task._bmadWorkflow) {
-      // Use the workflow-defined prompt instead of task title/desc
+      // Use the workflow-defined prompt + include task description if provided
       const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
       parts = [wfPrompt];
+      if (task.description?.trim()) parts.push(`\n---\nTask Description:\n${task.description.trim()}`);
     } else {
       parts = [task.title];
       if (task.description?.trim()) parts.push(task.description.trim());
