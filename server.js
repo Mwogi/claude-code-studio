@@ -834,7 +834,7 @@ async function startTask(task) {
         }
       } catch {}
     }
-    const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
+    let prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
