@@ -1278,7 +1278,11 @@ async function openEditModal(id){
 function buildForm(tk={}){
   const isNew=!tk.id;
   const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
-  const statusOpts=COLS.filter(c=>!c.hidden).map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
+  const NEW_TASK_STATUSES = new Set(['backlog','bmad_workflow','todo']);
+  const statusOpts=COLS.filter(c=>!c.hidden).map(c=>{
+    const disabled = modalMode==='add' && !NEW_TASK_STATUSES.has(c.id);
+    return disabled ? '' : `<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`;
+  }).filter(Boolean).join('');
   const wfMatch=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
   const wfVal=wfMatch?wfMatch[1]:'';
   const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
