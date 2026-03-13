@@ -3526,6 +3526,41 @@ app.get('/api/bmad/doc', (req, res) => {
   }
 });
 
+// POST /api/bmad/doc — create or update a document
+app.post('/api/bmad/doc', (req, res) => {
+  const { filePath, content } = req.body;
+  if (!filePath || content === undefined) return res.status(400).json({ error: 'filePath and content required' });
+  const normalized = path.resolve(filePath);
+  // Security: only allow writing to docs/, _bmad-output/, or _bmad/ within a project
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/')) {
+    return res.status(403).json({ error: 'Access denied — can only write to docs/ or _bmad-output/' });
+  }
+  try {
+    const dir = path.dirname(normalized);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(normalized, content, 'utf-8');
+    res.json({ ok: true, path: normalized, size: content.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/bmad/doc — delete a document
+app.delete('/api/bmad/doc', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  const normalized = path.resolve(filePath);
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output')) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  try {
+    if (fs.existsSync(normalized)) fs.unlinkSync(normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
 app.get('/api/bmad/sprint-status', (req, res) => {
   const workdir = req.query.workdir || WORKDIR;

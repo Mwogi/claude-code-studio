@@ -160,6 +160,18 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .docs-file-meta { font-size:10px; color:var(--muted); margin-top:1px; }
 .docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
+/* Docs editor */
+.docs-editor { display:flex; flex:1; overflow:hidden; height:100%; }
+.docs-editor-left { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+.docs-editor-right { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-editor-toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--s2); }
+.docs-editor-toolbar input { flex:1; background:var(--s1); border:1px solid var(--border); color:var(--fg); padding:4px 8px; border-radius:4px; font-size:13px; font-weight:600; }
+.docs-editor-toolbar select { background:var(--s1); border:1px solid var(--border); color:var(--fg); padding:4px 8px; border-radius:4px; font-size:12px; }
+.docs-editor-textarea { flex:1; background:var(--s1); color:var(--fg); border:none; padding:16px; font-family:var(--font-mono); font-size:13px; line-height:1.6; resize:none; outline:none; tab-size:2; }
+.docs-editor-actions { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); justify-content:flex-end; flex-shrink:0; background:var(--s2); }
+.docs-editor-actions .btn { padding:6px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; }
+.docs-editor-actions .btn-save { background:var(--accent); color:#fff; }
+.docs-editor-actions .btn-cancel { background:var(--s3); color:var(--fg); }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -1625,6 +1637,7 @@ function renderDocsSidebar(docs) {
 }
 
 async function loadDoc(filePath, el) {
+  _editingDocPath = filePath;
   // Highlight active
   document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -1636,10 +1649,18 @@ async function loadDoc(filePath, el) {
     const d = await r.json();
     if (d.error) { content.innerHTML = `<div class="docs-empty">${escH(d.error)}</div>`; return; }
     
+    const toolbar = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+      <h1 style="margin:0;font-size:16px">${escH(d.name)}</h1>
+      <div style="display:flex;gap:6px">
+        <button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>
+        <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
+      </div>
+    </div>`;
+    
     if (d.ext === '.yaml' || d.ext === '.yml') {
-      content.innerHTML = `<h1>${escH(d.name)}</h1><div class="yaml-content">${escH(d.content)}</div>`;
+      content.innerHTML = toolbar + `<div class="yaml-content">${escH(d.content)}</div>`;
     } else {
-      content.innerHTML = `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
+      content.innerHTML = toolbar + `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
     }
   } catch (e) {
     content.innerHTML = `<div class="docs-empty">Error loading document</div>`;
@@ -1692,6 +1713,150 @@ function renderMarkdown(md) {
 }
 
 // Check for docs when project changes
+// ─── Docs Editor ──────────────────────────────────────────────────────────
+let _editingDocPath = null;
+
+function newDocument() {
+  _editingDocPath = null;
+  const content = $i('docsContent');
+  content.innerHTML = buildEditor('', '', true);
+  // Deselect sidebar
+  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
+  // Focus title
+  setTimeout(() => $i('docEditorTitle')?.focus(), 100);
+}
+
+function editDocument() {
+  if (!_editingDocPath) return;
+  const content = $i('docsContent');
+  // Load existing content for editing
+  apiFetch(`/api/bmad/doc?path=${encodeURIComponent(_editingDocPath)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { toast(d.error); return; }
+      content.innerHTML = buildEditor(d.name, d.content, false);
+    })
+    .catch(() => toast('Failed to load document'));
+}
+
+function buildEditor(filename, text, isNew) {
+  const folderOptions = isNew ? `
+    <select id="docEditorFolder" class="sel">
+      <option value="docs">docs/</option>
+      <option value="_bmad-output/planning-artifacts">planning-artifacts/</option>
+      <option value="_bmad-output/implementation-artifacts">implementation-artifacts/</option>
+      <option value="_bmad-output">_bmad-output/</option>
+    </select>` : '';
+  const titleVal = isNew ? '' : filename;
+  const titleInput = isNew 
+    ? `<input id="docEditorTitle" type="text" placeholder="filename.md" value="${escH(titleVal)}">`
+    : `<span style="font-weight:600;font-size:13px;color:var(--fg)">${escH(filename)}</span>`;
+  return `
+    <div class="docs-editor">
+      <div class="docs-editor-left">
+        <div class="docs-editor-toolbar">
+          ${folderOptions}
+          ${titleInput}
+          <button onclick="insertMdHeading()" title="Heading" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">H</button>
+          <button onclick="insertMdBold()" title="Bold" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">B</button>
+          <button onclick="insertMdList()" title="List" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">☰</button>
+          <button onclick="insertMdCode()" title="Code" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">&lt;/&gt;</button>
+          <button onclick="insertMdTable()" title="Table" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">▦</button>
+        </div>
+        <textarea class="docs-editor-textarea" id="docEditorText" placeholder="Write your markdown here..." oninput="updateDocPreview()">${escH(text)}</textarea>
+        <div class="docs-editor-actions">
+          <button class="btn btn-cancel" onclick="cancelEditor()">Cancel</button>
+          <button class="btn btn-save" onclick="saveDocument()">💾 Save</button>
+        </div>
+      </div>
+      <div class="docs-editor-right" id="docEditorPreview">
+        <div class="docs-empty">Preview will appear here</div>
+      </div>
+    </div>`;
+}
+
+function updateDocPreview() {
+  const text = $i('docEditorText')?.value || '';
+  const preview = $i('docEditorPreview');
+  if (preview) {
+    preview.innerHTML = text.trim() ? `<div class="md-rendered">${renderMarkdown(text)}</div>` : '<div class="docs-empty">Preview will appear here</div>';
+  }
+}
+
+function insertAtCursor(before, after='') {
+  const ta = $i('docEditorText');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  ta.value = ta.value.substring(0, start) + before + selected + after + ta.value.substring(end);
+  ta.selectionStart = start + before.length;
+  ta.selectionEnd = start + before.length + selected.length;
+  ta.focus();
+  updateDocPreview();
+}
+
+function insertMdHeading() { insertAtCursor('## '); }
+function insertMdBold() { insertAtCursor('**', '**'); }
+function insertMdList() { insertAtCursor('- '); }
+function insertMdCode() { insertAtCursor('```\n', '\n```'); }
+function insertMdTable() { insertAtCursor('| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| | | |\n'); }
+
+function cancelEditor() {
+  if (_editingDocPath) {
+    // Reload the document in view mode
+    loadDoc(_editingDocPath, null);
+  } else {
+    $i('docsContent').innerHTML = '<div class="docs-empty">Select a document to preview</div>';
+  }
+}
+
+async function saveDocument() {
+  const text = $i('docEditorText')?.value || '';
+  let filePath;
+  
+  if (_editingDocPath) {
+    filePath = _editingDocPath;
+  } else {
+    // New document
+    const folder = $i('docEditorFolder')?.value || 'docs';
+    const title = $i('docEditorTitle')?.value?.trim();
+    if (!title) { toast('Filename required'); return; }
+    const filename = title.endsWith('.md') ? title : title + '.md';
+    filePath = `${curWorkdir}/${folder}/${filename}`;
+  }
+  
+  try {
+    const r = await apiFetch('/api/bmad/doc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath, content: text })
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error); return; }
+    toast('Document saved');
+    _editingDocPath = filePath;
+    // Refresh sidebar
+    loadDocsList();
+    // Show the saved doc in view mode
+    setTimeout(() => loadDoc(filePath, null), 300);
+  } catch (e) {
+    toast('Save failed: ' + e.message);
+  }
+}
+
+async function deleteDocument(filePath) {
+  if (!confirm(`Delete ${filePath.split('/').pop()}?`)) return;
+  try {
+    const r = await apiFetch(`/api/bmad/doc?path=${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast(d.error); return; }
+    toast('Document deleted');
+    _editingDocPath = null;
+    $i('docsContent').innerHTML = '<div class="docs-empty">Select a document to preview</div>';
+    loadDocsList();
+  } catch (e) { toast('Delete failed'); }
+}
+
 async function checkBmadDocs() {
   if (!curWorkdir) { $i('bmadDocsBtn').style.display = 'none'; return; }
   try {
@@ -1848,7 +2013,10 @@ async function doSprintSync() {
 <div id="docsPanel" class="docs-panel hidden">
   <div class="docs-panel-hd">
     <span class="docs-panel-title">📄 BMAD Documents</span>
-    <button class="modal-close" onclick="toggleDocsPanel()">×</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
+      <button class="modal-close" onclick="toggleDocsPanel()">×</button>
+    </div>
   </div>
   <div class="docs-panel-body">
     <div class="docs-sidebar" id="docsSidebar"></div>
