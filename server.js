@@ -930,6 +930,18 @@ async function startTask(task) {
         const MAX_CHAIN_RETRIES = 2;
 
         if (isSuccess) {
+          // Check if this is an interactive/planning task that needs user input
+          const isInteractive = task.mode === 'planning' || (fullText && (
+            fullText.includes('?') && (fullText.includes('Would you') || fullText.includes('Do you') || fullText.includes('Should I') || fullText.includes('What ') || fullText.includes('Which ') || fullText.includes('How ') || fullText.includes('please ') || fullText.includes('let me know'))
+          ));
+          
+          if (isInteractive && task.mode === 'planning') {
+            // Keep task active — Claude is waiting for user input
+            db.prepare(`UPDATE tasks SET status='in_progress', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(task.id);
+            log.info(`[taskWorker] task ${task.id}: interactive turn complete, awaiting user input`);
+            wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+          } else {
           // ✅ Success
           db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
@@ -956,6 +968,7 @@ async function startTask(task) {
             workdir: task.workdir || null,
           });
           openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir));
+          } // end else (non-interactive success)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
