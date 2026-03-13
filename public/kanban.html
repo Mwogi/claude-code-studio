@@ -1273,11 +1273,30 @@ function buildForm(tk={}){
     <div><label class="lbl">BMAD Workflow</label>
       <select id="fWorkflow" class="sel">
         <option value=""${wfVal===''?' selected':''}>None (regular task)</option>
-        <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Analysis → Product Brief</option>
-        <option value="planning"${wfVal==='planning'?' selected':''}>📋 Planning → PRD</option>
-        <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Solutioning → Architecture + Epics</option>
-        <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
-        <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
+        <optgroup label="Analysis">
+          <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
+          <option value="research"${wfVal==='research'?' selected':''}>🔬 Research (Domain/Market/Tech)</option>
+        </optgroup>
+        <optgroup label="Planning">
+          <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
+          <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
+          <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
+          <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
+        </optgroup>
+        <optgroup label="Solutioning">
+          <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture + Epics</option>
+          <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Implementation Readiness Check</option>
+        </optgroup>
+        <optgroup label="Implementation">
+          <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
+          <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
+          <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
+        </optgroup>
+        <optgroup label="Tools">
+          <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Project Context</option>
+          <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 Generate E2E Tests</option>
+          <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
+        </optgroup>
       </select>
     </div>
     <div>

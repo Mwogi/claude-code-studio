@@ -58,45 +58,98 @@ const BMAD_WORKFLOWS = {
     agent: 'analyst',
     skills: ['bmad-brainstorming', 'bmad-party-mode'],
     model: 'opus',
-    outputFile: 'product-brief.md',
-    outputDir: '_bmad-output/planning-artifacts',
-    prompt: (title, workdir) => `You are the BMAD Analyst. Run the product brief creation workflow for: ${title}\n\nProject directory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nCreate the product brief and save it to ${workdir}/_bmad-output/planning-artifacts/product-brief.md\n\nAfter creating the product brief, output the full document.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/create-product-brief/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+  },
+  research: {
+    label: '🔬 Research (Domain/Market/Tech)',
+    agent: 'analyst',
+    skills: ['bmad-brainstorming'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the research workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/research/\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain research, market research, and technical research. Save findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
   },
   planning: {
     label: '📋 Planning → PRD',
     agent: 'product-manager',
     skills: ['bmad-create-prd', 'bmad-party-mode'],
     model: 'opus',
-    outputFile: 'prd.md',
-    outputDir: '_bmad-output/planning-artifacts',
-    prompt: (title, workdir) => `You are the BMAD Product Manager. Create the PRD for: ${title}\n\nProject directory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nCreate the PRD and save it to ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nAfter creating the PRD, output the full document.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/prd.md`
+  },
+  'edit-prd': {
+    label: '✏️ Edit PRD',
+    agent: 'product-manager',
+    skills: ['bmad-create-prd'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD edit workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nEdit the existing PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md based on the task description.`
+  },
+  'validate-prd': {
+    label: '🔎 Validate PRD',
+    agent: 'product-manager',
+    skills: ['bmad-create-prd'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD validation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md against standards. Report issues and recommendations.`
+  },
+  'ux-design': {
+    label: '🎨 UX Design',
+    agent: 'ux-designer',
+    skills: ['bmad-party-mode'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/ux-designer.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-ux-design/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/ux-design-specification.md`
   },
   solutioning: {
     label: '🏗️ Solutioning → Architecture + Epics',
     agent: 'architect',
     skills: ['bmad-create-architecture', 'bmad-create-epics', 'bmad-party-mode'],
     model: 'opus',
-    outputFile: 'architecture.md',
-    outputDir: '_bmad-output/planning-artifacts',
-    prompt: (title, workdir) => `You are the BMAD Architect. Run the solutioning workflow for: ${title}\n\nProject directory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. First create the architecture document and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Then create the epics and stories document and save to ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nOutput both documents when complete.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. Run the architecture workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-architecture/ and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Run the epics workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/ and save to ${workdir}/_bmad-output/planning-artifacts/epics.md`
+  },
+  'readiness-check': {
+    label: '✅ Implementation Readiness Check',
+    agent: 'architect',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the implementation readiness check from ${workdir}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate that PRD, UX, Architecture, and Epics are complete and ready for implementation. Report any gaps.`
   },
   'sprint-planning': {
     label: '📐 Sprint Planning → sprint-status.yaml',
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
     model: 'sonnet',
-    outputFile: 'sprint-status.yaml',
-    outputDir: '_bmad-output/implementation-artifacts',
-    prompt: (title, workdir) => `You are the BMAD Scrum Master. Run sprint planning for: ${title}\n\nProject directory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nGenerate sprint-status.yaml and save to ${workdir}/_bmad-output/implementation-artifacts/sprint-status.yaml\n\nFollow the BMAD sprint planning workflow exactly.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nGenerate sprint-status.yaml and save to ${workdir}/_bmad-output/implementation-artifacts/sprint-status.yaml`
+  },
+  'quick-spec': {
+    label: '⚡ Quick Spec',
+    agent: 'architect',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-spec workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-spec/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
+  },
+  'quick-dev': {
+    label: '⚡ Quick Dev',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
+  },
+  'generate-context': {
+    label: '📑 Generate Project Context',
+    agent: 'master',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context workflow from ${workdir}/_bmad/bmm/workflows/generate-project-context/\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/project-context.md`
+  },
+  'e2e-tests': {
+    label: '🧪 Generate E2E Tests',
+    agent: 'qa',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/qa.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the QA E2E test generation workflow from ${workdir}/_bmad/bmm/workflows/qa-generate-e2e-tests/\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate end-to-end automated tests for existing features.`
   },
   shard: {
     label: '✂️ Shard Document',
     agent: 'master',
     skills: ['bmad-master'],
     model: 'sonnet',
-    outputFile: null,
-    outputDir: null,
-    prompt: (title, workdir) => `Run the BMAD shard-doc task. The user wants to split this document: ${title}\n\nProject directory: ${workdir}\n\nUse npx @kayvan/markdown-tree-parser to split the document into smaller files.`
+    prompt: (title, workdir) => `Run the BMAD shard-doc task. Split this document: ${title}\n\nDirectory: ${workdir}\n\nUse: npx @kayvan/markdown-tree-parser explode [source-file] [destination-folder]`
   }
 };
 
