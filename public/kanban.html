@@ -671,6 +671,7 @@ const COLS=[
   {id:'backlog',dot:'dot-backlog'},
   {id:'bmad_workflow',dot:'dot-bmad_workflow',bmad:true},
   {id:'todo',dot:'dot-todo'},
+  {id:'in_progress',dot:'dot-in_progress'},
   // ── BMAD workflow phases: center ──
   {id:'bmad_brainstorm',dot:'dot-bmad_brainstorm',bmad:true,bmadOrder:0},
   {id:'bmad_prd',dot:'dot-bmad_prd',bmad:true,bmadOrder:1},
@@ -680,8 +681,6 @@ const COLS=[
   // ── Standard: right side ──
   {id:'done',dot:'dot-done'},
   {id:'cancelled',dot:'dot-cancelled'},
-  // Hidden but kept for data compatibility
-  {id:'in_progress',dot:'dot-in_progress'},
 ];
 let tasks=[],sessions=[],projects=[];
 let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
