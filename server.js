@@ -791,21 +791,7 @@ async function startTask(task) {
     }
     // Build prompt
     let parts;
-    // Check if this is a resumed task (has session + user replied)
-    const _replyCheck = sessionId ? db.prepare(
-      `SELECT content FROM messages WHERE session_id=? AND role='user' ORDER BY created_at DESC LIMIT 1`
-    ).get(sessionId) : null;
-    const _lastAssist = sessionId ? db.prepare(
-      `SELECT created_at FROM messages WHERE session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1`
-    ).get(sessionId) : null;
-    const _userReply = _replyCheck && _lastAssist ? db.prepare(
-      `SELECT content FROM messages WHERE session_id=? AND role='user' AND created_at > ? ORDER BY created_at DESC LIMIT 1`
-    ).get(sessionId, _lastAssist.created_at) : null;
-
-    if (_userReply && claudeSessionId) {
-      // Resuming with user's reply — use it as the prompt
-      parts = [_userReply.content];
-    } else if (task._bmadWorkflow) {
+    if (task._bmadWorkflow) {
       // Use the workflow-defined prompt + include task description if provided
       const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
       parts = [wfPrompt];
@@ -866,6 +852,23 @@ async function startTask(task) {
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
     const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
+    
+    // Check if this is a resumed task with user reply (awaiting_input → todo)
+    if (claudeSessionId && sessionId) {
+      const _lastAssist = db.prepare(
+        `SELECT created_at FROM messages WHERE session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1`
+      ).get(sessionId);
+      if (_lastAssist) {
+        const _userReply = db.prepare(
+          `SELECT content FROM messages WHERE session_id=? AND role='user' AND created_at > ? ORDER BY created_at DESC LIMIT 1`
+        ).get(sessionId, _lastAssist.created_at);
+        if (_userReply) {
+          prompt = _userReply.content;
+          log.info(`[taskWorker] task ${task.id}: resuming with user reply`);
+        }
+      }
+    }
+    
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
