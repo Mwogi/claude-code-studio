@@ -1011,14 +1011,18 @@ async function startTask(task) {
           
           if (isAskingQuestion) {
             // Claude is waiting for user input — park the task
-            const questionSnippet = tail.slice(tail.lastIndexOf('\n', tail.lastIndexOf('?')) + 1).trim().substring(0, 500);
+            // Extract last meaningful section for context (last 1500 chars, trimmed to last section break)
+            const contextRaw = (fullText || '').slice(-1500);
+            const sectionBreak = contextRaw.search(/\n#{1,3} |\n\*\*[A-Z]|\n---/);
+            const contextSnippet = (sectionBreak > 0 ? contextRaw.slice(sectionBreak) : contextRaw).trim().substring(0, 1800);
+            
             db.prepare(`UPDATE tasks SET status='awaiting_input', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(task.id);
             log.info(`[taskWorker] task ${task.id}: awaiting user input`);
             wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
             // Notify via Discord
             const projName = getProjectName(task.workdir);
-            openclawNotify.taskAwaitingInput(task, projName, questionSnippet);
+            openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
           } else {
           // ✅ Success
           db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
@@ -1045,7 +1049,23 @@ async function startTask(task) {
             duration: Date.now() - _taskStartedAt,
             workdir: task.workdir || null,
           });
-          openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir));
+          // Extract summary from end of output for notification
+          const _completionTail = (fullText || '').slice(-2000);
+          // Look for VERIFICATION block, or last markdown section, or last 500 chars
+          let _summary = '';
+          const verMatch = _completionTail.match(/VERIFICATION:[\s\S]*/);
+          if (verMatch) {
+            _summary = verMatch[0].substring(0, 1500);
+          } else {
+            // Find last section heading
+            const sections = _completionTail.split(/\n#{1,3} /);
+            if (sections.length > 1) {
+              _summary = '## ' + sections[sections.length - 1].trim().substring(0, 1500);
+            } else {
+              _summary = _completionTail.slice(-800).trim();
+            }
+          }
+          openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
           } // end else (non-interactive success)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure

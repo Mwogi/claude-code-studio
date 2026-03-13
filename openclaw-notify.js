@@ -35,11 +35,12 @@ function taskStarted(task, projectName) {
   notify(`🚀 ${_projectTag(projectName)}Task Started${phaseLabel}: ${task.title}\nModel: ${model}`);
 }
 
-function taskCompleted(task, durationMs, projectName) {
+function taskCompleted(task, durationMs, projectName, summary) {
   const mins = Math.round((durationMs || 0) / 60000);
   const phase = (task.notes || '').match(/\[bmad-phase:(\w+)\]/)?.[1] || '';
   const phaseLabel = phase ? ` (${phase.replace('bmad_', '')})` : '';
-  notify(`✅ ${_projectTag(projectName)}Task Done${phaseLabel}: ${task.title}\n⏱️ ${mins}min`);
+  const summaryText = summary ? `\n\n${summary}` : '';
+  notify(`✅ ${_projectTag(projectName)}Task Done${phaseLabel}: ${task.title}\n⏱️ ${mins}min${summaryText}`);
 }
 
 function taskFailed(task, reason, projectName) {
@@ -61,10 +62,10 @@ function progressSummary(projectName, stats) {
   notify(lines.join('\n'));
 }
 
-function taskAwaitingInput(task, projectName, questionSnippet) {
+function taskAwaitingInput(task, projectName, contextSnippet) {
   const prefix = projectName ? `**[${projectName}]** ` : '';
-  const question = questionSnippet ? `\n\n> ${questionSnippet}` : '';
-  notify(`💬 ${prefix}Awaiting Input: ${task.title}${question}\n\nReply in Claude Studio to continue.`);
+  const context = contextSnippet ? `\n\n${contextSnippet}` : '';
+  notify(`💬 ${prefix}Awaiting Input: ${task.title}${context}\n\nReply in Claude Studio to continue.`);
 }
 
 module.exports = { notify, taskStarted, taskCompleted, taskFailed, progressSummary, taskAwaitingInput };
