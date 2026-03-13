@@ -128,6 +128,7 @@ const BMAD_WORKFLOWS = {
     agent: 'developer',
     skills: ['bmad-master'],
     model: 'sonnet',
+    maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
   },
   'generate-context': {
@@ -184,6 +185,7 @@ const BMAD_WORKFLOWS = {
     agent: 'developer',
     skills: ['bmad-master'],
     model: 'sonnet',
+    maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story definition of done checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the story, update tasks/subtasks, file list, and dev agent record per the checklist.`
   },
   'retrospective': {
@@ -924,7 +926,7 @@ async function startTask(task) {
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
-    const effectiveTaskMaxTurns = task.max_turns || 30;
+    const effectiveTaskMaxTurns = task._bmadWorkflow?.maxTurns || task.max_turns || 30;
 
     while (true) {
       lastTaskResult = null;
@@ -2397,7 +2399,7 @@ function decryptPassword(stored) {
 
 // Maximum number of auto-continue attempts when agent hits --max-turns limit.
 // Each continue resumes the session, giving the agent another maxTurns window.
-const MAX_AUTO_CONTINUES = 3;
+const MAX_AUTO_CONTINUES = 5;
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
