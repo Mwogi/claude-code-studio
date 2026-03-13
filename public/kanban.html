@@ -172,6 +172,30 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-editor-actions .btn { padding:6px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; }
 .docs-editor-actions .btn-save { background:var(--accent); color:#fff; }
 .docs-editor-actions .btn-cancel { background:var(--s3); color:var(--fg); }
+
+/* Kanban sidebar */
+.kb-sidebar-toggle { position:fixed; left:8px; top:50%; transform:translateY(-50%); z-index:100; background:var(--s2); border:1px solid var(--border); color:var(--fg); width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:opacity .2s; }
+.kb-sidebar-toggle:hover { background:var(--s3); }
+.kb-sidebar { position:fixed; left:0; top:0; height:100vh; width:280px; background:var(--s1); border-right:1px solid var(--border); z-index:1500; display:flex; flex-direction:column; transition:transform .25s ease; box-shadow:2px 0 12px rgba(0,0,0,.2); }
+.kb-sidebar.collapsed { transform:translateX(-100%); }
+.kb-sidebar-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.kb-sidebar-body { flex:1; overflow-y:auto; padding:8px 0; }
+.kb-sidebar-proj { padding:0; }
+.kb-sidebar-proj-hd { display:flex; align-items:center; gap:8px; padding:10px 16px; cursor:pointer; font-size:13px; font-weight:600; color:var(--fg); transition:background .15s; }
+.kb-sidebar-proj-hd:hover { background:var(--s2); }
+.kb-sidebar-proj-hd.active { color:var(--accent); }
+.kb-sidebar-proj-hd .proj-icon { font-size:14px; }
+.kb-sidebar-proj-hd .proj-arrow { font-size:10px; color:var(--muted); transition:transform .2s; }
+.kb-sidebar-proj-hd.expanded .proj-arrow { transform:rotate(90deg); }
+.kb-sidebar-proj-stats { display:flex; gap:6px; margin-left:auto; font-size:10px; color:var(--muted); }
+.kb-sidebar-proj-stats span { background:var(--s2); padding:1px 6px; border-radius:4px; }
+.kb-sidebar-sessions { display:none; padding:0 0 4px 0; }
+.kb-sidebar-sessions.open { display:block; }
+.kb-sidebar-sess { padding:6px 16px 6px 36px; font-size:12px; color:var(--fg2); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s; }
+.kb-sidebar-sess:hover { background:var(--s2); }
+.kb-sidebar-sess .sess-status { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; }
+.kb-sidebar-sess .sess-status.running { background:var(--orange); }
+.kb-sidebar-sess .sess-status.idle { background:var(--muted); }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -449,6 +473,18 @@ textarea.inp{ resize:vertical; min-height:80px; }
   <button id="bmadDocsBtn" onclick="toggleDocsPanel()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="View BMAD output documents">📄 Docs</button>
   <button id="autoModeBtn" onclick="toggleAutoMode()" style="border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="Auto Mode: automatically process all tasks">🤖 Auto Mode</button>
   <span class="status-dot ok" id="kbStatusEl">Connected</span>
+</div>
+
+<!-- Sidebar toggle -->
+<button class="kb-sidebar-toggle" id="sidebarToggle" onclick="toggleKbSidebar()" title="Projects">☰</button>
+
+<!-- Collapsible sidebar -->
+<div class="kb-sidebar collapsed" id="kbSidebar">
+  <div class="kb-sidebar-hd">
+    <span style="font-weight:700;font-size:13px">Projects</span>
+    <button class="modal-close" onclick="toggleKbSidebar()" style="font-size:16px">×</button>
+  </div>
+  <div class="kb-sidebar-body" id="kbSidebarBody"></div>
 </div>
 
 <!-- Board -->
@@ -1577,6 +1613,106 @@ document.addEventListener('keydown',e=>{
     tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed')refresh(true);};
   }catch{}
 })();
+
+// ─── Kanban Sidebar ───────────────────────────────────────────────────────
+let _kbSidebarOpen = false;
+
+function toggleKbSidebar() {
+  _kbSidebarOpen = !_kbSidebarOpen;
+  const sidebar = $i('kbSidebar');
+  const toggle = $i('sidebarToggle');
+  if (_kbSidebarOpen) {
+    sidebar.classList.remove('collapsed');
+    toggle.style.opacity = '0';
+    toggle.style.pointerEvents = 'none';
+    renderKbSidebar();
+  } else {
+    sidebar.classList.add('collapsed');
+    toggle.style.opacity = '1';
+    toggle.style.pointerEvents = 'auto';
+  }
+}
+
+async function renderKbSidebar() {
+  const body = $i('kbSidebarBody');
+  body.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:12px">Loading…</div>';
+  try {
+    const [projRes, taskRes, sessRes] = await Promise.all([
+      apiFetch('/api/projects').then(r => r.json()),
+      apiFetch('/api/tasks').then(r => r.json()),
+      apiFetch('/api/sessions').then(r => r.json()),
+    ]);
+    
+    let html = '';
+    for (const proj of projRes) {
+      const isActive = proj.workdir === curWorkdir;
+      const projTasks = taskRes.filter(t => t.workdir === proj.workdir);
+      const backlog = projTasks.filter(t => t.status === 'backlog').length;
+      const active = projTasks.filter(t => !['done','cancelled','backlog','todo'].includes(t.status)).length;
+      const done = projTasks.filter(t => t.status === 'done').length;
+      const total = projTasks.length;
+      
+      // Get sessions for this project
+      const projSessions = sessRes.filter(s => s.workdir === proj.workdir).slice(0, 10);
+      const activeTasks = projTasks.filter(t => !['done','cancelled','backlog'].includes(t.status));
+      const activeSessionIds = new Set(activeTasks.map(t => t.session_id).filter(Boolean));
+      
+      html += `<div class="kb-sidebar-proj">
+        <div class="kb-sidebar-proj-hd${isActive ? ' active' : ''}" onclick="toggleSidebarProj(this, '${escH(proj.workdir)}')">
+          <span class="proj-arrow">▸</span>
+          <span class="proj-icon">${isActive ? '●' : '○'}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(proj.name)}</span>
+          <div class="kb-sidebar-proj-stats">
+            ${active ? `<span style="color:var(--orange)">${active} active</span>` : ''}
+            <span>${done}/${total}</span>
+          </div>
+        </div>
+        <div class="kb-sidebar-sessions" id="sbSess_${escH(proj.id)}">`;
+      
+      if (projSessions.length) {
+        for (const sess of projSessions) {
+          const isRunning = activeSessionIds.has(sess.id);
+          html += `<div class="kb-sidebar-sess" onclick="window.open('/?open_session=${encodeURIComponent(sess.id)}','_blank')" title="${escH(sess.title||sess.id)}">
+            <span class="sess-status ${isRunning ? 'running' : 'idle'}"></span>
+            ${escH((sess.title || sess.id).substring(0, 40))}
+          </div>`;
+        }
+      } else {
+        html += `<div class="kb-sidebar-sess" style="color:var(--muted);cursor:default">No sessions</div>`;
+      }
+      
+      html += `</div></div>`;
+    }
+    
+    body.innerHTML = html || '<div style="padding:16px;color:var(--muted)">No projects</div>';
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px;color:var(--red)">Error loading projects</div>`;
+  }
+}
+
+function toggleSidebarProj(el, workdir) {
+  const hd = el;
+  const sessions = hd.nextElementSibling;
+  const wasExpanded = hd.classList.contains('expanded');
+  
+  // Collapse all
+  document.querySelectorAll('.kb-sidebar-proj-hd.expanded').forEach(h => {
+    h.classList.remove('expanded');
+    h.nextElementSibling?.classList.remove('open');
+  });
+  
+  if (!wasExpanded) {
+    hd.classList.add('expanded');
+    sessions?.classList.add('open');
+  }
+  
+  // Switch project if different
+  if (workdir !== curWorkdir) {
+    selectProjFromDropdown(workdir, false);
+    // Re-render after project switch
+    setTimeout(renderKbSidebar, 500);
+  }
+}
 
 // ─── BMAD Docs Panel ──────────────────────────────────────────────────────
 let _docsOpen = false;
