@@ -932,11 +932,16 @@ async function startTask(task) {
 
         if (isSuccess) {
           // Check if this is an interactive/planning task that needs user input
-          const isInteractive = task.mode === 'planning' || (fullText && (
-            fullText.includes('?') && (fullText.includes('Would you') || fullText.includes('Do you') || fullText.includes('Should I') || fullText.includes('What ') || fullText.includes('Which ') || fullText.includes('How ') || fullText.includes('please ') || fullText.includes('let me know'))
-          ));
+          // Check if Claude is asking a question at the END of its response (last 300 chars)
+          const tail = (fullText || '').slice(-300);
+          const isAskingQuestion = tail.includes('?') && (
+            tail.includes('Would you') || tail.includes('Do you') || tail.includes('Should I') ||
+            tail.includes('What ') || tail.includes('Which ') || tail.includes('How ') ||
+            tail.includes('please ') || tail.includes('let me know') || tail.includes('your thoughts') ||
+            tail.includes('prefer') || tail.includes('ready to')
+          );
           
-          if (isInteractive && task.mode === 'planning') {
+          if (isAskingQuestion && task.mode === 'planning') {
             // Keep task visible — Claude is waiting for user input
             db.prepare(`UPDATE tasks SET status='awaiting_input', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(task.id);
