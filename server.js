@@ -937,8 +937,8 @@ async function startTask(task) {
           ));
           
           if (isInteractive && task.mode === 'planning') {
-            // Keep task active — Claude is waiting for user input
-            db.prepare(`UPDATE tasks SET status='in_progress', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            // Keep task visible — Claude is waiting for user input
+            db.prepare(`UPDATE tasks SET status='awaiting_input', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(task.id);
             log.info(`[taskWorker] task ${task.id}: interactive turn complete, awaiting user input`);
             wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
@@ -1382,6 +1382,7 @@ setInterval(processQueue, 15000);
   const orphaned = db.prepare(`
     SELECT id, title, status FROM tasks 
     WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','bmad_workflow')
+    AND status != 'awaiting_input'
   `).all();
   if (orphaned.length) {
     log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
