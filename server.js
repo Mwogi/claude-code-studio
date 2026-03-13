@@ -870,12 +870,23 @@ async function startTask(task) {
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
       }
+      // Throttle text broadcasts to avoid flooding browser WebSocket
+      let _pendingText = '';
+      let _textFlushTimer = null;
+      const flushText = () => {
+        if (_pendingText) {
+          broadcastToSession(sessionId, { type: 'text', text: _pendingText, tabId: sessionId });
+          _pendingText = '';
+        }
+        _textFlushTimer = null;
+      };
       await new Promise(resolve => {
         stream
           .onText(t => {
             fullText += t;
             taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
-            broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
+            _pendingText += t;
+            if (!_textFlushTimer) _textFlushTimer = setTimeout(flushText, 150);
           })
           .onTool((name, inp) => {
             try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (inp || '').substring(0, 500), name, null, null, null); } catch {}
@@ -893,6 +904,7 @@ async function startTask(task) {
           })
           .onDone(sid => {
             if (sid) { newCid = sid; currentTaskCid = sid; }
+            if (_textFlushTimer) { clearTimeout(_textFlushTimer); flushText(); }
             resolve();
           });
       });
