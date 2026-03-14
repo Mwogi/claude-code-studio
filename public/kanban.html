@@ -1022,11 +1022,19 @@ function makeCard(tk){
   const wfTagM=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
   const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard'};
   const wfBadge=wfTagM?`<span class="badge badge-purple" style="background:rgba(147,51,234,.18);color:#c084fc">${escH(wfLabels[wfTagM[1]]||wfTagM[1])}</span>`:'';
+  // Chain badge
+  let chainBadge='';
+  if(tk.chain_id){
+    const chainTasks=tasks.filter(t=>t.chain_id===tk.chain_id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    const idx=chainTasks.findIndex(t=>t.id===tk.id);
+    const total=chainTasks.length;
+    if(total>1) chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}">🔗 ${idx+1}/${total}</span>`;
+  }
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${wfBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${schedBadge}${wfBadge}${chainBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
@@ -1390,6 +1398,19 @@ function buildForm(tk={}){
       <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
       <div class="att-dropzone" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
       <div class="att-previews" id="attPreviews"></div>
+    </div>
+    <div><label class="lbl">🔗 Run After (Chain)</label>
+      <select id="fAfter" class="sel">
+        <option value="">No dependency (run immediately)</option>
+        ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
+          .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+          .slice(0,30)
+          .map(t=>{
+            const sel=(tk.chain_id&&t.chain_id===tk.chain_id&&(t.sort_order||0)<(tk.sort_order||0))?'selected':'';
+            return '<option value="'+t.id+'" '+sel+'>'+escH((t.title||t.id).substring(0,60))+' ['+t.status+']</option>';
+          }).join('')}
+      </select>
+      ${tk.chain_id?'<div style="margin-top:4px;font-size:11px;color:#9ca3af">🔗 Chain: <code style="font-size:10px">'+escH(tk.chain_id)+'</code></div>':''}
     </div>`;
 }
 
@@ -1620,10 +1641,12 @@ async function saveTask(){
         body.session_id=session_id;
         toast(t('toast.sess_created'));
       }
+      const afterId=$i('fAfter')?.value||'';
+      if(afterId) body.after=afterId;
       const colTasks=tasks.filter(tk=>tk.status===body.status);
       body.sort_order=colTasks.length?Math.max(...colTasks.map(tk=>tk.sort_order))+1000:0;
       await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      toast(t('toast.created'));
+      toast(afterId?'✅ Created & chained':t('toast.created'));
     }else{
       const orig=tasks.find(tk=>tk.id===editingId);
       if(orig)body.sort_order=orig.sort_order;
