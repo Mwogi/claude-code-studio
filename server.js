@@ -1517,7 +1517,7 @@ setInterval(processQueue, 15000);
 })();
 
 // ── Auto Mode: automatically move backlog → todo for auto-enabled projects ──
-const AUTO_MODE_CONCURRENCY = 5; // max concurrent chains per project
+const AUTO_MODE_CONCURRENCY = 3; // max concurrent chains per project (was 5, reduced to prevent OOM on <64GB instances)
 
 function autoModeProcess() {
   const projects = loadProjects();

@@ -206,9 +206,11 @@ class ClaudeCLI {
     // On Unix, binaries execute directly (shell:false is safer).
     const needsShell = process.platform === 'win32' &&
       /\.(cmd|bat)$/i.test(this.claudeBin);
+    // Cap each Claude process memory to 8GB to prevent OOM
+    const spawnEnv = { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS || ''} --max-old-space-size=8192`.trim() };
     const proc = spawn(this.claudeBin, args, {
       cwd: this.cwd,
-      env,
+      env: spawnEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: needsShell,
     });
