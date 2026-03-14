@@ -3219,10 +3219,26 @@ app.get('/api/tasks/running-sessions', (req, res) => {
   res.json(rows.map(r => r.session_id));
 });
 app.post('/api/tasks', (req, res) => {
-  const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
+  let { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null,
+          after=null } = req.body;
+  
+  // Auto-chaining: if 'after' is a task ID, inherit or create chain_id and set sort_order
+  if (after) {
+    const depTask = stmts.getTask.get(after);
+    if (depTask) {
+      chain_id = depTask.chain_id || `chain-${after}`;
+      sort_order = (depTask.sort_order || 0) + 1;
+      workdir = workdir || depTask.workdir;
+      // If the dependency task didn't have a chain_id, assign one retroactively
+      if (!depTask.chain_id) {
+        db.prepare(`UPDATE tasks SET chain_id=? WHERE id=?`).run(chain_id, after);
+      }
+    }
+  }
+  
   const id = genId();
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null);
   const task = stmts.getTask.get(id);
@@ -3265,11 +3281,17 @@ app.post('/api/bmad/command', (req, res) => {
         : `${parsed.workflow} — ${proj.name}`;
       
       try {
-        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie);
+        const opts = {};
+        if (parsed.chainAfterLast) {
+          const lastTask = await bmadBridge.findLastTask(cookie, proj.workdir);
+          if (lastTask) opts.after = lastTask.id;
+        }
+        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie, opts);
         if (task.error) return res.json({ error: task.error });
+        const chainNote = task.chain_id ? `\n🔗 Chained after: \`${opts.after?.slice(0,8) || '—'}\`` : '';
         res.json({ 
           ok: true, 
-          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\``,
+          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\`${chainNote}`,
           taskId: task.id 
         });
       } catch (e) {
