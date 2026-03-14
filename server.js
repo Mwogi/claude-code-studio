@@ -778,7 +778,7 @@ async function startTask(task) {
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(bmadPhaseMatch[1], task.id);
       } else if (task._bmadWorkflow) {
         // Map BMAD workflow type to the appropriate phase column
-        const wfType = task._bmadWorkflow.id || '';
+        const wfType = task._bmadWorkflowType || '';
         const WORKFLOW_TO_PHASE = {
           'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
           'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
