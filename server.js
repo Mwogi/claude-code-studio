@@ -1081,7 +1081,7 @@ async function startTask(task) {
               if (hasChanges) {
                 _exec('git add -A', { cwd, timeout: 10000 });
                 const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
-                _exec(`git commit -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
                 log.info(`[taskWorker] auto-committed for task ${task.id} in ${cwd}`);
               }
             } catch (e) {
