@@ -777,8 +777,20 @@ async function startTask(task) {
       if (bmadPhaseMatch) {
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(bmadPhaseMatch[1], task.id);
       } else if (task._bmadWorkflow) {
-        // BMAD upstream workflow task — keep it in bmad_workflow column while running
-        db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(task.id);
+        // Map BMAD workflow type to the appropriate phase column
+        const wfType = task._bmadWorkflow.id || '';
+        const WORKFLOW_TO_PHASE = {
+          'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
+          'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
+          'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
+          'sprint-planning': 'bmad_implementation', 'create-story': 'bmad_implementation',
+          'dev-story': 'bmad_implementation', 'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
+          'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
+          'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
+          'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
+        };
+        const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_workflow';
+        db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
       } else {
         stmts.setTaskInProgress.run(task.id);
       }
