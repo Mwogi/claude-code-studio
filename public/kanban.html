@@ -1028,7 +1028,12 @@ function makeCard(tk){
     const chainTasks=tasks.filter(t=>t.chain_id===tk.chain_id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     const idx=chainTasks.findIndex(t=>t.id===tk.id);
     const total=chainTasks.length;
-    if(total>1) chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}">🔗 ${idx+1}/${total}</span>`;
+    const earlierPending=chainTasks.some(t=>(t.sort_order||0)<(tk.sort_order||0)&&!['done','cancelled'].includes(t.status));
+    if(total>1){
+      const waitIcon=earlierPending&&tk.status==='todo'?'⏳':'🔗';
+      const waitTip=earlierPending?' (waiting for previous task)':'';
+      chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}${waitTip}">${waitIcon} ${idx+1}/${total}</span>`;
+    }
   }
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
