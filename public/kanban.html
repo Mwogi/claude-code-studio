@@ -124,6 +124,87 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .proj-dd-item .proj-dd-item-path { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 22px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
 .proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
+.proj-dd-divider { height:1px; background:var(--border); margin:4px 8px; }
+.proj-dd-add .proj-dd-item-name { color:var(--accent) !important; }
+.proj-add-form { padding:8px 12px; }
+
+/* BMAD Docs Panel */
+.docs-panel { position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--s1); border:none; box-shadow:none; z-index:2000; display:flex; flex-direction:column; transition:transform .25s ease; }
+.docs-panel.hidden { transform:translateX(100%); pointer-events:none; }
+.docs-panel-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.docs-panel-title { font-size:15px; font-weight:700; color:var(--fg); }
+.docs-panel-body { display:flex; flex:1; overflow:hidden; }
+.docs-sidebar { width:240px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
+.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-content h1,.docs-content h2,.docs-content h3 { color:var(--fg); margin:1em 0 .5em; }
+.docs-content h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+.docs-content h2 { font-size:16px; }
+.docs-content h3 { font-size:14px; }
+.docs-content pre { background:var(--s2); padding:10px; border-radius:6px; overflow-x:auto; font-size:12px; }
+.docs-content code { background:var(--s2); padding:1px 4px; border-radius:3px; font-size:12px; }
+.docs-content pre code { background:none; padding:0; }
+.docs-content ul,.docs-content ol { padding-left:20px; }
+.docs-content blockquote { border-left:3px solid var(--accent); padding-left:12px; color:var(--muted); margin:8px 0; }
+.docs-content table { border-collapse:collapse; width:100%; margin:8px 0; }
+.docs-content th,.docs-content td { border:1px solid var(--border); padding:6px 10px; text-align:left; font-size:12px; }
+.docs-content th { background:var(--s2); font-weight:600; }
+.docs-content .yaml-content { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; background:var(--s2); padding:12px; border-radius:6px; }
+.docs-empty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
+.docs-cat { padding:6px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:8px; }
+.docs-cat:first-child { margin-top:0; }
+.docs-file { padding:8px 16px; cursor:pointer; font-size:13px; color:var(--fg2); display:flex; align-items:center; gap:8px; transition:background .15s; }
+.docs-file:hover { background:var(--s2); }
+.docs-file.active { background:var(--accent); color:#fff; border-radius:0; }
+.docs-file-icon { font-size:14px; flex-shrink:0; }
+.docs-file-info { flex:1; min-width:0; }
+.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.docs-file-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+.docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
+/* Docs editor */
+.docs-editor { display:flex; flex:1; overflow:hidden; height:100%; }
+.docs-editor-left { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+.docs-editor-right { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-editor-toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--s2); }
+.docs-editor-toolbar input { flex:1; background:var(--s1); border:1px solid var(--border); color:var(--fg); padding:4px 8px; border-radius:4px; font-size:13px; font-weight:600; }
+.docs-editor-toolbar select { background:var(--s1); border:1px solid var(--border); color:var(--fg); padding:4px 8px; border-radius:4px; font-size:12px; }
+.docs-editor-textarea { flex:1; background:var(--s1); color:var(--fg); border:none; padding:16px; font-family:var(--font-mono); font-size:13px; line-height:1.6; resize:none; outline:none; tab-size:2; }
+.docs-editor-actions { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--border); justify-content:flex-end; flex-shrink:0; background:var(--s2); }
+.docs-editor-actions .btn { padding:6px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; }
+.docs-editor-actions .btn-save { background:var(--accent); color:#fff; }
+.docs-editor-actions .btn-cancel { background:var(--s3); color:var(--fg); }
+
+/* Kanban sidebar */
+.kb-sidebar { position:fixed; left:0; top:0; height:100vh; width:280px; background:var(--s1); border-right:1px solid var(--border); z-index:1500; display:flex; flex-direction:column; transition:transform .25s ease; box-shadow:2px 0 12px rgba(0,0,0,.2); }
+.kb-sidebar.collapsed { transform:translateX(-100%); }
+.kb-sidebar-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.kb-sidebar-body { flex:1; overflow-y:auto; padding:8px 0; }
+.kb-sidebar-proj { padding:0; }
+.kb-sidebar-proj-hd { display:flex; align-items:center; gap:8px; padding:10px 16px; cursor:pointer; font-size:13px; font-weight:600; color:var(--fg); transition:background .15s; }
+.kb-sidebar-proj-hd:hover { background:var(--s2); }
+.kb-sidebar-proj-hd.active { color:var(--accent); }
+.kb-sidebar-proj-hd .proj-icon { font-size:14px; }
+.kb-sidebar-proj-hd .proj-arrow { font-size:10px; color:var(--muted); transition:transform .2s; }
+.kb-sidebar-proj-hd.expanded .proj-arrow { transform:rotate(90deg); }
+.kb-sidebar-proj-stats { display:flex; gap:6px; margin-left:auto; font-size:10px; color:var(--muted); }
+.kb-sidebar-proj-stats span { background:var(--s2); padding:1px 6px; border-radius:4px; }
+.kb-sidebar-sessions { display:none; padding:0 0 4px 0; }
+.kb-sidebar-sessions.open { display:block; }
+.kb-sidebar-sess { padding:6px 16px 6px 36px; font-size:12px; color:var(--fg2); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s; }
+.kb-sidebar-sess:hover { background:var(--s2); }
+.kb-sidebar-sess .sess-status { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px; }
+.kb-sidebar-sess .sess-status.running { background:var(--orange); }
+.kb-sidebar-sess .sess-status.idle { background:var(--muted); }
+.kb-sidebar-section { padding:8px 16px 4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.kb-sidebar-mcp { display:flex; align-items:center; gap:8px; padding:6px 16px; font-size:12px; color:var(--fg2); cursor:pointer; transition:background .15s; }
+.kb-sidebar-mcp:hover { background:var(--s2); }
+.mcp-status { font-size:10px; }
+.mcp-status.on { color:var(--green); }
+.mcp-status.off { color:var(--muted); }
+.mcp-name { flex:1; }
+.mcp-toggle { font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; }
+.mcp-status.on + .mcp-name + .mcp-toggle { color:var(--green); background:rgba(34,197,94,.1); }
+.mcp-status.off + .mcp-name + .mcp-toggle { color:var(--muted); background:var(--s2); }
+.kb-sidebar-skill { display:flex; align-items:center; gap:8px; padding:5px 16px; font-size:12px; color:var(--fg2); }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -161,8 +242,22 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .dot-backlog{ background:var(--muted); }
 .dot-todo{ background:var(--blue); }
 .dot-in_progress{ background:var(--orange); }
+.dot-awaiting_input{ background:#f59e0b; }
 .dot-done{ background:var(--green); }
 .dot-cancelled{ background:var(--red); }
+/* BMAD upstream workflow colour */
+.dot-bmad_workflow{ background:#9333ea; }
+/* BMAD phase colours */
+.dot-bmad_brainstorm{ background:#a855f7; }
+.dot-bmad_prd{ background:#7c6aef; }
+.dot-bmad_architecture{ background:#58a6ff; }
+.dot-bmad_implementation{ background:#3fb950; }
+.dot-bmad_qa{ background:#e5a435; }
+/* BMAD phase column accent */
+.col-head.bmad-col{ border-color:rgba(124,106,239,.35); background:linear-gradient(135deg,rgba(124,106,239,.12),rgba(124,106,239,.05)); }
+.col-head.bmad-col .col-title{ color:var(--accent2); }
+/* BMAD board section divider */
+.board-divider{ flex-shrink:0; width:1px; background:var(--border); margin:0 8px; align-self:stretch; opacity:.6; }
 
 /* ─── Card ─── */
 .card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s,transform .1s; }
@@ -177,6 +272,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .badge-accent{ background:var(--abg); color:var(--accent2); border:1px solid rgba(124,106,239,.2); max-width:140px; overflow:hidden; text-overflow:ellipsis; }
 .badge-green{ background:rgba(63,185,80,.12); color:var(--green); border:1px solid rgba(63,185,80,.2); }
 .badge-orange{ background:rgba(229,164,53,.12); color:var(--orange); border:1px solid rgba(229,164,53,.2); }
+.badge-purple{ background:rgba(139,92,246,.12); color:#a78bfa; border:1px solid rgba(139,92,246,.25); }
+.badge-blue{ background:rgba(56,139,253,.1); color:#58a6ff; border:1px solid rgba(56,139,253,.2); }
 .badge-sched{ background:rgba(56,139,253,.1); color:#58a6ff; border:1px solid rgba(56,139,253,.22); display:inline-flex; align-items:center; gap:3px; cursor:default; }
 .sched-info{ display:flex; align-items:center; gap:7px; background:rgba(56,139,253,.07); border:1px solid rgba(56,139,253,.2); color:#58a6ff; border-radius:6px; padding:8px 12px; font-size:12px; line-height:1.4; }
 .sched-info strong{ color:#79b8ff; font-weight:600; }
@@ -190,7 +287,35 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 /* ─── Modal overlay ─── */
 .ov{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; backdrop-filter:blur(4px); }
 .ov.hidden{ display:none; }
-.modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:680px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
+.modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
+.modal.has-chat{ max-width:1200px; height:92vh; min-height:600px; }
+.modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
+.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
+.modal-left .modal-body{ padding:16px; gap:10px; }
+.modal-right{ flex:1; display:flex; flex-direction:column; min-width:0; height:100%; overflow:hidden; }
+.modal-right .chat-panel{ border:none; border-radius:0; flex:1; display:flex; flex-direction:column; height:100%; overflow:hidden; }
+.modal-right .chat-panel-hd{ padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.modal-right .chat-panel-body{ flex:1; overflow-y:auto; padding:10px 14px; font-size:12px; min-height:0; }
+.modal-right .chat-msg{ margin-bottom:8px; padding:6px 8px; border-radius:6px; background:var(--s2); }
+.modal-right .chat-role{ font-size:10px; font-weight:700; margin-bottom:2px; }
+.modal-right .chat-role.assistant{ color:var(--accent); }
+.modal-right .chat-role.user{ color:var(--green); }
+.modal-right .chat-role.tool{ color:var(--orange); }
+.modal-right .chat-text{ white-space:pre-wrap; word-break:break-word; color:var(--fg2); line-height:1.4; }
+.modal-right .chat-empty{ padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+.modal-right .chat-tools-group{ margin-bottom:6px; border-radius:6px; background:var(--s2); font-size:11px; }
+.modal-right .chat-tools-summary{ padding:6px 10px; cursor:pointer; color:var(--muted); font-weight:500; list-style:none; user-select:none; }
+.modal-right .chat-tools-summary::-webkit-details-marker{ display:none; }
+.modal-right .chat-tools-summary::before{ content:'▸ '; }
+.modal-right details[open] .chat-tools-summary::before{ content:'▾ '; }
+.modal-right .chat-tools-detail{ padding:4px 10px 8px; border-top:1px solid var(--border); max-height:200px; overflow-y:auto; }
+.modal-right .tool-item{ padding:2px 0; color:var(--muted); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.modal-right .tool-name{ color:var(--orange); font-weight:600; }
+.modal-right .tool-input{ opacity:0.7; }
+.modal-right .live-badge{ display:inline-flex; align-items:center; gap:4px; color:var(--orange); font-size:11px; font-weight:600; }
+.modal-right .live-badge .spinning{ width:10px; height:10px; border-width:1.5px; }
+.modal.no-chat .modal-split{ display:block; }
+.modal.no-chat .modal-left{ flex:1; border-right:none; }
 .modal-hd{ display:flex; align-items:center; gap:10px; padding:15px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .modal-hd-title{ font-size:15px; font-weight:700; flex:1; }
 .modal-close{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:20px; padding:2px 6px; border-radius:var(--r-sm); line-height:1; transition:color .1s,background .1s; }
@@ -221,14 +346,19 @@ textarea.inp{ resize:vertical; min-height:80px; }
 /* ─── Chat history panel in modal ─── */
 .chat-panel{ border:1px solid var(--border); border-radius:var(--r-md); overflow:hidden; }
 .chat-panel-hd{ padding:8px 14px; background:var(--s2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
-.chat-panel-body{ max-height:280px; overflow-y:auto; }
+.chat-panel-body{ overflow-y:auto; }
+.chat-reply-bar{ display:flex; gap:6px; padding:8px 12px; border-top:1px solid var(--border); flex-shrink:0; background:var(--s2); }
+.chat-reply-input{ flex:1; background:var(--s1); border:1px solid var(--border); color:var(--fg); padding:6px 10px; border-radius:6px; font-size:12px; outline:none; }
+.chat-reply-input:focus{ border-color:var(--accent); }
+.chat-reply-btn{ background:var(--accent); color:#fff; border:none; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.chat-reply-btn:hover{ opacity:.9; }
 .chat-msg{ padding:9px 14px; border-bottom:1px solid var(--border); }
 .chat-msg:last-child{ border-bottom:none; }
 .chat-role{ font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:3px; letter-spacing:.5px; }
 .chat-role.user{ color:var(--blue); }
 .chat-role.assistant{ color:var(--accent2); }
 .chat-role.tool{ color:var(--orange); }
-.chat-text{ font-size:12px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; max-height:100px; overflow:hidden; }
+.chat-text{ font-size:12px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; }
 .chat-empty{ padding:20px; text-align:center; color:var(--muted); font-size:12px; }
 .sess-info{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto; }
 .mono-tag{ font-family:monospace; font-size:11px; color:var(--muted); background:var(--s3); padding:2px 7px; border-radius:4px; cursor:pointer; border:1px solid var(--border); transition:border-color .1s; }
@@ -283,6 +413,10 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .board { padding: 10px 8px 16px; gap: 8px; }
   .col { width: 240px; }
   .modal { max-width: 95vw; max-height: 92vh; max-height: 92dvh; }
+  .modal-left { flex: 0 0 320px; }
+  .modal-split { flex-direction: column; }
+  .modal-left { border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 auto; max-height: 40vh; }
+  .modal-right { flex: 1; min-height: 200px; }
   .grid2 { grid-template-columns: 1fr; }
   .card-actions { opacity: 1; }
   /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
@@ -302,7 +436,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <!-- Header -->
 <div class="hdr">
   <div class="hdr-l">
-    <div class="logo">CCS</div>
+    <div class="logo" onclick="toggleKbSidebar()" style="cursor:pointer" title="Projects & Settings">CCS</div>
     <nav class="nav-sw" aria-label="Навігація між розділами">
       <a class="nav-sw-btn" href="/" data-tip="Чат">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -350,7 +484,19 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
   <span class="refresh-ts" id="refreshTs2"></span>
   <span style="flex:1"></span>
+  <button id="sprintSyncBtn" onclick="showSprintSync()" style="background:var(--accent2);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="Sync BMAD sprint-status.yaml tasks to Kanban">⚡ Sprint Sync</button>
+  <button id="bmadDocsBtn" onclick="toggleDocsPanel()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="View BMAD output documents">📄 Docs</button>
+  <button id="autoModeBtn" onclick="toggleAutoMode()" style="border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="Auto Mode: automatically process all tasks">🤖 Auto Mode</button>
   <span class="status-dot ok" id="kbStatusEl">Connected</span>
+</div>
+
+<!-- Collapsible sidebar -->
+<div class="kb-sidebar collapsed" id="kbSidebar">
+  <div class="kb-sidebar-hd">
+    <span style="font-weight:700;font-size:13px">Projects</span>
+    <button class="modal-close" onclick="toggleKbSidebar()" style="font-size:16px">×</button>
+  </div>
+  <div class="kb-sidebar-body" id="kbSidebarBody"></div>
 </div>
 
 <!-- Board -->
@@ -358,13 +504,20 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
 <!-- Task modal -->
 <div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+  <div class="modal" id="taskModal">
     <div class="modal-hd">
       <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="modal-body" id="modalBody"></div>
-    <div class="modal-ft" id="modalFt"></div>
+    <div class="modal-split">
+      <div class="modal-left">
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-ft" id="modalFt"></div>
+      </div>
+      <div class="modal-right" id="modalChat" style="display:none">
+        <div id="chatContainer" style="display:flex;flex-direction:column;height:100%;overflow:hidden"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -393,6 +546,11 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
     'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
+    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'bmad.gate_warn':'⚠️ BMAD gate: попередня фаза ще не завершена',
+    'bmad.tpl_filled':'✓ Шаблон застосовано','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Нова задача','modal.edit':'Редагувати задачу',
     'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
     'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
@@ -421,8 +579,13 @@ const TR = {
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
-    'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
+    'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'⏳ In Progress','col.awaiting_input':'💬 Awaiting Input',
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
+    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'bmad.gate_warn':'⚠️ BMAD gate: previous phase not completed yet',
+    'bmad.tpl_filled':'✓ Template applied','bmad.use_tpl':'🧙 BMAD Template',
     'modal.add':'New task','modal.edit':'Edit task',
     'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
     'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
@@ -453,6 +616,11 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
     'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
+    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'bmad.gate_warn':'⚠️ BMAD gate: предыдущая фаза ещё не завершена',
+    'bmad.tpl_filled':'✓ Шаблон применён','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
     'modal.name':'Название *','modal.status':'Статус','modal.session':'Связанная сессия',
     'modal.no_session':'— без сессии —','modal.new_session':'➕ Новая сессия',
@@ -492,10 +660,32 @@ document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', 
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
 // ─── State ────────────────────────────────────────────────────────────────
+// BMAD phase columns (planning workflow) + standard kanban columns
+const BMAD_PHASES=['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
+const BMAD_PHASE_SET=new Set(BMAD_PHASES);
+// Helper: is a task actively running? (standard in_progress, bmad_workflow, OR any BMAD phase)
+function isTaskActive(status){ return status==='in_progress'||status==='bmad_workflow'||BMAD_PHASE_SET.has(status); }
+// Template mappings for BMAD phases (Task 8)
+const BMAD_PHASE_TEMPLATES={
+  'bmad_brainstorm':'brainstorming-session',
+  'bmad_prd':'prd',
+  'bmad_architecture':'tech-spec',
+  'bmad_qa':'readiness-report',
+};
 const COLS=[
+  // ── Standard: left side ──
   {id:'backlog',dot:'dot-backlog'},
+  {id:'bmad_workflow',dot:'dot-bmad_workflow',bmad:true},
   {id:'todo',dot:'dot-todo'},
   {id:'in_progress',dot:'dot-in_progress'},
+  {id:'awaiting_input',dot:'dot-awaiting_input'},
+  // ── BMAD workflow phases: center ──
+  {id:'bmad_brainstorm',dot:'dot-bmad_brainstorm',bmad:true,bmadOrder:0},
+  {id:'bmad_prd',dot:'dot-bmad_prd',bmad:true,bmadOrder:1},
+  {id:'bmad_architecture',dot:'dot-bmad_architecture',bmad:true,bmadOrder:2},
+  {id:'bmad_implementation',dot:'dot-bmad_implementation',bmad:true,bmadOrder:3},
+  {id:'bmad_qa',dot:'dot-bmad_qa',bmad:true,bmadOrder:4},
+  // ── Standard: right side ──
   {id:'done',dot:'dot-done'},
   {id:'cancelled',dot:'dot-cancelled'},
 ];
@@ -512,6 +702,20 @@ try{
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function stripBmadTags(s){return String(s||'').replace(/\[bmad-(?:workflow|phase):[\w-]+\]/g,'').replace(/\[bmad:[^\]]+\]/g,'').trim();}
+function extractBmadTags(s){const tags=[];const re=/\[(bmad(?:-\w+)?):([^\]]+)\]/g;let m;while((m=re.exec(s||''))!==null)tags.push({type:m[1],value:m[2]});return tags;}
+function renderNotesTags(notes,workflowVal){
+  const el=$i('fNotesTags');if(!el)return;
+  const tags=extractBmadTags(notes||'');
+  if(workflowVal){const has=tags.some(t=>t.type==='bmad-workflow');if(!has)tags.unshift({type:'bmad-workflow',value:workflowVal});}
+  if(!tags.length){el.innerHTML='';return;}
+  el.innerHTML=tags.map(t=>{
+    const colors={'bmad-workflow':'#9333ea','bmad-phase':'#f59e0b','bmad':'#3b82f6'};
+    const labels={'bmad-workflow':'Workflow','bmad-phase':'Phase','bmad':'Sprint'};
+    const c=colors[t.type]||'#6b7280';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c}22;color:${c};border:1px solid ${c}44;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600"><span style="font-size:9px">${escH(labels[t.type]||t.type)}</span>${escH(t.value)}</span>`;
+  }).join('');
+}
 function $i(id){return document.getElementById(id);}
 function relTime(iso){
   if(!iso)return'';
@@ -629,12 +833,36 @@ function renderProjDropdownList(filter = '') {
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>
     `;
-  }).join('');
+  }).join('') + `
+    <div class="proj-dd-divider"></div>
+    <div class="proj-dd-item proj-dd-add" onclick="showAddProjectForm()">
+      <div class="proj-dd-item-name">➕ Add Project</div>
+    </div>
+  `;
 }
 
 function filterProjDropdown(value) {
   renderProjDropdownList(value);
 }
+
+function showAddProjectForm() {
+  // Open the Chat page's Add Project modal in a popup window
+  const w = 600, h = 700;
+  const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
+  const popup = window.open('/?addProject=1', 'addProject', `width=${w},height=${h},left=${left},top=${top},resizable=yes`);
+  if(popup) {
+    closeProjDropdown();
+    // Poll for popup close, then reload projects
+    const check = setInterval(() => {
+      if(popup.closed) { clearInterval(check); loadProjects(); }
+    }, 500);
+  } else {
+    // Fallback: navigate
+    window.location.href = '/?addProject=1';
+  }
+}
+function hideAddProjectForm() {}
+function addProjectFromKanban() {}
 
 function selectProjFromDropdown(workdir, isAll) {
   closeProjDropdown();
@@ -674,7 +902,7 @@ async function fetchEtag(){
   return d.ts+'|'+d.n;
 }
 async function fetchMessages(sessId){
-  const d=await(await apiFetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`)).json();
+  const d=await(await apiFetch(`/api/sessions/${sessId}/messages?limit=200&offset=0`)).json();
   return d.messages||[];
 }
 
@@ -695,7 +923,7 @@ async function refresh(force=false){
 }
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
-  const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo');
+  const hasActive=tasks.some(t=>isTaskActive(t.status)||t.status==='todo');
   const delay=hasActive?5000:30000;
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
@@ -705,7 +933,7 @@ function updateStats(){
   const el=$i('kbStats');
   if(!el)return;
   const counts={backlog:0,todo:0,in_progress:0,done:0,cancelled:0};
-  for(const tk of tasks)counts[tk.status]=(counts[tk.status]||0)+1;
+  for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
   const total=tasks.length;
   const completed=counts.done;
   const active=counts.todo+counts.in_progress;
@@ -728,9 +956,9 @@ function updateStats(){
       <span class="kb-stat-lbl">${t('col.todo')}</span>
     </div>
     <div class="kb-stat">
-      <div class="kb-stat-dot dot-in_progress"></div>
+      <div class="kb-stat-dot dot-bmad_implementation"></div>
       <span class="kb-stat-num">${counts.in_progress}</span>
-      <span class="kb-stat-lbl">${t('col.in_progress')}</span>
+      <span class="kb-stat-lbl">Active</span>
     </div>
     <div class="kb-stat-spacer"></div>
     <div class="kb-stat">
@@ -748,15 +976,23 @@ function updateStats(){
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
   const board=$i('board');board.innerHTML='';
+  let lastWasBmad=false;
   for(const col of COLS){
+    if(col.hidden) continue; // Skip hidden columns (e.g., in_progress)
+    const isBmad=!!col.bmad;
+    // Add divider between BMAD section and standard section
+    if(lastWasBmad&&!isBmad){
+      const div=document.createElement('div');div.className='board-divider';board.appendChild(div);
+    }
     const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
     board.appendChild(makeColumn(col,colTasks));
+    lastWasBmad=isBmad;
   }
   updateStats();
 }
 function makeColumn(col,colTasks){
   const el=document.createElement('div');el.className='col';
-  const hd=document.createElement('div');hd.className='col-head';
+  const hd=document.createElement('div');hd.className='col-head'+(col.bmad?' bmad-col':'');
   hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
@@ -775,19 +1011,22 @@ function makeColumn(col,colTasks){
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
-  if(tk.status==='in_progress'){
+  if(isTaskActive(tk.status)){
     sessBadge=`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`;
   }else if(tk.session_id){
     sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||t('card.sess_fallback'))}</span>`;
   }
-  const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
+  const modelBadge=tk.sess_model?`<span class="badge ${tk.sess_model==='opus'?'badge-purple':tk.sess_model==='haiku'?'badge-green':'badge-blue'}">${escH(tk.sess_model)}</span>`:'';
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   const schedBadge=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
+  const wfTagM=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard'};
+  const wfBadge=wfTagM?`<span class="badge badge-purple" style="background:rgba(147,51,234,.18);color:#c084fc">${escH(wfLabels[wfTagM[1]]||wfTagM[1])}</span>`:'';
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${schedBadge}${wfBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
@@ -843,6 +1082,17 @@ function setupDropZone(el){
     }
     try{
       const task=tasks.find(tk=>tk.id===id);
+      // ── Task 7: BMAD phase gate validation ──────────────────────────────
+      const destPhaseIdx=BMAD_PHASES.indexOf(newStatus);
+      if(destPhaseIdx>0){
+        const prevPhaseId=BMAD_PHASES[destPhaseIdx-1];
+        const prevPhasePending=tasks.filter(tk=>tk.id!==id&&tk.status===prevPhaseId&&tk.status!=='done');
+        if(prevPhasePending.length>0){
+          toast(t('bmad.gate_warn')+': '+prevPhasePending.length+' task(s) in '+prevPhaseId.replace('bmad_',''),true);
+          // Non-blocking: warn but allow move
+        }
+      }
+      // For Dispatch mode in BMAD phases: set depends_on based on phase order (Task 7)
       let session_id=task?.session_id||null;
       if(newStatus==='in_progress'&&!session_id){
         const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -854,6 +1104,7 @@ function setupDropZone(el){
       }
       await apiFetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({status:newStatus,sort_order,session_id:session_id||undefined})});
+      try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_changed',id});bc.close();}catch{}
       await refresh(true);
     }catch(err){if(err.message!=='401')toast(t('toast.err')+err.message,true);}
   });
@@ -878,7 +1129,14 @@ function openAddModal(defaultStatus='backlog'){
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.create')}</button>`;
   $i('taskOv').classList.remove('hidden');
-  setTimeout(()=>$i('fTitle')?.focus(),60);
+  // Clear right panel for new tasks
+  const modalChat = $i('modalChat');
+  const modal = $i('taskModal');
+  if(modalChat) modalChat.style.display = 'none';
+  if(modal) { modal.classList.remove('has-chat'); modal.classList.add('no-chat'); }
+  $i('chatContainer').innerHTML = '';
+  if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
+  setTimeout(()=>{$i('fTitle')?.focus();renderNotesTags('','');},60);
 }
 
 // ─── Modal: Edit ───────────────────────────────────────────────────────────
@@ -889,30 +1147,149 @@ async function openEditModal(id){
   try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
   $i('modalTitle').textContent=t('modal.edit');
   $i('modalBody').innerHTML=buildForm(tk);
-  setTimeout(()=>renderAttPreviews(),0);
+  setTimeout(()=>{renderAttPreviews();renderNotesTags(tk.notes||'',$i('fWorkflow')?.value||'');},0);
   $i('modalFt').innerHTML=`
     <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
   $i('taskOv').classList.remove('hidden');
+  // Show chat panel in right side for tasks with sessions
+  const chatContainer = $i('chatContainer');
+  const modalChat = $i('modalChat');
+  const modal = $i('taskModal');
   if(tk.session_id){
     try{
       const msgs=await fetchMessages(tk.session_id);
       const chatHtml=buildChatPanel(tk,msgs);
-      const body=$i('modalBody');
-      if(body&&!$i('taskOv').classList.contains('hidden')){
-        const div=document.createElement('div');div.innerHTML=chatHtml;body.appendChild(div.firstElementChild);
-      }
-    }catch{}
+      chatContainer.innerHTML = chatHtml;
+      modalChat.style.display = '';
+      modal.classList.add('has-chat');
+      modal.classList.remove('no-chat');
+    }catch{
+      chatContainer.innerHTML = '';
+      modalChat.style.display = 'none';
+      modal.classList.remove('has-chat');
+      modal.classList.add('no-chat');
+    }
+  } else {
+    chatContainer.innerHTML = '';
+    modalChat.style.display = 'none';
+    modal.classList.remove('has-chat');
+    modal.classList.add('no-chat');
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
+  // ── WebSocket streaming for live task output ──
+  if(window._chatRefreshTimer) clearInterval(window._chatRefreshTimer);
+  if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
+  
+  if(tk.session_id && isTaskActive(tk.status)){
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}`);
+    window._kanbanWs = ws;
+    
+    // Track streaming state
+    let streamingEl = null; // current assistant message element being streamed into
+    
+    ws.onopen = () => {
+      // Subscribe to the task's session for live streaming
+      ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: tk.session_id }));
+    };
+    
+    ws.onmessage = (e) => {
+      if($i('taskOv')?.classList.contains('hidden')){ ws.close(); return; }
+      let d;
+      try { d = JSON.parse(e.data); } catch { return; }
+      const body = $i('chatPanelBody');
+      if(!body) return;
+      
+      const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+      
+      if(d.type === 'text') {
+        // Close any live tool group
+        const liveGroup = body.querySelector('.chat-tools-group-live');
+        if(liveGroup) liveGroup.classList.remove('chat-tools-group-live');
+        // Streaming text from Claude — append to current assistant message
+        if(!streamingEl) {
+          streamingEl = document.createElement('div');
+          streamingEl.className = 'chat-msg';
+          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+          body.appendChild(streamingEl);
+        }
+        const textEl = streamingEl.querySelector('.chat-text');
+        textEl.textContent += d.text;
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'tool') {
+        // Tool usage — add to current tool group or create one
+        streamingEl = null; // next text starts a new assistant block
+        let toolGroup = body.querySelector('.chat-tools-group-live');
+        if(!toolGroup) {
+          toolGroup = document.createElement('details');
+          toolGroup.className = 'chat-tools-group chat-tools-group-live';
+          toolGroup.innerHTML = '<summary class="chat-tools-summary">🔧 <span class="tool-count">1</span> tool calls</summary><div class="chat-tools-detail"></div>';
+          body.appendChild(toolGroup);
+        }
+        const count = toolGroup.querySelectorAll('.tool-item').length + 1;
+        toolGroup.querySelector('.tool-count').textContent = count;
+        const detail = toolGroup.querySelector('.chat-tools-detail');
+        const item = document.createElement('div');
+        item.className = 'tool-item';
+        item.innerHTML = `<span class="tool-name">${escH(d.tool||'')}</span> <span class="tool-input">${escH((d.input||'').substring(0,150))}</span>`;
+        detail.appendChild(item);
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'task_started') {
+        streamingEl = null;
+        const startDiv = document.createElement('div');
+        startDiv.className = 'chat-msg';
+        startDiv.innerHTML = `<div class="chat-role user">TASK</div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
+        body.appendChild(startDiv);
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'result' || d.type === 'task_done') {
+        streamingEl = null;
+        // Refresh the full message list on completion
+        fetchMessages(tk.session_id).then(msgs => {
+          if(!body) return;
+          body.innerHTML = msgs.map(m => {
+            const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
+            const label=role==='user'?'YOU':role==='tool'?`TOOL: ${escH(m.tool_name||'')}`:'CLAUDE';
+            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
+          }).join('');
+          body.scrollTop = body.scrollHeight;
+        }).catch(()=>{});
+      }
+      else if(d.type === 'catchup') {
+        // Catch-up buffer from already-running task
+        if(d.buffer) {
+          if(!streamingEl) {
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'chat-msg';
+            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+            body.appendChild(streamingEl);
+          }
+          streamingEl.querySelector('.chat-text').textContent += d.buffer;
+          body.scrollTop = body.scrollHeight;
+        }
+      }
+    };
+    
+    ws.onclose = () => { window._kanbanWs = null; };
+    ws.onerror = () => {};
+  }
 }
 
 function buildForm(tk={}){
   const isNew=!tk.id;
   const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
-  const statusOpts=COLS.map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
+  const NEW_TASK_STATUSES = new Set(['backlog','bmad_workflow','todo']);
+  const statusOpts=COLS.filter(c=>!c.hidden).map(c=>{
+    const disabled = modalMode==='add' && !NEW_TASK_STATUSES.has(c.id);
+    return disabled ? '' : `<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`;
+  }).filter(Boolean).join('');
+  const wfMatch=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfVal=wfMatch?wfMatch[1]:'';
   const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
     sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
   const visClass=!tk.session_id?' visible':'';
@@ -927,7 +1304,7 @@ function buildForm(tk={}){
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
     <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()">${statusOpts}</select></div>
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
@@ -959,11 +1336,54 @@ function buildForm(tk={}){
         </div>
       </div>
     </div>
-    <div><label class="lbl">${t('modal.desc')}</label>
+    <div>
+      <label class="lbl">${t('modal.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <div id="bmadTplBtn" style="margin-top:6px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
+        <button type="button" class="hb" style="font-size:12px;padding:4px 10px" onclick="fillBmadTemplate()">
+          ${t('bmad.use_tpl')}
+        </button>
+      </div>
     </div>
-    <div><label class="lbl">${t('modal.notes')}</label>
-      <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
+    <div><label class="lbl">Notes & Tags</label>
+      <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+      <textarea id="fNotes" class="inp" rows="2" placeholder="Additional context for the agent…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
+    </div>
+    <div><label class="lbl">BMAD Workflow</label>
+      <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
+        <option value=""${wfVal===''?' selected':''}>None (regular task)</option>
+        <optgroup label="Analysis">
+          <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
+          <option value="research"${wfVal==='research'?' selected':''}>🔬 Research (Domain/Market/Tech)</option>
+        </optgroup>
+        <optgroup label="Planning">
+          <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
+          <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
+          <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
+          <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
+        </optgroup>
+        <optgroup label="Solutioning">
+          <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture + Epics</option>
+          <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Implementation Readiness Check</option>
+        </optgroup>
+        <optgroup label="Implementation">
+          <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
+          <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
+          <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story (Implement)</option>
+          <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
+          <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
+          <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
+          <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
+          <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
+          <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
+        </optgroup>
+        <optgroup label="Tools">
+          <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
+          <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Project Context</option>
+          <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 Generate E2E Tests</option>
+          <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
+        </optgroup>
+      </select>
     </div>
     <div>
       <label class="lbl">${t('modal.attach')}</label>
@@ -1043,6 +1463,27 @@ function onFSessionChange(){
   const cfg=$i('newSessCfg');
   if(cfg)cfg.classList.toggle('visible',!hasSess);
 }
+// Task 8: Show/hide BMAD template button when status changes
+function onFStatusChange(){
+  const status=$i('fStatus')?.value||'';
+  const btn=$i('bmadTplBtn');
+  if(btn)btn.style.display=BMAD_PHASE_TEMPLATES[status]?'block':'none';
+}
+// Task 8: Fetch BMAD template and pre-fill description
+async function fillBmadTemplate(){
+  const status=$i('fStatus')?.value||'';
+  const tplKey=BMAD_PHASE_TEMPLATES[status];
+  if(!tplKey)return;
+  try{
+    const r=await apiFetch(`/api/bmad/templates/${encodeURIComponent(tplKey)}`);
+    const data=await r.json();
+    const desc=$i('fDesc');
+    if(desc&&data.content){
+      desc.value=data.content;
+      toast(t('bmad.tpl_filled'));
+    }
+  }catch(e){toast(t('toast.err')+e.message,true);}
+}
 function getSessCfg(){
   const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30};
   const cfg=$i('newSessCfg');
@@ -1057,43 +1498,110 @@ function getSessCfg(){
 }
 
 function buildChatPanel(tk,msgs){
-  const sessTitle=escH(tk.sess_title||tk.session_id);
   const claudeId=tk.claude_session_id||'';
   const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
+  const isActive=isTaskActive(tk.status);
   let msgsHtml;
   if(!msgs.length){
-    msgsHtml=`<div class="chat-empty">${t('chat.empty')}</div>`;
+    msgsHtml=`<div class="chat-empty">No messages yet${isActive?' — waiting for output...':''}</div>`;
   }else{
-    msgsHtml=msgs.map(m=>{
+    // Group consecutive tool calls into collapsible blocks
+    const groups = [];
+    let toolGroup = [];
+    for(const m of msgs){
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
-      const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
-      const text=escH((m.content||'').substring(0,300));
+      if(role==='tool'){
+        toolGroup.push(m);
+      } else {
+        if(toolGroup.length){
+          groups.push({type:'tools', items:toolGroup});
+          toolGroup=[];
+        }
+        groups.push({type:role, msg:m});
+      }
+    }
+    if(toolGroup.length) groups.push({type:'tools', items:toolGroup});
+    
+    msgsHtml = groups.map((g,i)=>{
+      if(g.type==='tools'){
+        const names = [...new Set(g.items.map(t=>t.tool_name||'tool'))];
+        const summary = `🔧 ${g.items.length} tool calls: ${names.join(', ')}`;
+        const details = g.items.map(t=>`<div class="tool-item"><span class="tool-name">${escH(t.tool_name||'')}</span> <span class="tool-input">${escH((t.content||'').substring(0,150))}</span></div>`).join('');
+        return `<details class="chat-tools-group"><summary class="chat-tools-summary">${escH(summary)}</summary><div class="chat-tools-detail">${details}</div></details>`;
+      }
+      const role=g.type;
+      const m=g.msg;
+      const label=role==='user'?'YOU':'CLAUDE';
+      const text=escH(m.content||'');
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
   const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
   const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
+  const liveBadge=isActive?`<span class="live-badge"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> Live</span>`:'';
   return `<div class="chat-panel">
     <div class="chat-panel-hd">
-      <span>${t('chat.title')}: ${sessTitle}</span>
-      <div class="sess-info">${copyBtn}${openBtn}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <span style="font-size:12px;font-weight:600;color:var(--fg)">${liveBadge} ${escH((tk.sess_title||'Session').substring(0,40))}</span>
+        <div style="display:flex;gap:6px;align-items:center">${copyBtn}${openBtn}</div>
+      </div>
     </div>
-    <div class="chat-panel-body">${msgsHtml}</div>
+    <div class="chat-panel-body" id="chatPanelBody">${msgsHtml}</div>
+    ${tk.status==='awaiting_input'||isActive?`<div class="chat-reply-bar">
+      <input type="text" id="chatReplyInput" class="chat-reply-input" placeholder="Reply to continue…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatReply('${escH(tk.id)}','${escH(tk.session_id)}')}" />
+      <button class="chat-reply-btn" onclick="sendChatReply('${escH(tk.id)}','${escH(tk.session_id)}')">Send ▶</button>
+    </div>`:''}
   </div>`;
 }
 
 // ─── Save task ────────────────────────────────────────────────────────────
+async function sendChatReply(taskId, sessionId) {
+  const input = $i('chatReplyInput');
+  const text = input?.value?.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true;
+  try {
+    const r = await apiFetch('/api/tasks/' + taskId + '/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error); input.disabled = false; return; }
+    toast('Reply sent — task resuming');
+    // Refresh to show updated status
+    setTimeout(() => refresh(true), 1000);
+  } catch (e) {
+    toast('Failed to send reply');
+  }
+  input.disabled = false;
+}
+
 async function saveTask(){
   const title=($i('fTitle')?.value||'').trim();
   if(!title){toast(t('modal.name'),true);$i('fTitle')?.focus();return;}
   let session_id=$i('fSession')?.value||null;
   const cfg=getSessCfg();
   const existingTask=editingId?tasks.find(t=>t.id===editingId):null;
+  // Handle BMAD workflow selection
+  const wfType=$i('fWorkflow')?.value||'';
+  let rawNotes=$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||'');
+  // Preserve existing bmad sprint tags from original notes
+  const origNotes=existingTask?.notes||'';
+  const sprintTags=(origNotes.match(/\[bmad:[^\]]+\]/g)||[]).join(' ');
+  const phaseTags=(origNotes.match(/\[bmad-phase:\w+\]/g)||[]).join(' ');
+  // Remove any existing workflow tag before re-tagging
+  rawNotes=rawNotes.replace(/\[bmad-workflow:[\w-]+\]/g,'').replace(/\[bmad:[^\]]+\]/g,'').replace(/\[bmad-phase:\w+\]/g,'').trim();
+  if(wfType) rawNotes=(rawNotes?rawNotes+'\n':'')+`[bmad-workflow:${wfType}]`;
+  if(sprintTags) rawNotes=(rawNotes?rawNotes+' ':'')+sprintTags;
+  if(phaseTags) rawNotes=(rawNotes?rawNotes+' ':'')+phaseTags;
+  const resolvedStatus=wfType?'bmad_workflow':($i('fStatus')?.value||'backlog');
   const body={
     title,
     description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
-    notes:$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||''),
-    status:$i('fStatus')?.value||'backlog',
+    notes:rawNotes,
+    status:resolvedStatus,
     session_id,
     workdir:curWorkdir||null,
     model:cfg.model,
@@ -1120,6 +1628,7 @@ async function saveTask(){
       const orig=tasks.find(tk=>tk.id===editingId);
       if(orig)body.sort_order=orig.sort_order;
       await apiFetch(`/api/tasks/${editingId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_changed',id:editingId});bc.close();}catch{}
       toast(t('toast.saved'));
     }
     closeModal();
@@ -1147,7 +1656,7 @@ function confirmDelete(id){
   $i('confirmOv').classList.remove('hidden');
 }
 function closeConfirm(){$i('confirmOv').classList.add('hidden');}
-function closeModal(){$i('taskOv').classList.add('hidden');}
+function closeModal(){if(window._chatRefreshTimer)clearInterval(window._chatRefreshTimer);if(window._kanbanWs){try{window._kanbanWs.close();}catch{}window._kanbanWs=null;}$i('taskOv').classList.add('hidden');}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
@@ -1175,6 +1684,591 @@ document.addEventListener('keydown',e=>{
     tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed')refresh(true);};
   }catch{}
 })();
+
+// ─── Kanban Sidebar ───────────────────────────────────────────────────────
+let _kbSidebarOpen = false;
+
+function toggleKbSidebar() {
+  _kbSidebarOpen = !_kbSidebarOpen;
+  const sidebar = $i('kbSidebar');
+  if (_kbSidebarOpen) {
+    sidebar.classList.remove('collapsed');
+    renderKbSidebar();
+  } else {
+    sidebar.classList.add('collapsed');
+  }
+}
+
+async function renderKbSidebar() {
+  const body = $i('kbSidebarBody');
+  body.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:12px">Loading…</div>';
+  try {
+    const [projRes, taskRes, sessRes, configRes] = await Promise.all([
+      apiFetch('/api/projects').then(r => r.json()),
+      apiFetch('/api/tasks').then(r => r.json()),
+      apiFetch('/api/sessions').then(r => r.json()),
+      apiFetch('/api/config').then(r => r.json()),
+    ]);
+    
+    let html = '<div class="kb-sidebar-section">PROJECTS</div>';
+    for (const proj of projRes) {
+      const isActive = proj.workdir === curWorkdir;
+      const projTasks = taskRes.filter(t => t.workdir === proj.workdir);
+      const active = projTasks.filter(t => !['done','cancelled','backlog','todo'].includes(t.status)).length;
+      const done = projTasks.filter(t => t.status === 'done').length;
+      const total = projTasks.length;
+      
+      const projSessions = sessRes.filter(s => s.workdir === proj.workdir).slice(0, 10);
+      const activeTasks = projTasks.filter(t => !['done','cancelled','backlog'].includes(t.status));
+      const activeSessionIds = new Set(activeTasks.map(t => t.session_id).filter(Boolean));
+      
+      html += `<div class="kb-sidebar-proj">
+        <div class="kb-sidebar-proj-hd${isActive ? ' active' : ''}" onclick="toggleSidebarProj(this, '${escH(proj.workdir)}')">
+          <span class="proj-arrow">▸</span>
+          <span class="proj-icon">${isActive ? '●' : '○'}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(proj.name)}</span>
+          <div class="kb-sidebar-proj-stats">
+            ${active ? `<span style="color:var(--orange)">${active}</span>` : ''}
+            <span>${done}/${total}</span>
+          </div>
+        </div>
+        <div class="kb-sidebar-sessions" id="sbSess_${escH(proj.id)}">`;
+      
+      if (projSessions.length) {
+        for (const sess of projSessions) {
+          const isRunning = activeSessionIds.has(sess.id);
+          html += `<div class="kb-sidebar-sess" onclick="window.open('/?open_session=${encodeURIComponent(sess.id)}','_blank')" title="${escH(sess.title||sess.id)}">
+            <span class="sess-status ${isRunning ? 'running' : 'idle'}"></span>
+            ${escH((sess.title || sess.id).substring(0, 40))}
+          </div>`;
+        }
+      } else {
+        html += `<div class="kb-sidebar-sess" style="color:var(--muted);cursor:default">No sessions</div>`;
+      }
+      html += `</div></div>`;
+    }
+    
+    // MCPs section
+    const mcps = configRes.mcpServers || {};
+    const mcpKeys = Object.keys(mcps);
+    if (mcpKeys.length) {
+      html += `<div class="kb-sidebar-section" style="margin-top:12px">MCP SERVERS</div>`;
+      for (const key of mcpKeys) {
+        const mcp = mcps[key];
+        const enabled = mcp.enabled !== false;
+        html += `<div class="kb-sidebar-mcp" onclick="toggleMcp('${escH(key)}')" title="${escH(mcp.description || key)}">
+          <span class="mcp-status ${enabled ? 'on' : 'off'}">${enabled ? '●' : '○'}</span>
+          <span class="mcp-name">${escH(mcp.label || key)}</span>
+          <span class="mcp-toggle">${enabled ? 'ON' : 'OFF'}</span>
+        </div>`;
+      }
+    }
+    
+    // Skills section
+    const skills = configRes.skills || {};
+    const skillKeys = Object.keys(skills).filter(k => skills[k]);
+    if (skillKeys.length) {
+      html += `<div class="kb-sidebar-section" style="margin-top:12px">SKILLS</div>`;
+      for (const key of skillKeys) {
+        html += `<div class="kb-sidebar-skill">
+          <span style="color:var(--accent);font-size:11px">✦</span>
+          <span>${escH(key)}</span>
+        </div>`;
+      }
+    }
+    
+    body.innerHTML = html || '<div style="padding:16px;color:var(--muted)">No projects</div>';
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px;color:var(--red)">Error loading</div>`;
+  }
+}
+
+async function toggleMcp(mcpId) {
+  try {
+    const cfgRes = await apiFetch('/api/config').then(r => r.json());
+    const mcp = cfgRes.mcpServers?.[mcpId];
+    if (!mcp) return;
+    mcp.enabled = !(mcp.enabled !== false);
+    await apiFetch(`/api/mcp/${mcpId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcp)
+    });
+    toast(`${mcpId}: ${mcp.enabled ? 'enabled' : 'disabled'}`);
+    renderKbSidebar();
+  } catch (e) { toast('Failed to toggle MCP'); }
+}
+
+function toggleSidebarProj(el, workdir) {
+  const hd = el;
+  const sessions = hd.nextElementSibling;
+  const wasExpanded = hd.classList.contains('expanded');
+  
+  // Collapse all
+  document.querySelectorAll('.kb-sidebar-proj-hd.expanded').forEach(h => {
+    h.classList.remove('expanded');
+    h.nextElementSibling?.classList.remove('open');
+  });
+  
+  if (!wasExpanded) {
+    hd.classList.add('expanded');
+    sessions?.classList.add('open');
+  }
+  
+  // Switch project if different
+  if (workdir !== curWorkdir) {
+    selectProjFromDropdown(workdir, false);
+    // Re-render after project switch
+    setTimeout(renderKbSidebar, 500);
+  }
+}
+
+// ─── BMAD Docs Panel ──────────────────────────────────────────────────────
+let _docsOpen = false;
+let _docsCache = null;
+
+function toggleDocsPanel() {
+  const panel = $i('docsPanel');
+  _docsOpen = !_docsOpen;
+  if (_docsOpen) {
+    panel.classList.remove('hidden');
+    loadDocsList();
+  } else {
+    panel.classList.add('hidden');
+  }
+}
+
+async function loadDocsList() {
+  if (!curWorkdir) return;
+  try {
+    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
+    const d = await r.json();
+    _docsCache = d.docs;
+    renderDocsSidebar(d.docs);
+    // Also show/hide the docs button
+    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+  } catch { }
+}
+
+function renderDocsSidebar(docs) {
+  const sidebar = $i('docsSidebar');
+  if (!docs.length) {
+    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No BMAD documents yet.<br>Run a workflow to generate them.</div>';
+    return;
+  }
+  // Group by category
+  const groups = {};
+  for (const doc of docs) {
+    if (!groups[doc.category]) groups[doc.category] = [];
+    groups[doc.category].push(doc);
+  }
+  let html = '';
+  for (const [cat, files] of Object.entries(groups)) {
+    html += `<div class="docs-cat">${escH(cat)}</div>`;
+    for (const f of files) {
+      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : '📝';
+      const size = f.size < 1024 ? f.size + 'B' : Math.round(f.size / 1024) + 'KB';
+      const date = new Date(f.modified).toLocaleDateString();
+      html += `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
+        <span class="docs-file-icon">${icon}</span>
+        <div class="docs-file-info">
+          <div class="docs-file-name">${escH(f.name)}</div>
+          <div class="docs-file-meta">${size} · ${date}</div>
+        </div>
+      </div>`;
+    }
+  }
+  sidebar.innerHTML = html;
+}
+
+async function loadDoc(filePath, el) {
+  _editingDocPath = filePath;
+  // Highlight active
+  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  
+  const content = $i('docsContent');
+  content.innerHTML = '<div class="docs-empty">Loading…</div>';
+  try {
+    const r = await apiFetch(`/api/bmad/doc?path=${encodeURIComponent(filePath)}`);
+    const d = await r.json();
+    if (d.error) { content.innerHTML = `<div class="docs-empty">${escH(d.error)}</div>`; return; }
+    
+    const toolbar = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+      <h1 style="margin:0;font-size:16px">${escH(d.name)}</h1>
+      <div style="display:flex;gap:6px">
+        <button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>
+        <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
+      </div>
+    </div>`;
+    
+    if (d.ext === '.yaml' || d.ext === '.yml') {
+      content.innerHTML = toolbar + `<div class="yaml-content">${escH(d.content)}</div>`;
+    } else {
+      content.innerHTML = toolbar + `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
+    }
+  } catch (e) {
+    content.innerHTML = `<div class="docs-empty">Error loading document</div>`;
+  }
+}
+
+function renderMarkdown(md) {
+  // Lightweight markdown renderer
+  let html = escH(md);
+  // Code blocks (``` ... ```)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code}</code></pre>`);
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold and italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Tables (simple: | col | col |)
+  html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+    const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // Paragraphs (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  // Single newlines to <br> (within paragraphs)
+  html = html.replace(/([^>])\n([^<])/g, '$1<br>$2');
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  return html;
+}
+
+// Check for docs when project changes
+// ─── Docs Editor ──────────────────────────────────────────────────────────
+let _editingDocPath = null;
+
+function newDocument() {
+  _editingDocPath = null;
+  const content = $i('docsContent');
+  content.innerHTML = buildEditor('', '', true);
+  // Deselect sidebar
+  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
+  // Focus title
+  setTimeout(() => $i('docEditorTitle')?.focus(), 100);
+}
+
+function editDocument() {
+  if (!_editingDocPath) return;
+  const content = $i('docsContent');
+  // Load existing content for editing
+  apiFetch(`/api/bmad/doc?path=${encodeURIComponent(_editingDocPath)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { toast(d.error); return; }
+      content.innerHTML = buildEditor(d.name, d.content, false);
+    })
+    .catch(() => toast('Failed to load document'));
+}
+
+function buildEditor(filename, text, isNew) {
+  const folderOptions = isNew ? `
+    <select id="docEditorFolder" class="sel">
+      <option value="docs">docs/</option>
+      <option value="_bmad-output/planning-artifacts">planning-artifacts/</option>
+      <option value="_bmad-output/implementation-artifacts">implementation-artifacts/</option>
+      <option value="_bmad-output">_bmad-output/</option>
+    </select>` : '';
+  const titleVal = isNew ? '' : filename;
+  const titleInput = isNew 
+    ? `<input id="docEditorTitle" type="text" placeholder="filename.md" value="${escH(titleVal)}">`
+    : `<span style="font-weight:600;font-size:13px;color:var(--fg)">${escH(filename)}</span>`;
+  return `
+    <div class="docs-editor">
+      <div class="docs-editor-left">
+        <div class="docs-editor-toolbar">
+          ${folderOptions}
+          ${titleInput}
+          <button onclick="insertMdHeading()" title="Heading" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">H</button>
+          <button onclick="insertMdBold()" title="Bold" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">B</button>
+          <button onclick="insertMdList()" title="List" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">☰</button>
+          <button onclick="insertMdCode()" title="Code" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-family:monospace">&lt;/&gt;</button>
+          <button onclick="insertMdTable()" title="Table" style="background:none;border:1px solid var(--border);color:var(--fg);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">▦</button>
+        </div>
+        <textarea class="docs-editor-textarea" id="docEditorText" placeholder="Write your markdown here..." oninput="updateDocPreview()">${escH(text)}</textarea>
+        <div class="docs-editor-actions">
+          <button class="btn btn-cancel" onclick="cancelEditor()">Cancel</button>
+          <button class="btn btn-save" onclick="saveDocument()">💾 Save</button>
+        </div>
+      </div>
+      <div class="docs-editor-right" id="docEditorPreview">
+        <div class="docs-empty">Preview will appear here</div>
+      </div>
+    </div>`;
+}
+
+function updateDocPreview() {
+  const text = $i('docEditorText')?.value || '';
+  const preview = $i('docEditorPreview');
+  if (preview) {
+    preview.innerHTML = text.trim() ? `<div class="md-rendered">${renderMarkdown(text)}</div>` : '<div class="docs-empty">Preview will appear here</div>';
+  }
+}
+
+function insertAtCursor(before, after='') {
+  const ta = $i('docEditorText');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  ta.value = ta.value.substring(0, start) + before + selected + after + ta.value.substring(end);
+  ta.selectionStart = start + before.length;
+  ta.selectionEnd = start + before.length + selected.length;
+  ta.focus();
+  updateDocPreview();
+}
+
+function insertMdHeading() { insertAtCursor('## '); }
+function insertMdBold() { insertAtCursor('**', '**'); }
+function insertMdList() { insertAtCursor('- '); }
+function insertMdCode() { insertAtCursor('```\n', '\n```'); }
+function insertMdTable() { insertAtCursor('| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| | | |\n'); }
+
+function cancelEditor() {
+  if (_editingDocPath) {
+    // Reload the document in view mode
+    loadDoc(_editingDocPath, null);
+  } else {
+    $i('docsContent').innerHTML = '<div class="docs-empty">Select a document to preview</div>';
+  }
+}
+
+async function saveDocument() {
+  const text = $i('docEditorText')?.value || '';
+  let filePath;
+  
+  if (_editingDocPath) {
+    filePath = _editingDocPath;
+  } else {
+    // New document
+    const folder = $i('docEditorFolder')?.value || 'docs';
+    const title = $i('docEditorTitle')?.value?.trim();
+    if (!title) { toast('Filename required'); return; }
+    const filename = title.endsWith('.md') ? title : title + '.md';
+    filePath = `${curWorkdir}/${folder}/${filename}`;
+  }
+  
+  try {
+    const r = await apiFetch('/api/bmad/doc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath, content: text })
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error); return; }
+    toast('Document saved');
+    _editingDocPath = filePath;
+    // Refresh sidebar
+    loadDocsList();
+    // Show the saved doc in view mode
+    setTimeout(() => loadDoc(filePath, null), 300);
+  } catch (e) {
+    toast('Save failed: ' + e.message);
+  }
+}
+
+async function deleteDocument(filePath) {
+  if (!confirm(`Delete ${filePath.split('/').pop()}?`)) return;
+  try {
+    const r = await apiFetch(`/api/bmad/doc?path=${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast(d.error); return; }
+    toast('Document deleted');
+    _editingDocPath = null;
+    $i('docsContent').innerHTML = '<div class="docs-empty">Select a document to preview</div>';
+    loadDocsList();
+  } catch (e) { toast('Delete failed'); }
+}
+
+async function checkBmadDocs() {
+  if (!curWorkdir) { $i('bmadDocsBtn').style.display = 'none'; return; }
+  try {
+    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
+    const d = await r.json();
+    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+  } catch { $i('bmadDocsBtn').style.display = 'none'; }
+}
+async function checkSprintStatus() {
+  if (!curWorkdir) { $i('sprintSyncBtn').style.display='none'; $i('autoModeBtn').style.display='none'; return; }
+  try {
+    const r = await apiFetch(`/api/bmad/sprint-status?workdir=${encodeURIComponent(curWorkdir)}`);
+    const d = await r.json();
+    $i('sprintSyncBtn').style.display = d.found ? '' : 'none';
+    window._sprintData = d.found ? d : null;
+  } catch { $i('sprintSyncBtn').style.display='none'; }
+  // Update auto mode button state
+  updateAutoModeBtn();
+}
+
+function updateAutoModeBtn() {
+  const btn = $i('autoModeBtn');
+  if (!curWorkdir || !projects.length) { btn.style.display='none'; return; }
+  const proj = projects.find(p => p.workdir === curWorkdir);
+  if (!proj) { btn.style.display='none'; return; }
+  btn.style.display = '';
+  if (proj.autoMode) {
+    btn.style.background = '#ef4444';
+    btn.style.color = '#fff';
+    btn.textContent = '⏸️ Stop Auto';
+    btn.title = 'Auto Mode is ON — processing tasks automatically. Click to stop.';
+  } else {
+    btn.style.background = 'var(--s2)';
+    btn.style.color = 'var(--fg)';
+    btn.style.border = '1px solid var(--border)';
+    btn.textContent = '🤖 Auto Mode';
+    btn.title = 'Enable Auto Mode: automatically process all backlog tasks, 5 at a time';
+  }
+}
+
+async function toggleAutoMode() {
+  const proj = projects.find(p => p.workdir === curWorkdir);
+  if (!proj) return;
+  const newState = !proj.autoMode;
+  if (newState) {
+    const backlogCount = tasks.filter(t => t.status === 'backlog').length;
+    if (!confirm(`Enable Auto Mode for "${proj.name}"?\n\n${backlogCount} backlog tasks will be automatically processed, 5 at a time, until all are done.\n\nEach task goes through the full BMAD pipeline (Analyst → Elicitation → Architect → Elicitation → Developer → Code Review → QA).\n\nContinue?`)) return;
+  }
+  try {
+    await apiFetch(`/api/projects/${proj.id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ autoMode: newState })
+    });
+    proj.autoMode = newState;
+    updateAutoModeBtn();
+    toast(newState ? '🤖 Auto Mode enabled' : '⏸️ Auto Mode disabled');
+    if (newState) setTimeout(() => refresh(true), 2000); // refresh to see moved tasks
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+// Check sprint status when project changes
+const _origRefresh = refresh;
+refresh = async function(force) {
+  await _origRefresh(force);
+  checkSprintStatus();
+  checkBmadDocs();
+};
+
+function showSprintSync() {
+  const d = window._sprintData;
+  if (!d) return toast('No sprint data found', true);
+
+  // Build modal content
+  let html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center" id="sprintOv" onclick="if(event.target===this)this.remove()">
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;width:95%;max-width:750px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow-xl)">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong style="font-size:15px">⚡ Sprint Sync — ${escH(d.meta.project)}</strong>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Generated: ${escH(String(d.meta.generated))} · ${d.epics.length} epics</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <select id="sprintFilter" style="background:var(--s2);border:1px solid var(--border);color:var(--fg);padding:3px 8px;border-radius:6px;font-size:12px">
+          <option value="all">All stories</option>
+          <option value="active" selected>Active only</option>
+          <option value="backlog">Backlog only</option>
+        </select>
+        <button onclick="doSprintSync()" style="background:var(--accent2);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Sync to Kanban</button>
+        <button onclick="$i('sprintOv').remove()" style="background:var(--s2);color:var(--fg);border:1px solid var(--border);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:16px">✕</button>
+      </div>
+    </div>
+    <div style="padding:14px 18px;overflow-y:auto;flex:1">`;
+
+  const statusColors = {
+    'backlog':'var(--muted)','ready-for-dev':'var(--blue)','in-progress':'var(--orange)',
+    'review':'#e8a838','needs-revision':'var(--red)','done':'var(--green)','optional':'var(--muted)'
+  };
+
+  for (const epic of d.epics) {
+    const epicColor = statusColors[epic.status] || 'var(--muted)';
+    const doneCount = epic.stories.filter(s=>s.status==='done').length;
+    html += `<div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${epicColor}"></span>
+        <strong style="font-size:13px">${escH(epic.id)}: ${escH(epic.title)}</strong>
+        <span style="font-size:11px;color:var(--muted)">${epic.status} · ${doneCount}/${epic.stories.length} stories done</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;padding-left:16px">`;
+
+    for (const story of epic.stories) {
+      const sc = statusColors[story.status] || 'var(--muted)';
+      const notesSnip = story.notes ? ` — <span style="color:var(--muted)">${escH(story.notes.substring(0,80))}${story.notes.length>80?'…':''}</span>` : '';
+      html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${sc};flex-shrink:0"></span>
+        <span style="color:var(--fg)">${escH(story.id)}</span>
+        <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:${sc}20;color:${sc}">${story.status}</span>
+        <span style="flex:1;color:var(--fg2)">${escH(story.title)}${notesSnip}</span>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  html += `<div id="sprintSyncResult" style="margin-top:12px"></div>`;
+  html += `</div></div></div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function doSprintSync() {
+  const filter = $i('sprintFilter')?.value || 'active';
+  const resultEl = $i('sprintSyncResult');
+  resultEl.innerHTML = '<span style="color:var(--accent2)">Syncing…</span>';
+  try {
+    const r = await apiFetch('/api/bmad/sprint-sync', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ workdir: curWorkdir, filter })
+    });
+    const d = await r.json();
+    if (d.error) { resultEl.innerHTML = `<span style="color:var(--red)">Error: ${escH(d.error)}</span>`; return; }
+    resultEl.innerHTML = `<div style="padding:8px 12px;background:var(--s2);border-radius:8px;font-size:12px">
+      <strong style="color:var(--green)">✓ Synced!</strong>
+      <span style="color:var(--fg2)">Created: ${d.created} · Updated: ${d.updated} · Skipped: ${d.skipped}</span>
+    </div>`;
+    refresh(true);
+  } catch(e) {
+    resultEl.innerHTML = `<span style="color:var(--red)">Error: ${escH(e.message)}</span>`;
+  }
+}
 </script>
+<!-- BMAD Docs Panel -->
+<div id="docsPanel" class="docs-panel hidden">
+  <div class="docs-panel-hd">
+    <span class="docs-panel-title">📄 BMAD Documents</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
+      <button class="modal-close" onclick="toggleDocsPanel()">×</button>
+    </div>
+  </div>
+  <div class="docs-panel-body">
+    <div class="docs-sidebar" id="docsSidebar"></div>
+    <div class="docs-content" id="docsContent">
+      <div class="docs-empty">Select a document to preview</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

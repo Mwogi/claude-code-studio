@@ -54,7 +54,7 @@ Create a card. Describe what you want. Move it to "To Do". Claude picks it up au
 
 ![Kanban workflow](public/screenshots/kanban-diagram.png)
 
-Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built).
+Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built). **Cross-tab sync** — edit or move a task in one browser tab and every other open tab updates instantly, no refresh needed.
 
 **True parallel execution** — independent tasks now run simultaneously even in the same project directory. No artificial workdir locks holding them back. Chain tasks still respect sequential order, but standalone cards run at full speed, in parallel, the way you'd expect.
 
@@ -234,6 +234,8 @@ If Claude hits the turn limit mid-task, it **auto-continues up to 3 times** — 
 
 Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
 
+**Quick attach with `#`** — type `#` in the chat input and a popup shows your configured SSH servers. Pick one (or several — the popup stays open for multi-select), it attaches as a chip, and Claude receives full connection details including stored credentials. No context switching, no sidebar clicking — just `#` and go.
+
 ### 🔗 Remote Access — Open Your Studio to the World
 
 Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?
@@ -376,13 +378,14 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🧠 Skills & auto-skills | 28 specialist personas; auto-classified per message with ⚡ Auto |
 | ⚙️ Model & turns | Haiku / Sonnet / Opus; adjustable turn budget (1–200) with auto-continue |
 | 🔀 Auto mode switch | Claude can switch modes mid-task (e.g., planning → execution) |
-| 📁 File browser | Browse, preview, and attach files with `@filename` |
+| 📁 File browser | Browse, preview, and attach files with `@filename` — multi-select: popup stays open for picking several files |
 | 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
 | 🗂 Projects | Separate workspaces with their own file directories |
-| 🌐 Remote SSH | Work on remote servers as if they were local |
+| 🌐 Remote SSH | Work on remote servers as if local — type `#` in chat to quickly attach any SSH host |
 | 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
 | 📱 Mobile UI | Touch-optimized responsive layout for all pages — Chat, Kanban, Schedule |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
+| 🔄 Cross-tab Kanban sync | Edit or move a task in one tab — every other open tab updates instantly |
 | 🔄 Tab drag-and-drop | Reorder chat tabs by dragging — organize your workspace your way |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
@@ -392,10 +395,110 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
 | 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
 | ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
+| 🛡 Crash-proof storage | Atomic file writes for auth data + MCP protocol guards — no data corruption on unexpected shutdown |
 | 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
 | 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
 | 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |
 | 🐳 Docker | Deploy anywhere |
+
+---
+
+## BMAD + OpenClaw Integration
+
+Claude Code Studio now ships with the [BMAD Method](https://github.com/bmadcode/bmad-method) — a structured AI-assisted product development workflow — and an OpenClaw bridge for external task automation.
+
+### BMAD Agents
+
+Ten specialist AI personas are available as skills. Select them in the toolbar or let Auto-Skill pick the right one:
+
+| Agent | Persona | Specializes In |
+|-------|---------|---------------|
+| 🧙 BMad Master | Orchestrator | Workflow routing, agent selection, BMAD method guide |
+| 📊 Analyst (Mary) | Business Analyst | Market research, product briefs, requirements elicitation |
+| 🏗️ Architect (Winston) | System Architect | Architecture docs, tech decisions, implementation readiness |
+| 💻 Developer (Amelia) | Senior Engineer | Story execution, TDD, code review (adversarial) |
+| 📋 Product Manager (John) | PM | PRD creation, epics, stories, stakeholder alignment |
+| 🧪 QA Engineer (Quinn) | QA | Test automation, API testing, E2E tests, coverage |
+| 🏃 Scrum Master (Bob) | Agile SM | Sprint planning, story prep, retrospectives |
+| 📚 Tech Writer (Paige) | Documentation | Docs, Mermaid diagrams, standards compliance |
+| 🎨 UX Designer (Sally) | UX/UI | User research, interaction design, UX specs |
+| 🚀 Quick Flow (Barry) | Solo Dev | Rapid spec + implementation, minimum ceremony |
+
+### BMAD Workflow Columns
+
+The Kanban board includes BMAD phase columns for tracking product development lifecycle:
+
+```
+🧠 Brainstorm → 📋 PRD → 🏗️ Architecture → 💻 Implementation → 🧪 QA
+```
+
+- **Phase gate validation**: Moving a card to the next phase warns you if the previous phase still has pending tasks.
+- **BMAD Templates**: When creating a card in a BMAD phase column, click "🧙 BMAD Template" to pre-fill the description with the relevant template (brainstorming session, PRD, tech spec, or readiness report).
+
+### Party Mode
+
+Add a 🎉 Party Mode to any chat session using the **Party** button in the agent toolbar. Before executing, 5 BMAD agents each give a brief perspective on the task from their specialist viewpoint, then synthesize a concrete execution plan and carry it out.
+
+### BMAD Scheduled Tasks
+
+The Scheduler includes pre-built BMAD task templates:
+
+| Template | Recurrence | BMAD Skills Injected |
+|----------|-----------|----------------------|
+| 🧪 Nightly Test Suite | Daily 2am | qa-engineer |
+| 🔒 Weekly Dependency Audit | Weekly | security, devops |
+| 👁️ Weekly Code Review | Weekly | code-review, analyst |
+| 📊 Daily Git Standup | Daily 8am | developer |
+
+Click a template button in the Schedule modal to pre-fill the form. Scheduled tasks automatically inject the relevant BMAD agent skill context via `<!-- bmad-skills: [...] -->` annotations.
+
+### /bmad-help Command
+
+Type `/bmad-help` in any chat to get contextual BMAD guidance:
+- Detects which phase your project is in (by scanning for BMAD artifacts)
+- Suggests the 2-3 most important next actions
+- Provides copy-pasteable prompts for each next step
+
+### OpenClaw Bridge
+
+The OpenClaw bridge (`openclaw-bridge.js`) enables external automation:
+
+**REST API** (Task 16) — create and manage cards externally:
+```bash
+# Create a card
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Cookie: auth=<token>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Audit dependencies","column":"todo","skill":"security"}'
+
+# List cards
+GET /api/tasks?status=todo
+
+# Update card status
+PATCH /api/tasks/:id
+
+# Get task result
+GET /api/tasks/:id/result
+```
+
+**Event streaming** — task events are forwarded to OpenClaw when `OPENCLAW_API_URL` is set:
+```env
+OPENCLAW_API_URL=https://your-openclaw-instance/api
+OPENCLAW_API_KEY=your-api-key
+```
+
+Event format:
+```json
+{
+  "type": "task_complete",
+  "taskId": "abc123",
+  "title": "Audit dependencies",
+  "result": "Found 3 critical CVEs...",
+  "duration": 45000
+}
+```
+
+**OpenClaw Cron Integration** (Task 19) — cards can be created externally via the REST API for cron-triggered workflows. See the `openclaw-bridge.js` module for the full WebSocket event stream implementation.
 
 ---
 

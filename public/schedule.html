@@ -365,6 +365,7 @@ button{font-family:inherit;cursor:pointer}
     <span id="lblStatRecurring">повторюваних</span>
   </div>
   <span class="status-dot ok" id="schStatusEl">Connected</span>
+  <button id="sprintSchedBtn" onclick="showSprintSchedule()" style="background:var(--accent2);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none;margin-left:auto" title="Import BMAD sprint stories as scheduled tasks">⚡ Sprint Tasks</button>
 </div>
 
 <!-- Agenda -->
@@ -556,6 +557,51 @@ function recurLabel(r) { return t('recur.' + r) || r; }
 // ─── State ────────────────────────────────────────────────────────────────
 let tasks = [], sessions = [], curWorkdir = null, editingId = null;
 let projects = [];
+
+// ─── Task 9: Pre-built BMAD scheduled task templates ──────────────────────
+// Task 10: Each template includes bmad-skills annotation for skill injection
+const BMAD_SCHED_TEMPLATES = [
+  {
+    id: 'nightly-tests',
+    icon: '🧪',
+    label: 'Nightly Test Suite',
+    title: 'Nightly Test Suite',
+    description: '<!-- bmad-skills: ["qa-engineer"] -->\nRun the full test suite and report results. Execute: 1) all unit tests, 2) integration tests, 3) report any failures with file:line references, 4) suggest fixes for failing tests.',
+    recurrence: 'daily',
+    hour: 2, // 2am
+    skills: ['qa-engineer'],
+  },
+  {
+    id: 'weekly-audit',
+    icon: '🔒',
+    label: 'Weekly Dependency Audit',
+    title: 'Weekly Dependency Audit',
+    description: '<!-- bmad-skills: ["security","devops"] -->\nAudit project dependencies for security vulnerabilities. Run: 1) npm audit or equivalent, 2) check for outdated packages, 3) identify CVEs, 4) produce a prioritized security report with remediation steps.',
+    recurrence: 'weekly',
+    hour: 3, // 3am
+    skills: ['security', 'devops'],
+  },
+  {
+    id: 'weekly-review',
+    icon: '👁️',
+    label: 'Weekly Code Review',
+    title: 'Weekly Code Review',
+    description: '<!-- bmad-skills: ["code-review","analyst"] -->\nPerform a comprehensive code review of recent changes. Analyze: 1) git log --since="7 days ago", 2) check code quality, 3) identify potential bugs or tech debt, 4) produce a structured report with severity levels (critical/warning/suggestion).',
+    recurrence: 'weekly',
+    hour: 9, // 9am
+    skills: ['code-review', 'analyst'],
+  },
+  {
+    id: 'daily-standup',
+    icon: '📊',
+    label: 'Daily Git Standup',
+    title: 'Daily Git Standup',
+    description: '<!-- bmad-skills: ["developer"] -->\nGenerate a daily standup report from git activity. Include: 1) commits in last 24h (git log --since="24 hours ago"), 2) files changed, 3) brief summary of what was accomplished, 4) any pending work in progress.',
+    recurrence: 'daily',
+    hour: 8, // 8am
+    skills: ['developer'],
+  },
+];
 const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 2592000 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -942,7 +988,7 @@ async function runNow(id) {
     await apiFetch(`/api/tasks/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'todo', scheduled_at: null }),
+      body: JSON.stringify({ status: 'todo' }),
     });
     toast(t('toast.queued'), 'ok');
     await refresh();
@@ -953,6 +999,34 @@ async function runNow(id) {
 }
 
 // ─── Modal / Form ─────────────────────────────────────────────────────────
+// Task 9: Apply BMAD template to the form
+function applyBmadTemplate(id) {
+  const tpl = BMAD_SCHED_TEMPLATES.find(t => t.id === id);
+  if (!tpl) return;
+  const titleEl = $i('fTitle');
+  const descEl = $i('fDesc');
+  const recurEl = $i('fRecurrence');
+  const schedEl = $i('fScheduledAt');
+  if (titleEl) titleEl.value = tpl.title;
+  if (descEl) descEl.value = tpl.description;
+  if (recurEl) { recurEl.value = tpl.recurrence || ''; onRecurChange(); }
+  if (schedEl && tpl.hour !== undefined) {
+    // Set next occurrence at specified hour
+    const now = new Date();
+    const next = new Date(now);
+    next.setDate(next.getDate() + (now.getHours() >= tpl.hour ? 1 : 0));
+    next.setHours(tpl.hour, 0, 0, 0);
+    const p = n => String(n).padStart(2, '0');
+    schedEl.value = `${next.getFullYear()}-${p(next.getMonth()+1)}-${p(next.getDate())}T${p(next.getHours())}:00`;
+  }
+  // Show skill badges
+  const skillsEl = $i('bmadSkillsBadge');
+  if (skillsEl && tpl.skills?.length) {
+    skillsEl.textContent = '🧙 Skills: ' + tpl.skills.join(', ');
+    skillsEl.style.display = 'inline-block';
+  }
+}
+
 function buildForm(tk={}) {
   const sessOpts = `<option value="">${t('form.no_session')}</option>` +
     sessions.map(s => `<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,50))}</option>`).join('');
@@ -960,7 +1034,24 @@ function buildForm(tk={}) {
   const dtVal = tk.scheduled_at ? toLocalDatetimeStr(tk.scheduled_at) : '';
   const endDtVal = tk.recurrence_end_at ? toLocalDateStr(tk.recurrence_end_at) : '';
 
+  // Task 9: BMAD template picker (only shown for new tasks)
+  const bmadTplHtml = !tk.id ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🧙 BMAD Templates</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${BMAD_SCHED_TEMPLATES.map(tpl => `
+          <button type="button" onclick="applyBmadTemplate('${tpl.id}')"
+            style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--s3);color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;transition:.12s"
+            onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent2)'"
+            onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+            ${tpl.icon} ${escH(tpl.label)}
+          </button>`).join('')}
+      </div>
+      <div id="bmadSkillsBadge" style="display:none;margin-top:6px;font-size:11px;color:var(--accent2);background:var(--abg);border:1px solid rgba(124,106,239,.3);padding:3px 8px;border-radius:5px;display:inline-block"></div>
+    </div>` : '';
+
   return `
+    ${bmadTplHtml}
     <div>
       <label class="lbl">${t('form.title')}</label>
       <input id="fTitle" class="inp" placeholder="${t('form.title.ph')}" value="${escH(tk.title||'')}" maxlength="200">
@@ -1090,10 +1181,12 @@ async function saveTask() {
   const recurrence_end_at = (recurrence && endDateRaw)
     ? Math.floor(new Date(endDateRaw + 'T23:59:59').getTime() / 1000) : null;
 
+  const orig = editingId ? tasks.find(x => x.id === editingId) : null;
   const body = {
     title,
     description: $i('fDesc')?.value || '',
-    status: 'todo',
+    // Preserve existing status on edit — don't forcibly queue a running/backlog task
+    status: orig ? (orig.status || 'todo') : 'todo',
     session_id: $i('fSession')?.value || null,
     workdir: curWorkdir || null,
     model: getScVal('model', 'sonnet'),
@@ -1114,7 +1207,6 @@ async function saveTask() {
       });
       toast(t('toast.scheduled'), 'ok');
     } else {
-      const orig = tasks.find(x => x.id === editingId);
       if (orig) body.sort_order = orig.sort_order;
       await apiFetch(`/api/tasks/${editingId}`, {
         method: 'PUT',
@@ -1191,6 +1283,81 @@ function applyStaticI18n() {
     tc.onmessage = e => { if (e.data?.type === 'task_deleted' || e.data?.type === 'task_changed') refresh(); };
   } catch {}
 })();
+
+// ─── BMAD Sprint → Schedule Integration ───────────────────────────────────
+async function checkSprintForSchedule() {
+  const workdir = curProject?.workdir;
+  if (!workdir) { $i('sprintSchedBtn').style.display='none'; return; }
+  try {
+    const r = await apiFetch(`/api/bmad/sprint-status?workdir=${encodeURIComponent(workdir)}`);
+    const d = await r.json();
+    $i('sprintSchedBtn').style.display = d.found ? '' : 'none';
+    window._sprintSchedData = d.found ? d : null;
+  } catch { $i('sprintSchedBtn').style.display='none'; }
+}
+
+// Hook into project load
+const _origLoadProjects = loadProjects;
+loadProjects = async function() {
+  await _origLoadProjects();
+  checkSprintForSchedule();
+};
+
+function showSprintSchedule() {
+  const d = window._sprintSchedData;
+  if (!d) return toast('No sprint data', true);
+
+  // Show active stories that could be scheduled
+  const activeStories = [];
+  for (const epic of d.epics) {
+    for (const story of epic.stories) {
+      if (story.status !== 'done') {
+        activeStories.push({ ...story, epicId: epic.id, epicTitle: epic.title });
+      }
+    }
+  }
+
+  const statusColors = {
+    'backlog':'#888','ready-for-dev':'#4a9eff','in-progress':'#e8a020',
+    'review':'#e8a838','needs-revision':'#e85050','done':'#4ade80'
+  };
+
+  let html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center" id="sprintSchedOv" onclick="if(event.target===this)this.remove()">
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;width:95%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow-xl)">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <strong style="font-size:15px">⚡ Sprint Stories → Scheduled Tasks</strong>
+      <button onclick="$i('sprintSchedOv').remove()" style="background:var(--s2);color:var(--fg);border:1px solid var(--border);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div style="padding:14px 18px;overflow-y:auto;flex:1">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${activeStories.length} active stories. Click a story to schedule it as a task.</div>`;
+
+  for (const s of activeStories) {
+    const sc = statusColors[s.status] || '#888';
+    html += `<div onclick="scheduleSprintStory('${escH(s.id)}','${escH(s.epicTitle)}','${escH(s.title)}')" 
+      style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:12px;border:1px solid var(--border);margin-bottom:4px;transition:.12s"
+      onmouseover="this.style.borderColor='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${sc};flex-shrink:0"></span>
+      <span style="color:var(--muted);width:60px;flex-shrink:0">${escH(s.epicId)}</span>
+      <span style="flex:1;color:var(--fg)">${escH(s.title)}</span>
+      <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;background:${sc}20;color:${sc}">${s.status}</span>
+    </div>`;
+  }
+
+  html += `</div></div></div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function scheduleSprintStory(storyId, epicTitle, storyTitle) {
+  $i('sprintSchedOv')?.remove();
+  // Open the new task modal with pre-filled data
+  openNewModal();
+  setTimeout(() => {
+    const titleEl = $i('fTitle');
+    const descEl = $i('fDesc');
+    if (titleEl) titleEl.value = `[BMAD] ${epicTitle}: ${storyTitle}`;
+    if (descEl) descEl.value = `BMAD Story: ${storyId}\n\nImplement this story following the acceptance criteria. Check the story file for detailed requirements.\n\n[bmad:${storyId}]`;
+  }, 100);
+}
 </script>
 </body>
 </html>

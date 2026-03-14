@@ -3,6 +3,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 const fs = require('fs');
+const yaml = require('js-yaml');
 const os = require('os');
 const url = require('url');
 const { execSync, spawn: spawnProc } = require('child_process');
@@ -18,6 +19,9 @@ const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
 const TunnelManager = require('./tunnel-manager');
+// Task 17: OpenClaw bridge — external event forwarding and REST API helpers
+const openclawBridge = require('./openclaw-bridge');
+const openclawNotify = require('./openclaw-notify');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -40,6 +44,166 @@ const TunnelManager = require('./tunnel-manager');
 // Reads LOG_LEVEL + NODE_ENV from process.env (already populated from .env above).
 // Production: emits newline-delimited JSON for log aggregators (Loki, Datadog, etc.)
 // Development: human-readable output with icons.
+const BMAD_PHASE_MODEL_MAP = {
+  'bmad_brainstorm': 'opus',
+  'bmad_prd': 'opus',
+  'bmad_architecture': 'opus',
+  'bmad_implementation': 'sonnet',
+  'bmad_qa': 'sonnet',
+};
+
+const BMAD_WORKFLOWS = {
+  analysis: {
+    label: '🔍 Analysis → Product Brief',
+    agent: 'analyst',
+    skills: ['bmad-brainstorming', 'bmad-party-mode'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/create-product-brief/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+  },
+  research: {
+    label: '🔬 Research (Domain/Market/Tech)',
+    agent: 'analyst',
+    skills: ['bmad-brainstorming'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the research workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/research/\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain research, market research, and technical research. Save findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
+  },
+  planning: {
+    label: '📋 Planning → PRD',
+    agent: 'product-manager',
+    skills: ['bmad-create-prd', 'bmad-party-mode'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/prd.md`
+  },
+  'edit-prd': {
+    label: '✏️ Edit PRD',
+    agent: 'product-manager',
+    skills: ['bmad-create-prd'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD edit workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nEdit the existing PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md based on the task description.`
+  },
+  'validate-prd': {
+    label: '🔎 Validate PRD',
+    agent: 'product-manager',
+    skills: ['bmad-create-prd'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD validation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md against standards. Report issues and recommendations.`
+  },
+  'ux-design': {
+    label: '🎨 UX Design',
+    agent: 'ux-designer',
+    skills: ['bmad-party-mode'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/ux-designer.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-ux-design/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/ux-design-specification.md`
+  },
+  solutioning: {
+    label: '🏗️ Solutioning → Architecture + Epics',
+    agent: 'architect',
+    skills: ['bmad-create-architecture', 'bmad-create-epics', 'bmad-party-mode'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. Run the architecture workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-architecture/ and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Run the epics workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/ and save to ${workdir}/_bmad-output/planning-artifacts/epics.md`
+  },
+  'readiness-check': {
+    label: '✅ Implementation Readiness Check',
+    agent: 'architect',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the implementation readiness check from ${workdir}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate that PRD, UX, Architecture, and Epics are complete and ready for implementation. Report any gaps.`
+  },
+  'sprint-planning': {
+    label: '📐 Sprint Planning → sprint-status.yaml',
+    agent: 'scrum-master',
+    skills: ['bmad-sprint-planning'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nGenerate sprint-status.yaml and save to ${workdir}/_bmad-output/implementation-artifacts/sprint-status.yaml`
+  },
+  'quick-spec': {
+    label: '⚡ Quick Spec',
+    agent: 'architect',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-spec workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-spec/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
+  },
+  'quick-dev': {
+    label: '⚡ Quick Dev',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
+  },
+  'generate-context': {
+    label: '📑 Generate Project Context',
+    agent: 'master',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context workflow from ${workdir}/_bmad/bmm/workflows/generate-project-context/\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/_bmad-output/project-context.md`
+  },
+  'e2e-tests': {
+    label: '🧪 Generate E2E Tests',
+    agent: 'qa',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/qa.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the QA E2E test generation workflow from ${workdir}/_bmad/bmm/workflows/qa-generate-e2e-tests/\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate end-to-end automated tests for existing features.`
+  },
+  shard: {
+    label: '✂️ Shard Document',
+    agent: 'master',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Run the BMAD shard-doc task. Split this document: ${title}\n\nDirectory: ${workdir}\n\nUse: npx @kayvan/markdown-tree-parser explode [source-file] [destination-folder]`
+  },
+  'document-project': {
+    label: '📚 Document Project',
+    agent: 'master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the document-project workflow from ${workdir}/_bmad/bmm/workflows/document-project/\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project codebase and generate comprehensive documentation. Save output to ${workdir}/docs/`
+  },
+  'code-review': {
+    label: '🔍 Code Review',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/code-review/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
+  },
+  'correct-course': {
+    label: '🔄 Correct Course',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the correct-course workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/correct-course/\n\nProject: ${title}\nDirectory: ${workdir}\n\nNavigate the sprint change. Ask what issue or change requires course correction.`
+  },
+  'create-story': {
+    label: '📝 Create Story',
+    agent: 'product-manager',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a new story file using the template. Save to the appropriate epic directory.`
+  },
+  'dev-story': {
+    label: '💻 Dev Story (Implement)',
+    agent: 'developer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story definition of done checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the story, update tasks/subtasks, file list, and dev agent record per the checklist.`
+  },
+  'retrospective': {
+    label: '🔮 Retrospective',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the retrospective workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/retrospective/\n\nProject: ${title}\nDirectory: ${workdir}\n\nFacilitate an epic completion retrospective. No blame, no time estimates. Focus on lessons learned and action items.`
+  },
+  'sprint-status': {
+    label: '📊 Sprint Status',
+    agent: 'scrum-master',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-status/\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
+  }
+};
+
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 const _logLevel  = LOG_LEVELS[(process.env.LOG_LEVEL || 'info').toLowerCase()] ?? LOG_LEVELS.info;
 const _isProd    = process.env.NODE_ENV === 'production';
@@ -106,6 +270,18 @@ const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 // Category map for bundled skills — used when skill is auto-discovered (not in config)
 const BUNDLED_SKILL_META = {
   'auto-mode':         { label:'🎯 Auto-Skill Mode',           category:'system'      },
+  // ─── BMAD Agents ─────────────────────────────────────────────────────────
+  'bmad-master':       { label:'🧙 BMad Master',               category:'bmad', description:'BMAD orchestrator, workflow routing, agent selection' },
+  'analyst':           { label:'📊 Business Analyst (Mary)',    category:'bmad', description:'Market research, requirements elicitation, product briefs' },
+  'architect':         { label:'🏗️ Architect (Winston)',         category:'bmad', description:'System architecture, tech decisions, implementation readiness' },
+  'developer':         { label:'💻 Developer (Amelia)',         category:'bmad', description:'Story execution, TDD, code implementation, code review' },
+  'product-manager':   { label:'📋 Product Manager (John)',     category:'bmad', description:'PRD creation, epics, stories, stakeholder alignment' },
+  'qa-engineer':       { label:'🧪 QA Engineer (Quinn)',        category:'bmad', description:'Test automation, API testing, E2E testing, coverage' },
+  'scrum-master':      { label:'🏃 Scrum Master (Bob)',         category:'bmad', description:'Sprint planning, story preparation, agile ceremonies' },
+  'tech-writer':       { label:'📚 Tech Writer (Paige)',        category:'bmad', description:'Documentation, Mermaid diagrams, concept explanation' },
+  'ux-designer':       { label:'🎨 UX Designer (Sally)',        category:'bmad', description:'User research, interaction design, UX design specs' },
+  'quick-flow':        { label:'🚀 Quick Flow (Barry)',         category:'bmad', description:'Rapid spec + implementation for solo developers' },
+  // ─── Engineering ─────────────────────────────────────────────────────────
   'backend':           { label:'⚙️ Backend Engineer',           category:'engineering' },
   'api-designer':      { label:'🔌 API Designer',              category:'engineering' },
   'frontend':          { label:'🎨 Frontend Engineer',          category:'engineering' },
@@ -258,6 +434,34 @@ function runDatabaseMaintenance() {
 }
 
 // ============================================
+// SESSION ID SANITIZATION
+// ============================================
+// Extracts a clean UUID string from potentially corrupted claude_session_id values.
+// Bug: runMultiAgent fallback could store { cid, completed } objects or nested JSON
+// like {"cid":"{\"cid\":\"uuid\",\"completed\":true}","completed":false}
+// This helper recursively unwraps to find the actual UUID.
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function sanitizeSessionId(val) {
+  if (!val) return null;
+  // Already a clean UUID
+  if (typeof val === 'string' && UUID_RE.test(val)) return val;
+  // Object with .cid field (from runCliSingle return value)
+  if (typeof val === 'object' && val !== null && val.cid) return sanitizeSessionId(val.cid);
+  // JSON string — try to parse and extract
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed && typeof parsed === 'object' && parsed.cid) return sanitizeSessionId(parsed.cid);
+    } catch {}
+    // Maybe a UUID is embedded somewhere in the string
+    const m = val.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// ============================================
 // DATABASE
 // ============================================
 const db = new Database(DB_PATH);
@@ -400,7 +604,16 @@ function wrapStmt(stmt, label) {
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
-  updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
+  updateClaudeId: (() => {
+    const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
+    const _origRun = _stmt.run.bind(_stmt);
+    _stmt.run = (cid, sessionId) => {
+      const clean = sanitizeSessionId(cid);
+      if (cid && !clean) log.warn('updateClaudeId: rejected non-UUID session_id', { raw: String(cid).substring(0, 80), sessionId });
+      return _origRun(clean, sessionId);
+    };
+    return _stmt;
+  })(),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
@@ -409,6 +622,8 @@ const stmts = {
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
+  // Lightweight: strip tool content (frontend only needs tool_name + agent_id for badge counts)
+  getMsgsLite: db.prepare(`SELECT id, session_id, role, type, CASE WHEN type='tool' THEN '' ELSE content END AS content, tool_name, agent_id, created_at, reply_to_id, attachments, source FROM messages WHERE session_id=? ORDER BY id ASC`),
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
@@ -433,8 +648,8 @@ const stmts = {
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
   // processQueue hot-path — prepared once, reused every 60 s
-  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
-  getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`),
+  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE (status='todo' OR (status='bmad_workflow' AND notes LIKE '%[bmad-workflow:%')) AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
+  getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')`),
   getTasksByChain:   db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC`),
   // startTask hot-path
   setTaskSession:    db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`),
@@ -464,6 +679,9 @@ const stmts = {
     FROM messages
     WHERE session_id = ?
   `),
+  // getSession endpoint helpers — pre-compiled to avoid re-prepare on every load
+  hasRunningTask: db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`),
+  getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
 };
 // Auto-sanitize ALL prepared statements — prevents "Too few parameter values"
 // on every code path (chat, tasks, queue, reconnect, telegram, etc.)
@@ -526,6 +744,26 @@ async function startTask(task) {
   let _retryBackoffMs = 0; // Set by auto-retry logic, used by finally for processQueue delay
   let sessionId = task.session_id;
   let _taskStartedAt = Date.now();
+  // Override model based on BMAD phase tag
+  const bmadPhaseTagMatch = (task.notes || '').match(/\[bmad-phase:(\w+)\]/);
+  if (bmadPhaseTagMatch && BMAD_PHASE_MODEL_MAP[bmadPhaseTagMatch[1]]) {
+    task.model = BMAD_PHASE_MODEL_MAP[bmadPhaseTagMatch[1]];
+    // Also update the session model so cli.send picks it up
+    if (task.session_id) {
+      db.prepare(`UPDATE sessions SET model=?, updated_at=datetime('now') WHERE id=?`).run(task.model, task.session_id);
+    }
+  }
+  // Override model and skills based on BMAD workflow tag
+  const bmadWorkflowTagMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  if (bmadWorkflowTagMatch && BMAD_WORKFLOWS[bmadWorkflowTagMatch[1]]) {
+    const wf = BMAD_WORKFLOWS[bmadWorkflowTagMatch[1]];
+    task.model = wf.model;
+    task._bmadWorkflow = wf;
+    task._bmadWorkflowType = bmadWorkflowTagMatch[1];
+    if (task.session_id) {
+      db.prepare(`UPDATE sessions SET model=?, updated_at=datetime('now') WHERE id=?`).run(task.model, task.session_id);
+    }
+  }
   try {
     // Create session + link task + mark in_progress — all atomic
     db.transaction(() => {
@@ -534,12 +772,37 @@ async function startTask(task) {
         stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', 'cli', task.workdir || null);
         stmts.setTaskSession.run(sessionId, task.id);
       }
-      stmts.setTaskInProgress.run(task.id);
+      // For BMAD chain tasks, set status to BMAD phase column instead of generic 'in_progress'
+      const bmadPhaseMatch = (task.notes || '').match(/\[bmad-phase:(\w+)\]/);
+      if (bmadPhaseMatch) {
+        db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(bmadPhaseMatch[1], task.id);
+      } else if (task._bmadWorkflow) {
+        // BMAD upstream workflow task — keep it in bmad_workflow column while running
+        db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(task.id);
+      } else {
+        stmts.setTaskInProgress.run(task.id);
+      }
     })();
+    // For BMAD workflow tasks, create output directory and use workflow-specific prompt
+    if (task._bmadWorkflow) {
+      const wf = task._bmadWorkflow;
+      if (wf.outputDir) {
+        const outDir = path.join(task.workdir || WORKDIR, wf.outputDir);
+        fs.mkdirSync(outDir, { recursive: true });
+      }
+    }
     // Build prompt
-    const parts = [task.title];
-    if (task.description?.trim()) parts.push(task.description.trim());
-    if (task.notes?.trim()) parts.push(`---\nУточнення:\n${task.notes.trim()}`);
+    let parts;
+    if (task._bmadWorkflow) {
+      // Use the workflow-defined prompt + include task description if provided
+      const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
+      parts = [wfPrompt];
+      if (task.description?.trim()) parts.push(`\n---\nTask Description:\n${task.description.trim()}`);
+    } else {
+      parts = [task.title];
+      if (task.description?.trim()) parts.push(task.description.trim());
+      if (task.notes?.trim()) parts.push(`---\nУточнення:\n${task.notes.trim()}`);
+    }
     // Write attachment files to workspace so Claude Code can read them
     if (task.attachments) {
       try {
@@ -573,7 +836,7 @@ async function startTask(task) {
         }
       } catch {}
     }
-    const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
+    let prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
@@ -590,7 +853,24 @@ async function startTask(task) {
     }
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
-    const claudeSessionId = session?.claude_session_id || null;
+    const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
+    
+    // Check if this is a resumed task with user reply (awaiting_input → todo)
+    if (claudeSessionId && sessionId) {
+      const _lastAssist = db.prepare(
+        `SELECT created_at FROM messages WHERE session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 1`
+      ).get(sessionId);
+      if (_lastAssist) {
+        const _userReply = db.prepare(
+          `SELECT content FROM messages WHERE session_id=? AND role='user' AND created_at > ? ORDER BY created_at DESC LIMIT 1`
+        ).get(sessionId, _lastAssist.created_at);
+        if (_userReply) {
+          prompt = _userReply.content;
+          log.info(`[taskWorker] task ${task.id}: resuming with user reply`);
+        }
+      }
+    }
+    
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
@@ -603,18 +883,57 @@ async function startTask(task) {
       broadcastToSession(sessionId, { type: 'task_retrying', taskId: task.id, title: task.title, prompt, retryCount, tabId: sessionId });
     } else {
       broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, prompt, tabId: sessionId });
+      openclawNotify.taskStarted(task, getProjectName(task.workdir));
     }
+    // Task 10: Inject BMAD agent skill context for scheduled tasks.
+    // If the task description contains a <!-- bmad-skills: [...] --> annotation,
+    // extract the skill IDs and build + inject a system prompt.
+    let taskSystemPrompt = null;
+    // For BMAD workflow tasks, use their defined skills
+    if (task._bmadWorkflow && task._bmadWorkflow.skills && task._bmadWorkflow.skills.length) {
+      try {
+        let _skillIds = [...task._bmadWorkflow.skills];
+        if (!_skillIds.includes('bmad-master')) _skillIds = ['bmad-master', ..._skillIds];
+        const _skillConfig = loadMergedConfig();
+        taskSystemPrompt = buildSystemPrompt(_skillIds, _skillConfig);
+        log.info(`[taskWorker] injecting BMAD workflow skills for "${task.title}" (${task._bmadWorkflowType}): ${_skillIds.join(', ')}`);
+      } catch (e) { log.warn('[taskWorker] bmad-workflow skills injection error', { error: e.message }); }
+    }
+    const _skillAnnotation = !taskSystemPrompt && (task.description || '').match(/<!--\s*bmad-skills:\s*(\[[\s\S]*?\])\s*-->/);
+    if (_skillAnnotation) {
+      try {
+        let _skillIds = JSON.parse(_skillAnnotation[1]);
+        // Always include bmad-master as orchestrator
+        if (!_skillIds.includes('bmad-master')) _skillIds = ['bmad-master', ..._skillIds];
+        if (Array.isArray(_skillIds) && _skillIds.length) {
+          const _skillConfig = loadMergedConfig();
+          taskSystemPrompt = buildSystemPrompt(_skillIds, _skillConfig);
+          log.info(`[taskWorker] injecting BMAD skills for task "${task.title}": ${_skillIds.join(', ')}`);
+        }
+      } catch (e) { log.warn('[taskWorker] bmad-skills parse error', { error: e.message }); }
+    }
+    // If no explicit skill annotation, still use bmad-master as default
+    if (!taskSystemPrompt) {
+      const _skillConfig = loadMergedConfig();
+      if (_skillConfig.skills['bmad-master']) {
+        taskSystemPrompt = buildSystemPrompt(['bmad-master'], _skillConfig);
+        log.info(`[taskWorker] using BMAD Master as default orchestrator for task "${task.title}"`);
+      }
+    }
+
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
-    const effectiveTaskMaxTurns = task.max_turns || 30;
+    const effectiveTaskMaxTurns = task._bmadWorkflow?.maxTurns || task.max_turns || 30;
 
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort });
+      const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
+      if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
+      const stream = cli.send(_sendOpts);
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -627,8 +946,10 @@ async function startTask(task) {
             broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
           })
           .onTool((name, inp) => {
-            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null); } catch {}
-            broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (inp || '').substring(0, 500), name, null, null, null); } catch {}
+            if (name !== 'ask_user' && name !== 'notify_user' && name !== 'set_ui_state') {
+              broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            }
           })
           .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
           .onResult(r => { lastTaskResult = r; })
@@ -678,6 +999,33 @@ async function startTask(task) {
         const MAX_CHAIN_RETRIES = 2;
 
         if (isSuccess) {
+          // Check if this is an interactive/planning task that needs user input
+          // Check if Claude is asking a question at the END of its response (last 300 chars)
+          const tail = (fullText || '').slice(-300);
+          const isAskingQuestion = tail.includes('?') && (
+            tail.includes('Would you') || tail.includes('Do you') || tail.includes('Should I') ||
+            tail.includes('What ') || tail.includes('Which ') || tail.includes('How ') ||
+            tail.includes('please ') || tail.includes('let me know') || tail.includes('your thoughts') ||
+            tail.includes('prefer') || tail.includes('ready to') || tail.includes('like to') ||
+            tail.includes('want to') || tail.includes('option') || tail.includes('choose') ||
+            /\*\*\[.\]/.test(tail)
+          );
+          
+          if (isAskingQuestion) {
+            // Claude is waiting for user input — park the task
+            // Extract last meaningful section for context (last 1500 chars, trimmed to last section break)
+            const contextRaw = (fullText || '').slice(-1500);
+            const sectionBreak = contextRaw.search(/\n#{1,3} |\n\*\*[A-Z]|\n---/);
+            const contextSnippet = (sectionBreak > 0 ? contextRaw.slice(sectionBreak) : contextRaw).trim().substring(0, 1800);
+            
+            db.prepare(`UPDATE tasks SET status='awaiting_input', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(task.id);
+            log.info(`[taskWorker] task ${task.id}: awaiting user input`);
+            wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+            // Notify via Discord
+            const projName = getProjectName(task.workdir);
+            openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
+          } else {
           // ✅ Success
           db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
@@ -694,6 +1042,54 @@ async function startTask(task) {
               duration: Date.now() - _taskStartedAt,
             }).catch(() => {});
           }
+          // Task 18: Forward completion event to OpenClaw
+          openclawBridge.emitEvent({
+            type: 'task_complete',
+            taskId: task.id,
+            title: task.title,
+            result: fullText ? fullText.substring(0, 2000) : null,
+            duration: Date.now() - _taskStartedAt,
+            workdir: task.workdir || null,
+          });
+          // Extract summary from end of output for notification
+          const _completionTail = (fullText || '').slice(-2000);
+          // Look for VERIFICATION block, or last markdown section, or last 500 chars
+          let _summary = '';
+          const verMatch = _completionTail.match(/VERIFICATION:[\s\S]*/);
+          if (verMatch) {
+            _summary = verMatch[0].substring(0, 1500);
+          } else {
+            // Find last section heading
+            const sections = _completionTail.split(/\n#{1,3} /);
+            if (sections.length > 1) {
+              _summary = '## ' + sections[sections.length - 1].trim().substring(0, 1500);
+            } else {
+              _summary = _completionTail.slice(-800).trim();
+            }
+          }
+          openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
+          
+          // Auto-commit for implementation tasks
+          const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec']);
+          const _wfType = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]);
+          const _hasBmadPhase = (task.notes || '').match(/\[bmad-phase:(implementation|qa)\]/);
+          if ((_wfType && AUTO_COMMIT_WORKFLOWS.has(_wfType)) || _hasBmadPhase) {
+            const cwd = task.workdir || WORKDIR;
+            try {
+              const { execSync: _exec } = require('child_process');
+              const hasChanges = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+              if (hasChanges) {
+                _exec('git add -A', { cwd, timeout: 10000 });
+                const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                log.info(`[taskWorker] auto-committed for task ${task.id} in ${cwd}`);
+              }
+            } catch (e) {
+              log.warn(`[taskWorker] auto-commit failed for task ${task.id}: ${e.message}`);
+            }
+          }
+          
+          } // end else (non-interactive success)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
@@ -738,6 +1134,16 @@ async function startTask(task) {
               error: reason,
             }).catch(() => {});
           }
+          // Task 18: Forward failure event to OpenClaw
+          openclawBridge.emitEvent({
+            type: 'task_failed',
+            taskId: task.id,
+            title: task.title,
+            error: reason,
+            duration: Date.now() - _taskStartedAt,
+            workdir: task.workdir || null,
+          });
+          openclawNotify.taskFailed(task, reason, getProjectName(task.workdir));
           // Cascade cancel of dependents happens in next processQueue() run
         }
       } else {
@@ -811,6 +1217,210 @@ function scheduleNextRun(task) {
 function processQueue() {
   const todo = stmts.getTodoTasks.all();
   if (!todo.length) return;
+
+  // ── BMAD Sprint Auto-Dispatch: expand BMAD sprint stories into agent chains ──
+  for (const task of todo) {
+    if (task.chain_id) continue; // already part of a chain
+    const bmadMatch = (task.notes || '').match(/\[bmad:([^\]]+)\]/);
+    if (!bmadMatch) continue; // not a BMAD sprint task
+    
+    // Check if story file exists in the project
+    const storyId = bmadMatch[1];
+    const workdir = task.workdir || WORKDIR;
+    
+    // This is a BMAD sprint story — expand into a dispatch chain
+    log.info(`[BMAD] Auto-dispatching sprint story: ${storyId}`);
+    
+    const chainId = genId();
+    const chainSessionId = genId();
+    stmts.createSession.run(
+      chainSessionId, task.title.substring(0, 200),
+      '[]', '[]', 'auto', 'single', task.model || 'sonnet', 'cli', workdir
+    );
+    
+    // Create the BMAD workflow chain: analyze → elicitate → design → validate → implement → review → verify
+    const subtasks = [
+      // 1. Analyst (opus) — brainstorm phase + Party Mode
+      {
+        title: `[BMAD Analyst] Research & Requirements — ${storyId}`,
+        description:
+          `PARTY MODE ACTIVE: Before executing your analysis, facilitate a multi-agent discussion.\n` +
+          `Simulate perspectives from these BMAD agents:\n` +
+          `- Mary (Analyst 📊): Market research, competitive analysis\n` +
+          `- John (PM 📋): Requirements, stakeholder alignment\n` +
+          `- Sally (UX 🎨): User experience, interaction patterns\n` +
+          `- Bob (SM 🏃): Sprint feasibility, story breakdown\n\n` +
+          `Discussion format:\n` +
+          `1. Each agent states their perspective on the story requirements (2-3 sentences each)\n` +
+          `2. Identify areas of agreement and disagreement\n` +
+          `3. Synthesize into unified requirements\n\n` +
+          `Then proceed with your analysis tasks.\n\n` +
+          `<!-- bmad-skills: ["analyst","product-manager"] -->\n` +
+          `You are the BMAD Analyst. Analyze the story requirements for: ${storyId}\n\n` +
+          `Epic context from sprint: ${task.title}\n\n${task.description || ''}\n\n` +
+          `Tasks:\n` +
+          `1. Read the project's _bmad-output/implementation-artifacts/ directory to find story files\n` +
+          `2. If no story file exists for ${storyId}, create one based on the epic file's acceptance criteria\n` +
+          `3. Analyze the existing codebase to understand current architecture and patterns\n` +
+          `4. Document technical requirements, dependencies, and risks\n` +
+          `5. Write your analysis as a comment at the top of the story file\n` +
+          `\nOutput: A clear story file with requirements, acceptance criteria, and technical notes.`,
+        sort: 0,
+        bmadPhase: 'bmad_brainstorm',
+        model: 'opus',
+      },
+      // 2. Elicitation: Pre-mortem + Stakeholder Round Table (opus) — brainstorm phase
+      {
+        title: `[BMAD Elicitation] Requirements Analysis — ${storyId}`,
+        description:
+          `<!-- bmad-skills: ["advanced-elicitation","analyst"] -->\n` +
+          `You are running Advanced Elicitation on the Analyst's output for story: ${storyId}\n\n` +
+          `Apply these elicitation methods in sequence:\n` +
+          `1. **Pre-mortem Analysis**: Assume this feature already failed in production. Work backward to find what went wrong. Document gaps in the requirements.\n` +
+          `2. **Stakeholder Round Table**: Evaluate requirements from perspectives of: end user, developer, product owner, operations team. Find blind spots.\n\n` +
+          `Read the story file that was just created/updated by the Analyst.\n` +
+          `Apply each method, document findings, and update the story file with enhanced requirements.\n` +
+          `Output: Enhanced story file with elicitation-improved requirements.`,
+        sort: 1,
+        depends: [0],
+        bmadPhase: 'bmad_brainstorm',
+        model: 'opus',
+      },
+      // 3. Architect (opus) — architecture phase + Party Mode
+      {
+        title: `[BMAD Architect] Technical Design — ${storyId}`,
+        description:
+          `PARTY MODE ACTIVE: Before designing, facilitate a multi-agent architecture discussion.\n` +
+          `Simulate perspectives from:\n` +
+          `- Winston (Architect 🏗️): System design, scalability, patterns\n` +
+          `- Amelia (Developer 💻): Implementation feasibility, code patterns\n` +
+          `- Quinn (QA 🧪): Testability, edge cases, failure modes\n` +
+          `- Bob (SM 🏃): Story impact, sprint planning implications\n\n` +
+          `Discussion format:\n` +
+          `1. Each agent evaluates the proposed approach (2-3 sentences each)\n` +
+          `2. Debate trade-offs and alternatives\n` +
+          `3. Converge on the recommended technical approach\n\n` +
+          `Then proceed with your architecture tasks.\n\n` +
+          `<!-- bmad-skills: ["architect"] -->\n` +
+          `You are the BMAD Architect. Design the technical approach for: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story file created by the Analyst\n` +
+          `2. Review existing architecture patterns in the codebase\n` +
+          `3. Design the implementation approach: which files to modify/create, data models, API changes\n` +
+          `4. Identify potential issues and edge cases\n` +
+          `5. Create a brief implementation plan as a checklist\n` +
+          `\nOutput: A technical design comment in the story file with implementation plan.`,
+        sort: 2,
+        depends: [1],
+        bmadPhase: 'bmad_architecture',
+        model: 'opus',
+      },
+      // 4. Elicitation: ADR + First Principles (opus) — architecture phase
+      {
+        title: `[BMAD Elicitation] Architecture Validation — ${storyId}`,
+        description:
+          `<!-- bmad-skills: ["advanced-elicitation","architect"] -->\n` +
+          `You are running Advanced Elicitation on the Architecture for story: ${storyId}\n\n` +
+          `Apply these methods:\n` +
+          `1. **Architecture Decision Records**: Document each technical decision with explicit trade-offs, alternatives considered, and rationale.\n` +
+          `2. **First Principles Thinking**: Strip away assumptions about the architecture. What must be true? Rebuild the approach from ground truth.\n\n` +
+          `Read the architecture notes in the story file.\n` +
+          `Apply methods, document ADRs, and update the story file.\n` +
+          `Output: Architecture section with ADRs and first-principles validation.`,
+        sort: 3,
+        depends: [2],
+        bmadPhase: 'bmad_architecture',
+        model: 'opus',
+      },
+      // 5. Developer (sonnet) — implementation phase
+      {
+        title: `[BMAD Developer] Implementation — ${storyId}`,
+        description:
+          `<!-- bmad-skills: ["developer"] -->\n` +
+          `You are the BMAD Developer. Implement the story: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story file with requirements and technical design\n` +
+          `2. Implement all acceptance criteria following existing code patterns\n` +
+          `3. Write clean, well-documented code\n` +
+          `4. Handle error cases and edge cases identified by the Architect\n` +
+          `5. Run any existing tests to ensure nothing is broken\n` +
+          `\nOutput: Working implementation that satisfies all acceptance criteria.`,
+        sort: 4,
+        depends: [3],
+        bmadPhase: 'bmad_implementation',
+        model: 'sonnet',
+      },
+      // 6. Code Reviewer + Red Team elicitation (sonnet) — implementation phase
+      {
+        title: `[BMAD Code Review] Review — ${storyId}`,
+        description:
+          `<!-- bmad-skills: ["code-review","analyst"] -->\n` +
+          `You are the BMAD Code Reviewer. Review the implementation of: ${storyId}\n\n` +
+          `Apply Red Team vs Blue Team elicitation:\n` +
+          `- **Red Team (attacker)**: Find vulnerabilities, edge cases, logic flaws, security issues\n` +
+          `- **Blue Team (defender)**: Validate robustness, propose hardening, verify fixes\n\n` +
+          `Tasks:\n` +
+          `1. Review all changes made by the Developer\n` +
+          `2. Check against the acceptance criteria in the story file\n` +
+          `3. Verify code quality: naming, patterns, error handling, security\n` +
+          `4. Check for regressions or missed edge cases\n` +
+          `5. Fix any issues found (HIGH severity: fix immediately, MEDIUM: fix, LOW: note)\n` +
+          `\nOutput: Code review summary with issues found and fixes applied.`,
+        sort: 5,
+        depends: [4],
+        bmadPhase: 'bmad_implementation',
+        model: 'sonnet',
+      },
+      // 7. QA (sonnet) — qa phase
+      {
+        title: `[BMAD QA] Verification — ${storyId}`,
+        description:
+          `<!-- bmad-skills: ["qa-engineer"] -->\n` +
+          `You are the BMAD QA Engineer. Verify the implementation of: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story acceptance criteria\n` +
+          `2. Write tests for each acceptance criterion\n` +
+          `3. Run the test suite and verify all pass\n` +
+          `4. Check for edge cases and error scenarios\n` +
+          `5. Update the story status to 'done' if all checks pass\n` +
+          `\nOutput: Test results and verification report.`,
+        sort: 6,
+        depends: [5],
+        bmadPhase: 'bmad_qa',
+        model: 'sonnet',
+      },
+    ];
+    
+    // Create real task IDs and map dependencies
+    const taskIds = subtasks.map(() => genId());
+    
+    db.transaction(() => {
+      for (let i = 0; i < subtasks.length; i++) {
+        const st = subtasks[i];
+        const realDeps = (st.depends || []).map(d => taskIds[d]);
+        stmts.createTask.run(
+          taskIds[i], st.title.substring(0, 200), st.description.substring(0, 2000),
+          `[bmad:${storyId}] [bmad-phase:${st.bmadPhase}] Chain subtask ${i+1}/${subtasks.length}`,
+          'todo', st.sort,
+          chainSessionId, workdir,
+          st.model || task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
+          null, realDeps.length ? JSON.stringify(realDeps) : null,
+          chainId, null, null, null, null
+        );
+      }
+      // Remove the original task — it's been replaced by the chain subtasks
+      db.prepare(`DELETE FROM tasks WHERE id=?`).run(task.id);
+    })();
+    
+    log.info(`[BMAD] Created dispatch chain for ${storyId}: ${subtasks.length} subtasks, chain=${chainId}`);
+    
+    // Notify connected clients
+    wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  }
+  
+  // Re-fetch todo after potential expansions
+  const todoRefreshed = stmts.getTodoTasks.all();
+  if (!todoRefreshed.length) return;
   const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
@@ -820,7 +1430,7 @@ function processQueue() {
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
   const startedWorkdirs = new Set();
-  for (const task of todo) {
+  for (const task of todoRefreshed) {
     if (taskRunning.has(task.id)) continue;
     // Dependency gate: check depends_on before starting chain tasks
     if (task.depends_on) {
@@ -856,15 +1466,19 @@ function processQueue() {
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
-    // Workdir lock: only for chain tasks — prevents parallel chains from conflicting in the same directory.
-    // Independent tasks (no chain_id) can run in parallel per workdir; the user explicitly chose concurrency.
-    if (task.chain_id && task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
+    // Workdir lock: only for chain tasks sharing the SAME chain — prevents sequential chain steps
+    // from conflicting in the same directory. Different chains CAN run in parallel.
+    if (task.chain_id && task.workdir) {
+      const sameChainRunning = inProg.some(t => t.chain_id === task.chain_id && t.workdir === task.workdir)
+        || [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`);
+      if (sameChainRunning) continue;
+    }
     if (task.session_id) {
       // Shared session: one at a time per session
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
-        if (task.workdir) startedWorkdirs.add(task.workdir);
+        if (task.chain_id && task.workdir) startedWorkdirs.add(`${task.chain_id}:${task.workdir}`);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
@@ -880,6 +1494,151 @@ function processQueue() {
 // Run every 15s (fast enough to pick up unblocked tasks promptly,
 // light enough to be negligible — just two SELECT queries on SQLite)
 setInterval(processQueue, 15000);
+
+// ── Orphaned task recovery on startup ──
+// Tasks stuck in active BMAD phases after a server restart have no Claude process.
+// Reset them to 'todo' so processQueue picks them up again.
+(function recoverOrphanedTasks() {
+  const orphaned = db.prepare(`
+    SELECT id, title, status FROM tasks 
+    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','bmad_workflow')
+    AND status != 'awaiting_input'
+  `).all();
+  if (orphaned.length) {
+    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
+    const reset = db.prepare(`UPDATE tasks SET status='todo' WHERE id=?`);
+    for (const t of orphaned) {
+      reset.run(t.id);
+      log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
+    }
+    // Trigger queue processing after a short delay
+    setTimeout(processQueue, 3000);
+  }
+})();
+
+// ── Auto Mode: automatically move backlog → todo for auto-enabled projects ──
+const AUTO_MODE_CONCURRENCY = 3; // max concurrent chains per project (was 5, reduced to prevent OOM on <64GB instances)
+
+function autoModeProcess() {
+  const projects = loadProjects();
+  const autoProjects = projects.filter(p => p.autoMode);
+  if (!autoProjects.length) return;
+
+  for (const proj of autoProjects) {
+    const workdir = proj.workdir;
+    
+    // Count stories actively being processed:
+    // A "story" = a chain that has been expanded from a backlog task
+    // Count distinct chains that have at least one task NOT in 'todo' and NOT in 'done'/'cancelled'
+    // (i.e., actively executing in a BMAD phase or in_progress)
+    const runningChains = db.prepare(`
+      SELECT COUNT(DISTINCT chain_id) as cnt FROM tasks 
+      WHERE workdir=? AND chain_id IS NOT NULL 
+        AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
+    `).get(workdir);
+
+    // Also count chains that are fully in 'todo' (just expanded, waiting to start)
+    const pendingChains = db.prepare(`
+      SELECT COUNT(DISTINCT chain_id) as cnt FROM tasks
+      WHERE workdir=? AND chain_id IS NOT NULL AND status='todo'
+        AND chain_id NOT IN (
+          SELECT DISTINCT chain_id FROM tasks
+          WHERE workdir=? AND chain_id IS NOT NULL
+            AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','cancelled')
+        )
+    `).get(workdir, workdir);
+
+    // Non-chain BMAD tasks in active state (exclude scheduled/non-BMAD tasks from auto mode count)
+    const nonChainActive = db.prepare(`
+      SELECT COUNT(*) as cnt FROM tasks
+      WHERE workdir=? AND chain_id IS NULL
+        AND status IN ('todo','in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
+        AND notes LIKE '%[bmad:%'
+    `).get(workdir);
+    
+    const currentStories = (runningChains?.cnt || 0) + (pendingChains?.cnt || 0) + (nonChainActive?.cnt || 0);
+    
+    if (currentStories >= AUTO_MODE_CONCURRENCY) continue;
+    
+    const slotsAvailable = AUTO_MODE_CONCURRENCY - currentStories;
+    
+    // Get backlog tasks for this project, respecting sort order
+    const backlogTasks = db.prepare(`
+      SELECT * FROM tasks 
+      WHERE workdir=? AND status='backlog' AND chain_id IS NULL
+      ORDER BY sort_order ASC, created_at ASC
+      LIMIT ?
+    `).all(workdir, slotsAvailable);
+    
+    if (!backlogTasks.length) {
+      // Check if ALL tasks are done — auto mode complete
+      const remaining = db.prepare(`
+        SELECT COUNT(*) as cnt FROM tasks 
+        WHERE workdir=? AND status NOT IN ('done','cancelled')
+      `).get(workdir);
+      
+      if (remaining.cnt === 0) {
+        // All done! Disable auto mode
+        proj.autoMode = false;
+        delete proj.autoModeStartedAt;
+        saveProjects(projects);
+        const doneCount = db.prepare(`SELECT COUNT(*) as cnt FROM tasks WHERE workdir=? AND status='done'`).get(workdir);
+        openclawNotify.notify(`🎉 **Auto Mode Complete**: ${proj.name}\n✅ All ${doneCount.cnt} tasks finished!`);
+        log.info(`[AutoMode] ALL DONE for project "${proj.name}" — disabling auto mode`);
+      }
+      continue;
+    }
+    
+    // Move backlog tasks to todo (which triggers BMAD chain expansion in processQueue)
+    for (const task of backlogTasks) {
+      db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`).run(task.id);
+      log.info(`[AutoMode] Moved to todo: "${task.title}" (${task.id})`);
+    }
+    
+    if (backlogTasks.length) {
+      log.info(`[AutoMode] ${proj.name}: moved ${backlogTasks.length} tasks from backlog → todo (${currentActive + backlogTasks.length}/${AUTO_MODE_CONCURRENCY} active)`);
+      // Notify connected clients
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    }
+  }
+  
+  // Trigger processQueue to pick up the newly moved tasks
+  setImmediate(processQueue);
+}
+
+// Run auto mode check every 15 seconds (same cadence as processQueue)
+setInterval(autoModeProcess, 15000);
+
+// ── Periodic Progress Summary via OpenClaw (every 2 hours) ──
+setInterval(() => {
+  try {
+    const allTasks = db.prepare(`SELECT * FROM tasks`).all();
+    // Group by workdir (project)
+    const byProject = {};
+    for (const t of allTasks) {
+      const proj = t.workdir || 'default';
+      if (!byProject[proj]) byProject[proj] = [];
+      byProject[proj].push(t);
+    }
+    for (const [projPath, tasks] of Object.entries(byProject)) {
+      const projName = require('path').basename(projPath);
+      const backlog = tasks.filter(t => t.status === 'backlog').length;
+      const todo = tasks.filter(t => t.status === 'todo').length;
+      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'cancelled').length;
+      const done = tasks.filter(t => t.status === 'done').length;
+      const total = tasks.filter(t => t.status !== 'cancelled').length;
+      // Recently completed (last 2 hours)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+      const recentlyCompleted = tasks
+        .filter(t => t.status === 'done' && t.updated_at > twoHoursAgo)
+        .map(t => t.title);
+      if (active > 0 || recentlyCompleted.length > 0) {
+        openclawNotify.progressSummary(projName, { backlog, todo, active, done, total, recentlyCompleted });
+      }
+    }
+  } catch (e) { log.error('[progress-summary]', { error: e.message }); }
+}, 2 * 60 * 60 * 1000); // every 2 hours
+
 // Kick off on startup — smart recovery for in_progress tasks
 setTimeout(() => {
   const stuck = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
@@ -1257,6 +2016,12 @@ function buildUserContent(text, attachments = []) {
     if (att.type && att.type.startsWith('image/')) {
       // Vision block — base64 image
       blocks.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } });
+    } else if (att.type === 'ssh') {
+      // SSH host reference — inject full connection info as text context
+      let sshText = `[SSH Host: ${att.label || att.host}]\nHost: ${att.host}:${att.port || 22}`;
+      if (att.sshKeyPath) sshText += `\nSSH Key: ${att.sshKeyPath}`;
+      else if (att.password) sshText += `\nPassword: ${att.password}`;
+      blocks.push({ type: 'text', text: sshText });
     } else {
       // Text / PDF — decode base64 and embed as readable text block
       let content = '(unable to decode)';
@@ -1284,6 +2049,28 @@ const DEFAULT_SLASH_COMMANDS = [
   { id: 'sc8', name: '/optimize', text: 'Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.' },
   { id: 'sc9', name: '/compact',  text: 'Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured.' },
   { id: 'sc10', name: '/init',    text: 'Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise.' },
+  // Task 13: BMAD contextual guidance command
+  { id: 'sc11', name: '/bmad-help', text: `Analyze the current project state and provide contextual BMAD guidance. Do the following:
+
+1. **Project Phase Detection**: Check for BMAD artifacts in the workspace:
+   - Look for product-brief.md, prd.md, architecture docs → determines current phase
+   - Look for sprint-status.yaml → implementation phase indicator
+   - Look for test files, coverage reports → QA phase indicator
+   - Check recent git commits for phase clues
+
+2. **Phase Assessment**: Based on what you find, identify which BMAD phase the project is in:
+   - 🧠 Brainstorm (no PRD yet)
+   - 📋 PRD (has brief, needs PRD)
+   - 🏗️ Architecture (has PRD, needs architecture doc)
+   - 💻 Implementation (has architecture, coding in progress)
+   - 🧪 QA (implementation done, needs testing)
+   - ✅ Done (all phases complete)
+
+3. **Next Steps**: Suggest the 2-3 most important next actions, including which BMAD agent to use (analyst, architect, developer, qa-engineer, etc.)
+
+4. **Quick Commands**: Provide copy-pasteable prompts for the suggested next steps.
+
+Be concise and actionable. Focus on what's most useful right now.` },
 ];
 
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
@@ -1543,6 +2330,7 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
 // PROJECTS
 // ============================================
 function loadProjects() { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8')); } catch { return []; } }
+function getProjectName(workdir) { if(!workdir) return ''; const p = loadProjects().find(p => p.workdir === workdir); return p?.name || path.basename(workdir); }
 function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(PROJECTS_FILE, JSON.stringify(p, null, 2)); }
 
 /**
@@ -1611,14 +2399,18 @@ function decryptPassword(stored) {
 
 // Maximum number of auto-continue attempts when agent hits --max-turns limit.
 // Each continue resumes the session, giving the agent another maxTurns window.
-const MAX_AUTO_CONTINUES = 3;
+const MAX_AUTO_CONTINUES = 5;
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -1646,16 +2438,16 @@ async function runCliSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
-        if (name === 'ask_user' || name === 'notify_user') {
-          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
         if (name === 'AskUserQuestion') {
-          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
@@ -1754,7 +2546,11 @@ async function runSshSingle(p) {
   const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -1778,8 +2574,12 @@ async function runSshSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
+          return;
+        }
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
@@ -1828,6 +2628,139 @@ async function runSshSingle(p) {
   return { cid: newCid, completed: lastResult?.subtype === 'success' };
 }
 
+// ── Task 12: Party Mode — BMAD multi-persona discussion + execution ──────────
+// Party mode: before execution, each relevant BMAD agent briefly discusses the
+// task from their perspective, then a synthesis creates the execution plan.
+async function runPartyMode(p) {
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
+  const effectiveWorkdir = workdir || WORKDIR;
+  const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
+
+  // ── Step 1: Identify relevant BMAD agents ───────────────────────────────
+  const PARTY_AGENTS = [
+    { id: 'analyst',         emoji: '📊', name: 'Mary (Analyst)'         },
+    { id: 'architect',       emoji: '🏗️',  name: 'Winston (Architect)'    },
+    { id: 'developer',       emoji: '💻', name: 'Amelia (Developer)'     },
+    { id: 'qa-engineer',     emoji: '🧪', name: 'Quinn (QA)'             },
+    { id: 'product-manager', emoji: '📋', name: 'John (PM)'              },
+  ];
+  ws.send(JSON.stringify({ type:'agent_status', agent:'party-host', status:'🎉 Party Mode — BMAD agents discussing...', ...(tabId ? { tabId } : {}) }));
+  ws.send(JSON.stringify({ type:'party_start', agents: PARTY_AGENTS.map(a => ({ id: a.id, name: a.name, emoji: a.emoji })), ...(tabId ? { tabId } : {}) }));
+
+  const headerText = `\n## 🎉 Party Mode — BMAD Agent Discussion\n\n`;
+  const _addBuf = (t) => { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); };
+  _addBuf(headerText);
+  ws.send(JSON.stringify({ type:'text', text: headerText, ...(tabId ? { tabId } : {}) }));
+
+  let currentSessionId = claudeSessionId || null;
+  const config = loadMergedConfig();
+
+  // ── Step 2: Each BMAD agent briefly discusses the task ─────────────────
+  const agentPerspectives = [];
+  for (const agent of PARTY_AGENTS) {
+    ws.send(JSON.stringify({ type:'agent_status', agent: agent.id, status:`${agent.emoji} ${agent.name} reviewing...`, ...(tabId ? { tabId } : {}) }));
+    const agentSkillPrompt = config.skills[agent.id] ? buildSystemPrompt([agent.id], config) : `You are ${agent.name}. Be concise.`;
+    const agentPrompt = `As ${agent.name}, review this task in 2-3 sentences from your specialist perspective. Focus on your key concern, approach, or recommendation.\n\nTASK: ${prompt}`;
+    let agentText = '';
+    await new Promise(res => {
+      let _s = false; const _r = () => { if (!_s) { _s = true; res(); } };
+      cli.send({ prompt: agentPrompt, sessionId: currentSessionId, model, maxTurns: 1, systemPrompt: agentSkillPrompt, allowedTools: [], abortController })
+        .onText(t => { agentText += t; })
+        .onSessionId(sid => { currentSessionId = sid; })
+        .onError(() => _r()).onDone(() => _r());
+    });
+    const perspText = `\n**${agent.emoji} ${agent.name}:** ${agentText.trim()}\n`;
+    agentPerspectives.push({ agent: agent.id, name: agent.name, text: agentText.trim() });
+    _addBuf(perspText);
+    ws.send(JSON.stringify({ type:'text', text: perspText, agent: agent.id, ...(tabId ? { tabId } : {}) }));
+    ws.send(JSON.stringify({ type:'party_agent_spoke', agent: agent.id, name: agent.name, emoji: agent.emoji, text: agentText.trim(), ...(tabId ? { tabId } : {}) }));
+    if (abortController?.signal?.aborted) break;
+  }
+
+  ws.send(JSON.stringify({ type:'agent_status', agent:'party-host', status:'📋 Synthesizing discussion into execution plan...', ...(tabId ? { tabId } : {}) }));
+
+  // ── Step 3: Synthesize discussion into execution plan ──────────────────
+  const synthPrompt = `Based on the BMAD team discussion above, create a concrete execution plan. Break into 2-5 subtasks with specific roles. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"developer","task":"...","depends_on":[]}]}\n\nAgent perspectives:\n${agentPerspectives.map(a => `${a.name}: ${a.text}`).join('\n')}\n\nTASK: ${prompt}`;
+  let planText = '';
+  await new Promise(res => {
+    let _s = false; const _r = () => { if (!_s) { _s = true; res(); } };
+    cli.send({ prompt: synthPrompt, sessionId: currentSessionId, model, maxTurns: 1, allowedTools: [], abortController })
+      .onText(t => { planText += t; })
+      .onSessionId(sid => { currentSessionId = sid; })
+      .onError(() => _r()).onDone(() => _r());
+  });
+
+  let plan = null;
+  try { const m = planText.match(/\{[\s\S]*\}/); if (m) plan = JSON.parse(m[0]); } catch {}
+
+  if (!plan?.agents?.length) {
+    ws.send(JSON.stringify({ type:'agent_status', agent:'party-host', status:'⚠️ Falling back to single mode', ...(tabId ? { tabId } : {}) }));
+    return runCliSingle(p);
+  }
+
+  const planSummaryText = `\n---\n📋 **Execution Plan:** ${plan.plan}\n🤖 ${plan.agents.map(a => `${a.id}(${a.role})`).join(', ')}\n---\n`;
+  _addBuf(planSummaryText);
+  ws.send(JSON.stringify({ type:'text', text: planSummaryText, ...(tabId ? { tabId } : {}) }));
+  ws.send(JSON.stringify({ type:'agent_plan', plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), ...(tabId ? { tabId } : {}) }));
+
+  // ── Step 4: Execute the plan (reuse multi-agent execution loop) ─────────
+  const completed = new Set(), results = {};
+  const remaining = [...plan.agents];
+  while (remaining.length) {
+    const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
+    if (!runnable.length) break;
+    await Promise.all(runnable.map(async agent => {
+      remaining.splice(remaining.indexOf(agent), 1);
+      ws.send(JSON.stringify({ type:'agent_status', agent: agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
+      const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
+      const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
+      const _bmadSkillId = BMAD_ROLE_TO_SKILL[agent.role?.toLowerCase()];
+      let agentSp = _bmadSkillId && config.skills[_bmadSkillId] ? buildSystemPrompt([_bmadSkillId], config) : `You are ${agent.role}. Complete your assigned task thoroughly.`;
+      let agentText = '';
+      await new Promise(res => {
+        let _s = false; const _r = () => { if (!_s) { _s = true; res(); } };
+        cli.send({ prompt: agentPrompt, sessionId: currentSessionId, model, maxTurns: Math.min(maxTurns||30, 50), systemPrompt: agentSp, mcpServers, allowedTools: ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'], abortController })
+          .onText(t => { agentText += t; _addBuf(t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
+          .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
+          .onSessionId(sid => { currentSessionId = sid; })
+          .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _r(); })
+          .onDone(() => _r());
+      });
+      results[agent.id] = agentText;
+      completed.add(agent.id);
+      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
+    }));
+  }
+
+  ws.send(JSON.stringify({ type:'agent_status', agent:'party-host', status:'✅ Party Mode complete', ...(tabId ? { tabId } : {}) }));
+  return currentSessionId;
+}
+
+// ── Task 11: BMAD role → skill ID mapping ────────────────────────────────────
+const BMAD_ROLE_TO_SKILL = {
+  'architect':       'architect',
+  'developer':       'developer',
+  'qa-engineer':     'qa-engineer',
+  'tech-writer':     'tech-writer',
+  'ux-designer':     'ux-designer',
+  'analyst':         'analyst',
+  'product-manager': 'product-manager',
+  'scrum-master':    'scrum-master',
+  'bmad-master':     'bmad-master',
+  'quick-flow':      'quick-flow',
+  // Common synonyms
+  'tester':          'qa-engineer',
+  'qa':              'qa-engineer',
+  'documentation':   'tech-writer',
+  'writer':          'tech-writer',
+  'design':          'ux-designer',
+  'ux':              'ux-designer',
+  'backend':         'backend',
+  'frontend':        'frontend',
+  'devops':          'devops',
+  'security':        'security',
+};
+
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
   const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
@@ -1837,7 +2770,8 @@ async function runMultiAgent(p) {
   const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
   let planText = '';
   // Orchestrator gets existing session context via --resume if available
-  const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
+  // Task 11: Use BMAD role names in orchestrator prompt for persona mapping
+  const planPrompt = `You are a BMAD lead architect. Break this into 2-5 subtasks, assigning each to the most appropriate BMAD specialist. Use these exact role names when applicable: architect, developer, qa-engineer, tech-writer, ux-designer, analyst, product-manager. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"developer","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
   let currentSessionId = claudeSessionId || null;
 
   await new Promise(res => {
@@ -1855,7 +2789,10 @@ async function runMultiAgent(p) {
 
   if (!plan?.agents?.length) {
     ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
-    return runCliSingle(p);
+    // runCliSingle returns { cid, completed } — extract .cid to match
+    // runMultiAgent's contract of returning a plain session ID string.
+    const fallback = await runCliSingle(p);
+    return fallback?.cid || null;
   }
 
   const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
@@ -1880,7 +2817,18 @@ async function runMultiAgent(p) {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
-      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
+      // Task 11: Map agent role to BMAD skill and build skill-based system prompt
+      const _bmadSkillId = BMAD_ROLE_TO_SKILL[agent.role?.toLowerCase()] || null;
+      let agentSp;
+      if (_bmadSkillId) {
+        try {
+          const _skillConfig = loadMergedConfig();
+          if (_skillConfig.skills[_bmadSkillId]) {
+            agentSp = buildSystemPrompt([_bmadSkillId], _skillConfig);
+          }
+        } catch {}
+      }
+      if (!agentSp) agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
       let agentText = '';
 
@@ -1890,7 +2838,7 @@ async function runMultiAgent(p) {
         // Agent resumes session to maintain context
         cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
@@ -2180,7 +3128,7 @@ app.get('/api/stats', (req, res) => {
   // Context size estimate: sum of all content lengths in session ÷ 4 chars/token
   let contextTokens = 0;
   if (sessionId) {
-    const { total } = stmts.contextTokens.get(sessionId);
+    const { total } = stmts.contextTokens.get(sessionId) || { total: 0 };
     contextTokens = Math.round(total / 4);
   }
 
@@ -2237,7 +3185,10 @@ app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','sched
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
   const workdir = req.query.workdir || null;
-  const rows = stmts.getTasks.all({ w: workdir || null });
+  const statusFilter = req.query.status || null; // Task 16: ?status=todo filter
+  let rows = stmts.getTasks.all({ w: workdir || null });
+  // Optional status filter for external API clients
+  if (statusFilter) rows = rows.filter(t => t.status === statusFilter);
   const result = rows.map(t => ({
     ...t,
     is_active: t.session_id ? activeTasks.has(t.session_id) : false,
@@ -2261,6 +3212,93 @@ app.post('/api/tasks', (req, res) => {
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
 });
+
+// ─── Discord BMAD Bridge API (local only) ──────────────────────────────────
+const bmadBridge = require('./discord-bmad-bridge');
+
+// POST /api/bmad/command — execute a BMAD command from Discord
+// Body: { command: "bmad quick-spec \"HMIS Lite\" Fix pharmacy" }
+app.post('/api/bmad/command', (req, res) => {
+  // Local only — reject external requests
+  const ip = req.ip || req.connection?.remoteAddress;
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+    return res.status(403).json({ error: 'Local only' });
+  }
+  
+  const parsed = bmadBridge.parseCommand(req.body.command);
+  if (!parsed) return res.json({ error: 'Not a bmad command' });
+  
+  if (parsed.action === 'list') {
+    return res.json({ ok: true, text: bmadBridge.formatWorkflowList() });
+  }
+  
+  if (parsed.action === 'status') {
+    const cookie = `token=${req.cookies?.token || ''}`;
+    bmadBridge.getTaskStatus(cookie).then(text => res.json({ ok: true, text })).catch(e => res.json({ error: e.message }));
+    return;
+  }
+  
+  if (parsed.action === 'start') {
+    const cookie = req.headers.cookie || '';
+    bmadBridge.findProject(parsed.project, 'http://127.0.0.1:3000', cookie).then(async proj => {
+      if (!proj) return res.json({ error: `Project "${parsed.project}" not found. Use \`bmad list\` to see options.` });
+      
+      const title = parsed.description 
+        ? `${parsed.description.substring(0, 80)}`
+        : `${parsed.workflow} — ${proj.name}`;
+      
+      try {
+        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie);
+        if (task.error) return res.json({ error: task.error });
+        res.json({ 
+          ok: true, 
+          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\``,
+          taskId: task.id 
+        });
+      } catch (e) {
+        res.json({ error: e.message });
+      }
+    });
+    return;
+  }
+  
+  if (parsed.action === 'reply') {
+    const cookie = req.headers.cookie || '';
+    bmadBridge.replyToTask(parsed.taskId, parsed.message, cookie)
+      .then(r => res.json({ ok: true, text: `✅ Reply sent to task \`${parsed.taskId}\`` }))
+      .catch(e => res.json({ error: e.message }));
+    return;
+  }
+  
+  // help
+  res.json({ ok: true, text: bmadBridge.formatWorkflowList() });
+});
+
+// POST /api/tasks/:id/reply — send a reply to an awaiting_input task and resume it
+app.post('/api/tasks/:id/reply', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  if (!task.session_id) return res.status(400).json({ error: 'No session linked' });
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+  
+  // Save user message to the session
+  try {
+    stmts.addMsg.run(task.session_id, 'user', 'text', message.trim(), null, null, null, null);
+  } catch (e) { log.error('reply addMsg failed', e.message); }
+  
+  // Set task back to todo so the worker picks it up and resumes with the user's reply
+  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`)
+    .run(task.id);
+  
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  
+  // Trigger queue processing
+  setTimeout(processQueue, 500);
+  
+  res.json({ ok: true, status: 'todo' });
+});
+
 app.put('/api/tasks/:id', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
@@ -2310,6 +3348,95 @@ app.delete('/api/tasks/:id', (req, res) => {
   if (task?.worker_pid) killByPid(task.worker_pid);
   stmts.deleteTask.run(tid);
   res.json({ ok: true });
+});
+
+// ─── Task 16: Extended REST API for external card creation ───────────────────
+// PATCH /api/tasks/:id — partial update (only provide fields you want to change)
+app.patch('/api/tasks/:id', express.json(), (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  const allowed = ['title', 'description', 'notes', 'status', 'sort_order', 'model', 'mode', 'agent_mode', 'max_turns', 'scheduled_at', 'recurrence', 'recurrence_end_at'];
+  const updates = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  // Handle 'column' as alias for 'status' (friendlier API)
+  if (req.body.column !== undefined) updates.status = req.body.column;
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields provided' });
+  const merged = { ...task, ...updates };
+  // Stop task if being moved away from in_progress
+  if (task.status === 'in_progress' && merged.status && merged.status !== 'in_progress') {
+    const ctrl = runningTaskAborts.get(req.params.id);
+    if (ctrl) { stoppingTasks.add(req.params.id); ctrl.abort(); }
+    else if (task.worker_pid) { stoppingTasks.add(req.params.id); killByPid(task.worker_pid); }
+  }
+  stmts.updateTask.run(
+    String(merged.title).substring(0,200), String(merged.description||'').substring(0,2000),
+    String(merged.notes||'').substring(0,2000),
+    sqlVal(merged.status), sqlVal(merged.sort_order), sqlVal(merged.session_id)||null, sqlVal(merged.workdir)||null,
+    sqlVal(merged.model), sqlVal(merged.mode), sqlVal(merged.agent_mode), sqlVal(merged.max_turns), sqlVal(merged.attachments)||null,
+    sqlVal(merged.depends_on)||null, sqlVal(merged.chain_id)||null, sqlVal(merged.source_session_id)||null,
+    sqlVal(merged.scheduled_at)||null, sqlVal(merged.recurrence)||null, sqlVal(merged.recurrence_end_at)||null,
+    req.params.id
+  );
+  if (merged.status === 'todo') setImmediate(processQueue);
+  // ── BMAD reverse sync: update sprint-status.yaml when Kanban status changes ──
+  if (updates.status && merged.notes) {
+    const bmadMatch = (merged.notes || '').match(/\[bmad:([^\]]+)\]/);
+    if (bmadMatch) {
+      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','cancelled':'backlog' };
+      const bmadStatus = REVERSE_MAP[merged.status];
+      if (bmadStatus) {
+        const wd = merged.workdir || WORKDIR;
+        const spFile = findSprintStatusFile(wd);
+        if (spFile) {
+          try {
+            let content = fs.readFileSync(spFile, 'utf-8');
+            const re = new RegExp(`(\\s+${bmadMatch[1].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}:\\s*)\\S+`, 'm');
+            if (re.test(content)) {
+              content = content.replace(re, `$1${bmadStatus}`);
+              fs.writeFileSync(spFile, content, 'utf-8');
+              log.info('BMAD reverse sync', { story: bmadMatch[1], status: bmadStatus });
+            }
+          } catch (e) { log.warn('BMAD reverse sync failed', { error: e.message }); }
+        }
+      }
+    }
+  }
+  res.json(stmts.getTask.get(req.params.id));
+});
+
+// GET /api/tasks/:id — get a single task by ID
+app.get('/api/tasks/:id', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  res.json({ ...task, is_active: task.session_id ? activeTasks.has(task.session_id) : false });
+});
+
+// GET /api/tasks/:id/result — get task result (assistant messages from linked session)
+app.get('/api/tasks/:id/result', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  if (!task.session_id) return res.json({ task, messages: [], summary: null });
+  const messages = db.prepare(`SELECT role, type, content, tool_name, created_at FROM messages WHERE session_id=? ORDER BY id ASC`).all(task.session_id);
+  const assistantText = messages.filter(m => m.role === 'assistant' && m.type === 'text').map(m => m.content).join('\n\n');
+  res.json({
+    task,
+    messages,
+    summary: assistantText ? assistantText.substring(0, 2000) : null,
+    status: task.status,
+    failure_reason: task.failure_reason || null,
+  });
+});
+
+// POST /api/tasks/:id/run — trigger a task to start immediately (set status to 'todo')
+app.post('/api/tasks/:id/run', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  if (task.status === 'in_progress') return res.status(409).json({ error: 'Task already running' });
+  db.prepare(`UPDATE tasks SET status='todo', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  setImmediate(processQueue);
+  res.json({ ok: true, task: stmts.getTask.get(req.params.id) });
 });
 
 // ─── Task Dispatch (Chat → Kanban chain) ─────────────────────────────────
@@ -2403,6 +3530,351 @@ app.post('/api/tasks/dispatch', (req, res) => {
   res.json({ chain_id: chainId, session_id: chainSessionId, tasks: createdTasks });
 });
 
+// ─── Tasks 17-19: OpenClaw Bridge Endpoints ──────────────────────────────────
+// GET /api/openclaw/status — check if OpenClaw bridge is configured
+app.get('/api/openclaw/status', async (req, res) => {
+  const configured = openclawBridge.isConfigured();
+  if (!configured) return res.json({ configured: false, message: 'Set OPENCLAW_API_URL and OPENCLAW_API_KEY in .env to enable' });
+  const health = await openclawBridge.healthCheck();
+  res.json({ configured, ...health });
+});
+// GET /api/openclaw/cron-templates — Task 19: return cron integration templates
+app.get('/api/openclaw/cron-templates', (req, res) => {
+  res.json(openclawBridge.CRON_TEMPLATES);
+});
+
+// ─── Task 8: BMAD Phase Templates ────────────────────────────────────────────
+// Returns the content of a BMAD template by name.
+// Templates stored at /home/ubuntu/.openclaw/workspace/bmad-openclaw/templates/
+const BMAD_TEMPLATES_DIR = path.join(os.homedir(), '.openclaw', 'workspace', 'bmad-openclaw', 'templates');
+const BMAD_TEMPLATE_NAMES = {
+  'brainstorming-session': 'brainstorming-session.md',
+  'prd': 'prd.md',
+  'tech-spec': 'tech-spec.md',
+  'readiness-report': 'readiness-report.md',
+  'story': 'story.md',
+  'epics': 'epics.md',
+  'architecture-decision': 'architecture-decision.md',
+  'ux-design': 'ux-design.md',
+};
+app.get('/api/bmad/templates/:name', (req, res) => {
+  const name = req.params.name;
+  const filename = BMAD_TEMPLATE_NAMES[name];
+  if (!filename) return res.status(404).json({ error: 'Template not found' });
+  try {
+    const filePath = path.join(BMAD_TEMPLATES_DIR, filename);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.json({ name, filename, content });
+  } catch (err) {
+    res.status(404).json({ error: `Template file not readable: ${err.message}` });
+  }
+});
+app.get('/api/bmad/templates', (req, res) => {
+  const templates = Object.entries(BMAD_TEMPLATE_NAMES).map(([name, filename]) => {
+    const filePath = path.join(BMAD_TEMPLATES_DIR, filename);
+    const exists = fs.existsSync(filePath);
+    return { name, filename, available: exists };
+  });
+  res.json(templates);
+});
+
+// ─── BMAD Sprint Status Integration ───────────────────────────────────────────
+// Finds and parses sprint-status.yaml from a project's _bmad-output directory.
+// Maps BMAD statuses → Kanban statuses and syncs tasks bidirectionally.
+
+const BMAD_STATUS_MAP = {
+  'backlog':       'backlog',
+  'ready-for-dev': 'todo',
+  'in-progress':   'in_progress',
+  'review':        'in_progress',
+  'needs-revision':'in_progress',
+  'done':          'done',
+  'optional':      'backlog',
+};
+
+function findSprintStatusFile(workdir) {
+  if (!workdir) return null;
+  // Common locations for sprint-status.yaml relative to the project workdir
+  const candidates = [
+    path.join(workdir, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml'),
+    path.join(workdir, '_bmad-output', 'sprint-status.yaml'),
+    path.join(workdir, 'sprint-status.yaml'),
+    path.join(workdir, '_bmad', 'sprint-status.yaml'),
+  ];
+  // Also check the openclaw workspace for a project with the same base name
+  const baseName = path.basename(workdir);
+  const homeDir = os.homedir();
+  const ocWorkspace = path.join(homeDir, '.openclaw', 'workspace');
+  // Try exact match and common variations (e.g., golf_casino → golf_casino_app)
+  const variations = [baseName, baseName + '_app', baseName.replace(/-/g, '_'), baseName.replace(/_/g, '-')];
+  for (const v of variations) {
+    candidates.push(path.join(ocWorkspace, v, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml'));
+    candidates.push(path.join(ocWorkspace, v, '_bmad-output', 'sprint-status.yaml'));
+    candidates.push(path.join(ocWorkspace, v, 'sprint-status.yaml'));
+  }
+  // No shallow scan — only return files that belong to this project
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function parseSprintStatus(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const doc = yaml.load(raw);
+    if (!doc || !doc.development_status) return null;
+
+    const meta = {
+      project: doc.project || '',
+      project_key: doc.project_key || '',
+      generated: doc.generated || '',
+      story_location: doc.story_location || '',
+    };
+
+    // Parse development_status into structured epics and stories
+    const epics = [];
+    let currentEpic = null;
+
+    // Read the raw file for comments (epic titles)
+    const lines = raw.split('\n');
+    const epicComments = {};
+    for (const line of lines) {
+      const cm = line.match(/^\s*#\s*Epic\s+(\d+):\s*(.+)/i);
+      if (cm) epicComments[`epic-${cm[1]}`] = cm[2].trim();
+    }
+
+    for (const [key, status] of Object.entries(doc.development_status)) {
+      const statusStr = String(status).split('#')[0].trim(); // strip inline comments
+      if (key.match(/^epic-\d+$/)) {
+        currentEpic = {
+          id: key,
+          title: epicComments[key] || key,
+          status: statusStr,
+          kanbanStatus: BMAD_STATUS_MAP[statusStr] || 'backlog',
+          stories: [],
+        };
+        epics.push(currentEpic);
+      } else if (key.match(/^epic-\d+-retrospective$/)) {
+        if (currentEpic) currentEpic.retrospective = statusStr;
+      } else if (currentEpic && !key.startsWith('epic-')) {
+        // It's a story
+        const storyComment = raw.split('\n').find(l => l.includes(key + ':'));
+        const inlineComment = storyComment ? (storyComment.split('#').slice(1).join('#').trim() || '') : '';
+        currentEpic.stories.push({
+          id: key,
+          title: key.replace(/^\d+-\d+-/, '').replace(/-/g, ' '),
+          status: statusStr,
+          kanbanStatus: BMAD_STATUS_MAP[statusStr] || 'backlog',
+          notes: inlineComment,
+        });
+      }
+    }
+
+    return { meta, epics, filePath };
+  } catch (e) {
+    log.error('Failed to parse sprint-status.yaml', { error: e.message, filePath });
+    return null;
+  }
+}
+
+// GET /api/bmad/docs?workdir=... — list BMAD output documents
+app.get('/api/bmad/docs', (req, res) => {
+  const workdir = req.query.workdir || WORKDIR;
+  const docs = [];
+  const baseName = path.basename(workdir);
+  const homeDir = os.homedir();
+  const ocWorkspace = path.join(homeDir, '.openclaw', 'workspace');
+  // Scan dirs: project workdir + openclaw workspace variations
+  const scanDirs = [
+    { dir: path.join(workdir, '_bmad-output', 'planning-artifacts'), category: 'Planning' },
+    { dir: path.join(workdir, '_bmad-output', 'implementation-artifacts'), category: 'Implementation' },
+    { dir: path.join(workdir, '_bmad-output', 'analysis'), category: 'Analysis' },
+    { dir: path.join(workdir, '_bmad-output'), category: 'Output' },
+    { dir: path.join(workdir, 'docs'), category: 'Project Docs' },
+  ];
+  // Also check openclaw workspace variations
+  const variations = [baseName, baseName + '_app', baseName.replace(/-/g, '_'), baseName.replace(/_/g, '-')];
+  for (const v of variations) {
+    const ocDir = path.join(ocWorkspace, v, '_bmad-output');
+    if (fs.existsSync(ocDir)) {
+      scanDirs.push({ dir: path.join(ocDir, 'planning-artifacts'), category: 'Planning' });
+      scanDirs.push({ dir: path.join(ocDir, 'implementation-artifacts'), category: 'Implementation' });
+      scanDirs.push({ dir: path.join(ocDir, 'analysis'), category: 'Analysis' });
+      scanDirs.push({ dir: ocDir, category: 'Output' });
+      break; // found it
+    }
+  }
+  const seen = new Set();
+  for (const { dir, category } of scanDirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      for (const f of fs.readdirSync(dir)) {
+        const fp = path.join(dir, f);
+        const stat = fs.statSync(fp);
+        if (!stat.isFile()) continue;
+        if (!['.md', '.yaml', '.yml', '.txt'].includes(path.extname(f).toLowerCase())) continue;
+        if (seen.has(f)) continue; // deduplicate
+        seen.add(f);
+        docs.push({
+          name: f,
+          category,
+          path: fp,
+          relativePath: path.relative(workdir, fp),
+          size: stat.size,
+          modified: stat.mtime.toISOString(),
+        });
+      }
+    } catch {}
+  }
+  res.json({ docs, workdir });
+});
+
+// GET /api/bmad/doc?path=... — read a single BMAD document
+app.get('/api/bmad/doc', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  // Security: only allow reading from _bmad-output/ or docs/ within a project
+  const normalized = path.resolve(filePath);
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace')) {
+    return res.status(403).json({ error: 'Access denied — only BMAD output files allowed' });
+  }
+  try {
+    const content = fs.readFileSync(normalized, 'utf-8');
+    const ext = path.extname(normalized).toLowerCase();
+    res.json({ content, name: path.basename(normalized), ext, size: content.length });
+  } catch (e) {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// POST /api/bmad/doc — create or update a document
+app.post('/api/bmad/doc', (req, res) => {
+  const { filePath, content } = req.body;
+  if (!filePath || content === undefined) return res.status(400).json({ error: 'filePath and content required' });
+  const normalized = path.resolve(filePath);
+  // Security: only allow writing to docs/, _bmad-output/, or _bmad/ within a project
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/')) {
+    return res.status(403).json({ error: 'Access denied — can only write to docs/ or _bmad-output/' });
+  }
+  try {
+    const dir = path.dirname(normalized);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(normalized, content, 'utf-8');
+    res.json({ ok: true, path: normalized, size: content.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/bmad/doc — delete a document
+app.delete('/api/bmad/doc', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  const normalized = path.resolve(filePath);
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output')) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  try {
+    if (fs.existsSync(normalized)) fs.unlinkSync(normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
+app.get('/api/bmad/sprint-status', (req, res) => {
+  const workdir = req.query.workdir || WORKDIR;
+  const filePath = findSprintStatusFile(workdir);
+  if (!filePath) return res.json({ found: false, workdir });
+  const parsed = parseSprintStatus(filePath);
+  if (!parsed) return res.status(500).json({ error: 'Failed to parse sprint-status.yaml' });
+  res.json({ found: true, ...parsed });
+});
+
+// POST /api/bmad/sprint-sync — sync sprint stories → Kanban cards
+app.post('/api/bmad/sprint-sync', express.json(), (req, res) => {
+  const workdir = req.body.workdir || WORKDIR;
+  const filter = req.body.filter || 'all'; // 'all' | 'active' | 'backlog'
+  const filePath = findSprintStatusFile(workdir);
+  if (!filePath) return res.status(404).json({ error: 'No sprint-status.yaml found', workdir });
+  const parsed = parseSprintStatus(filePath);
+  if (!parsed) return res.status(500).json({ error: 'Failed to parse sprint-status.yaml' });
+
+  // Get existing tasks tagged with bmad_sprint source
+  const existingTasks = db.prepare(`SELECT * FROM tasks WHERE workdir=?`).all(workdir);
+  const existingByBmadId = {};
+  for (const t of existingTasks) {
+    // Check notes for [bmad:story-id] tag
+    const m = (t.notes || '').match(/\[bmad:([^\]]+)\]/);
+    if (m) existingByBmadId[m[1]] = t;
+  }
+
+  const created = [], updated = [], skipped = [];
+
+  for (const epic of parsed.epics) {
+    for (const story of epic.stories) {
+      // Apply filter
+      if (filter === 'active' && (story.status === 'backlog' || story.status === 'done')) continue;
+      if (filter === 'backlog' && story.status !== 'backlog') continue;
+
+      const bmadTag = `[bmad:${story.id}]`;
+      const existing = existingByBmadId[story.id];
+
+      if (existing) {
+        // Update status if BMAD status changed
+        if (existing.status !== story.kanbanStatus) {
+          stmts.patchTaskStatus.run(story.kanbanStatus, existing.sort_order, existing.id);
+          updated.push({ id: story.id, from: existing.status, to: story.kanbanStatus });
+        } else {
+          skipped.push(story.id);
+        }
+      } else {
+        // Create new Kanban card
+        const id = crypto.randomUUID();
+        const title = `[${epic.id}] ${story.title}`;
+        const description = story.notes
+          ? `BMAD Story: ${story.id}\nEpic: ${epic.title}\n\n${story.notes}\n\nImplement this story following the acceptance criteria in the story file.`
+          : `BMAD Story: ${story.id}\nEpic: ${epic.title}\n\nImplement this story following the acceptance criteria in the story file.`;
+        const notes = `${bmadTag} Sprint: ${parsed.meta.project}`;
+        const sortOrder = epic.stories.indexOf(story);
+
+        stmts.createTask.run(
+          id, title, description, notes,
+          story.kanbanStatus, sortOrder, null, workdir,
+          null, null, null, null, null, null, null, null, null, null, null
+        );
+        created.push({ id: story.id, kanbanId: id, status: story.kanbanStatus });
+      }
+    }
+  }
+
+  // Broadcast refresh
+  // Notify connected clients
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  res.json({ synced: true, created: created.length, updated: updated.length, skipped: skipped.length, details: { created, updated, skipped } });
+});
+
+// POST /api/bmad/sprint-status/update — update a story status back to sprint-status.yaml
+app.post('/api/bmad/sprint-status/update', express.json(), (req, res) => {
+  const { workdir, storyId, newStatus } = req.body;
+  const dir = workdir || WORKDIR;
+  const filePath = findSprintStatusFile(dir);
+  if (!filePath) return res.status(404).json({ error: 'No sprint-status.yaml found' });
+  try {
+    let content = fs.readFileSync(filePath, 'utf-8');
+    // Find the line with the story ID and update its status
+    const regex = new RegExp(`(\\s+${storyId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)\\S+`, 'm');
+    if (!regex.test(content)) return res.status(404).json({ error: `Story ${storyId} not found in sprint-status.yaml` });
+    content = content.replace(regex, `$1${newStatus}`);
+    fs.writeFileSync(filePath, content, 'utf-8');
+    res.json({ updated: true, storyId, newStatus });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Sessions
 app.get('/api/sessions', (req,res) => {
   const { workdir } = req.query;
@@ -2426,14 +3898,14 @@ app.post('/api/sessions/reorder', (req, res) => {
 app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
-  s.messages = stmts.getMsgs.all(req.params.id);
+  // Lite: strip tool content — frontend only needs tool_name + agent_id for badge counts
+  s.messages = stmts.getMsgsLite.all(req.params.id);
   // Include running-task flag so client can show spinner immediately on load
-  const rt = db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(req.params.id);
-  s.hasRunningTask = !!rt;
+  s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
   // True when a direct-chat streaming session is alive in memory (not a Kanban task)
   s.isChatRunning = activeTasks.has(req.params.id);
   // Include chain tasks dispatched FROM this session (for chain progress widget restoration)
-  const chainTasks = db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`).all(req.params.id);
+  const chainTasks = stmts.getChainTasks.all(req.params.id);
   if (chainTasks.length) {
     // Group by chain_id (a session could have dispatched multiple chains)
     const chains = {};
@@ -2494,8 +3966,9 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
 });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
-  if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });
-  const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
+  const _cleanSid = sanitizeSessionId(session?.claude_session_id);
+  if (!_cleanSid) return res.status(400).json({ error: 'No Claude session ID' });
+  const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
   const platform = process.platform;
@@ -2881,7 +4354,8 @@ app.get('/api/files/download', (req,res) => {
   try {
     const stat = fs.statSync(fp);
     if (stat.isDirectory()) return res.status(400).json({error:'Cannot download a directory'});
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(fp)}"`);
+    const _dlFilename = path.basename(fp).replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${_dlFilename}"`);
     res.setHeader('Content-Length', stat.size);
     fs.createReadStream(fp).pipe(res);
   } catch { res.status(404).json({error:'Not found'}); }
@@ -3021,6 +4495,15 @@ app.post('/api/projects', (req,res) => {
     const id = 'proj-' + genId();
     projects.push({ id, name, workdir, createdAt:new Date().toISOString() });
     saveProjects(projects);
+    // Auto-install BMAD in new local projects (background, non-blocking)
+    if (!fs.existsSync(path.join(workdir, '_bmad'))) {
+      const { execFile: ef } = require('child_process');
+      ef('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
+        if (err) log.warn('BMAD auto-install failed', { workdir, error: err.message });
+        else log.info('BMAD auto-installed', { workdir });
+      });
+      actions.push('bmad install (background)');
+    }
     res.json({ ok:true, id, actions });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
@@ -3037,14 +4520,26 @@ app.post('/api/projects/reorder', (req, res) => {
   res.json({ ok: true });
 });
 app.patch('/api/projects/:id', (req,res) => {
-  const { name } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error:'name required' });
+  const { name, autoMode } = req.body;
   const projects = loadProjects();
   const p = projects.find(p => p.id === req.params.id);
   if (!p) return res.status(404).json({ error:'not found' });
-  p.name = name.trim();
+  if (name !== undefined) p.name = String(name).trim();
+  if (autoMode !== undefined) {
+    p.autoMode = !!autoMode;
+    if (p.autoMode) {
+      p.autoModeStartedAt = new Date().toISOString();
+      log.info(`[AutoMode] ENABLED for project "${p.name}" (${p.workdir})`);
+      openclawNotify.notify(`⚡ **Auto Mode Enabled**: ${p.name}\nTasks will be processed automatically, 5 at a time.`);
+    } else {
+      delete p.autoModeStartedAt;
+      log.info(`[AutoMode] DISABLED for project "${p.name}"`);
+      openclawNotify.notify(`⏸️ **Auto Mode Disabled**: ${p.name}`);
+    }
+  }
   saveProjects(projects);
-  res.json({ ok:true });
+  if (autoMode) setImmediate(autoModeProcess); // kick off immediately
+  res.json({ ok:true, autoMode: !!p.autoMode });
 });
 
 app.delete('/api/projects/:id', (req,res) => {
@@ -3325,7 +4820,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       ws: proxy,
       sessionId,
       abortController,
-      claudeSessionId: session.claude_session_id || undefined,
+      claudeSessionId: sanitizeSessionId(session.claude_session_id) || undefined,
       mode,
       workdir,
     };
@@ -3345,7 +4840,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       await runCliSingle(params);
     }
 
-    proxy.send(JSON.stringify({ type: 'done', duration: Date.now() - activeTasks.get(sessionId)?.startedAt }));
+    const _taskStart = activeTasks.get(sessionId)?.startedAt;
+    proxy.send(JSON.stringify({ type: 'done', duration: _taskStart ? Date.now() - _taskStart : 0 }));
   } catch (err) {
     log.error('[processTelegramChat] Error', { message: err.message, name: err.name, stack: err.stack });
     proxy.send(JSON.stringify({ type: 'error', error: err.message }));
@@ -3751,7 +5247,7 @@ wss.on('connection', (ws) => {
         stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.engine)||null,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
-        localClaudeId = existSess.claude_session_id || undefined;
+        localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
       }
 
       // For legacy (no tabId) mode, keep WS-level state in sync
@@ -3786,7 +5282,15 @@ wss.on('connection', (ws) => {
       }
       const replyToId = sqlVal(reply_to?.id ?? null);
       const engineMessage = replyQuote + userMessage;
-      const userContent = buildUserContent(engineMessage, attachments);
+      // Enrich SSH attachments with stored auth credentials (key path or decrypted password)
+      const enrichedAttachments = attachments.map(att => {
+        if (att.type !== 'ssh' || !att.hostId) return att;
+        const hosts = loadRemoteHosts();
+        const rh = hosts.find(h => h.id === att.hostId);
+        if (!rh) return att;
+        return { ...att, sshKeyPath: rh.sshKeyPath || '', password: decryptPassword(rh.password) || '' };
+      });
+      const userContent = buildUserContent(engineMessage, enrichedAttachments);
 
       if (!retry) {
         const attJson = attachments.length ? JSON.stringify(attachments.map(a => ({ type: a.type, name: a.name, base64: a.base64 }))) : null;
@@ -3812,22 +5316,28 @@ wss.on('connection', (ws) => {
       // ─── LLM-based task classification ──────────────────────────────
       // When autoSkill=true, classify the user message with haiku (~10-15s via CLI).
       // Returns both specialist skills AND a short chat title in one call.
+      // Skip on resumed sessions (localClaudeId set) — skills already baked into session
+      // context, no need to pay for a Haiku call on every subsequent message.
       let effectiveSkills = sIds;
       let classifiedTitle = '';
-      log.info('[classify] autoSkill=%s sIds=%j msgLen=%d', autoSkill, sIds, userMessage.length);
-      if (autoSkill) {
+      const shouldClassify = autoSkill && !localClaudeId;
+      log.info('[classify] start', { autoSkill, shouldClassify, sIds, msgLen: userMessage.length });
+      if (shouldClassify) {
         try {
           proxy.send(JSON.stringify({ type:'agent_status', status:'⚡ Classifying task...', statusKey:'status.classifying', tabId: effectiveTabId }));
           const classification = await classifyTask(userMessage, sIds, config, workdir || WORKDIR);
-          effectiveSkills = classification.skills;
           classifiedTitle = classification.title;
-          log.info('[classify] skills=%j title=%s', effectiveSkills, classifiedTitle);
+          // Merge classified skills into existing (not replace)
+          const merged = new Set(sIds);
+          for (const s of classification.skills) merged.add(s);
+          effectiveSkills = [...merged];
+          log.info('[classify] done', { newSkills: classification.skills, merged: effectiveSkills, title: classifiedTitle });
           if (effectiveSkills.length > 0) {
             proxy.send(JSON.stringify({ type:'skills_auto', skills: effectiveSkills, tabId: effectiveTabId }));
           }
         } catch (err) {
-          log.error('[classify] Failed: %s', err.message);
-          effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
+          log.error('[classify] Failed', { err: err.message });
+          if (!effectiveSkills.length) effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
         }
       }
 
@@ -3844,8 +5354,15 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
       }
 
-      // Build system prompt — cached by skill combination, skill files cached in memory
-      const systemPrompt = buildSystemPrompt(effectiveSkills, config);
+      // Build system prompt — cached by skill combination, skill files cached in memory.
+      // BMAD Master is always included as the default orchestrator
+      if (config.skills['bmad-master'] && !effectiveSkills.includes('bmad-master')) {
+        effectiveSkills = ['bmad-master', ...effectiveSkills];
+      }
+      // Skipped on resumed sessions (localClaudeId set): claude-cli.js blocks --system-prompt
+      // when --resume is used (cryptographic signatures on thinking blocks), so building
+      // it would be pure waste. System prompt was already set on the first turn of this session.
+      const systemPrompt = localClaudeId ? undefined : buildSystemPrompt(effectiveSkills, config);
 
       const mcpServers = {};
       for (const mid of mIds) {
@@ -3929,6 +5446,8 @@ wss.on('connection', (ws) => {
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
+      } else if (agentMode==='party') {
+        newCid = await runPartyMode(params);
       } else {
         const result = await runCliSingle(params);
         newCid = result.cid;
@@ -4051,7 +5570,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) {
-        legacyClaudeId = existing.claude_session_id || undefined;
+        legacyClaudeId = sanitizeSessionId(existing.claude_session_id) || undefined;
         // Don't send session_started for existing sessions — the client's session_started
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
@@ -4245,7 +5764,7 @@ wss.on('connection', (ws) => {
         // Catch up new subscriber with any already-running task (unless suppressed)
         if (!noCatchUp) {
           const runningTask = db.prepare(
-            `SELECT * FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`
+            `SELECT * FROM tasks WHERE session_id=? AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa') LIMIT 1`
           ).get(sessionId);
           if (runningTask && ws.readyState === 1) {
             ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
@@ -4346,7 +5865,7 @@ wss.on('connection', (ws) => {
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: session?.claude_session_id, model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
                 .onText(t => { planText += t; })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });
@@ -4562,7 +6081,8 @@ initTunnelManager();
 // Start Telegram bot if configured
 initTelegramBot();
 
-server.listen(PORT, () => {
+const HOST = process.env.HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
   log.info('server started', {
     port:      PORT,
     url:       `http://localhost:${PORT}`,
