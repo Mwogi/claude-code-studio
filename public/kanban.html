@@ -320,7 +320,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .modal-hd-title{ font-size:15px; font-weight:700; flex:1; }
 .modal-close{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:20px; padding:2px 6px; border-radius:var(--r-sm); line-height:1; transition:color .1s,background .1s; }
 .modal-close:hover{ color:var(--text); background:var(--s2); }
-.modal-body{ padding:20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; }
+.modal-body{ padding:16px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px; }
 .modal-ft{ padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; flex-shrink:0; }
 
 /* Form elements */
@@ -1316,9 +1316,58 @@ function buildForm(tk={}){
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
-    <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()">${statusOpts}</select></div>
-      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()" style="font-size:12px">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()" style="font-size:12px">${sessOpts}</select></div>
+      <div><label class="lbl">BMAD Workflow</label>
+        <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)" style="font-size:12px">
+          <option value=""${wfVal===''?' selected':''}>None</option>
+          <optgroup label="Analysis">
+            <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
+            <option value="research"${wfVal==='research'?' selected':''}>🔬 Research</option>
+          </optgroup>
+          <optgroup label="Planning">
+            <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
+            <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
+            <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
+            <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
+          </optgroup>
+          <optgroup label="Solutioning">
+            <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture</option>
+            <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Readiness Check</option>
+          </optgroup>
+          <optgroup label="Implementation">
+            <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning</option>
+            <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
+            <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story</option>
+            <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
+            <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
+            <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
+            <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
+            <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
+            <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
+          </optgroup>
+          <optgroup label="Tools">
+            <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
+            <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Context</option>
+            <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 E2E Tests</option>
+            <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
+          </optgroup>
+        </select>
+      </div>
+      <div><label class="lbl">🔗 Run After</label>
+        <select id="fAfter" class="sel" style="font-size:12px">
+          <option value="">None</option>
+          ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
+            .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+            .slice(0,30)
+            .map(t=>{
+              const sel=(tk.chain_id&&t.chain_id===tk.chain_id&&(t.sort_order||0)<(tk.sort_order||0))?'selected':'';
+              return '<option value="'+t.id+'" '+sel+'>'+escH((t.title||t.id).substring(0,40))+' ['+t.status+']</option>';
+            }).join('')}
+        </select>
+        ${tk.chain_id?'<div style="margin-top:2px;font-size:10px;color:#9ca3af">🔗 <code style="font-size:9px">'+escH(tk.chain_id.slice(0,20))+'</code></div>':''}
+      </div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
       <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
@@ -1349,73 +1398,25 @@ function buildForm(tk={}){
         </div>
       </div>
     </div>
-    <div>
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0">
       <label class="lbl">${t('modal.desc')}</label>
-      <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
-      <div id="bmadTplBtn" style="margin-top:6px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
+      <textarea id="fDesc" class="inp" style="flex:1;min-height:200px;resize:vertical;font-family:monospace;font-size:13px;line-height:1.5" placeholder="Task description — be specific about what needs to be done…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <div id="bmadTplBtn" style="margin-top:4px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
         <button type="button" class="hb" style="font-size:12px;padding:4px 10px" onclick="fillBmadTemplate()">
           ${t('bmad.use_tpl')}
         </button>
       </div>
     </div>
-    <div><label class="lbl">Notes & Tags</label>
-      <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
-      <textarea id="fNotes" class="inp" rows="2" placeholder="Additional context for the agent…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
-    </div>
-    <div><label class="lbl">BMAD Workflow</label>
-      <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
-        <option value=""${wfVal===''?' selected':''}>None (regular task)</option>
-        <optgroup label="Analysis">
-          <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
-          <option value="research"${wfVal==='research'?' selected':''}>🔬 Research (Domain/Market/Tech)</option>
-        </optgroup>
-        <optgroup label="Planning">
-          <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
-          <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
-          <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
-          <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
-        </optgroup>
-        <optgroup label="Solutioning">
-          <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture + Epics</option>
-          <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Implementation Readiness Check</option>
-        </optgroup>
-        <optgroup label="Implementation">
-          <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
-          <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
-          <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story (Implement)</option>
-          <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
-          <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
-          <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
-          <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
-          <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
-          <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
-        </optgroup>
-        <optgroup label="Tools">
-          <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
-          <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Project Context</option>
-          <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 Generate E2E Tests</option>
-          <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
-        </optgroup>
-      </select>
-    </div>
-    <div>
-      <label class="lbl">${t('modal.attach')}</label>
-      <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
-      <div class="att-dropzone" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
-      <div class="att-previews" id="attPreviews"></div>
-    </div>
-    <div><label class="lbl">🔗 Run After (Chain)</label>
-      <select id="fAfter" class="sel">
-        <option value="">No dependency (run immediately)</option>
-        ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
-          .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
-          .slice(0,30)
-          .map(t=>{
-            const sel=(tk.chain_id&&t.chain_id===tk.chain_id&&(t.sort_order||0)<(tk.sort_order||0))?'selected':'';
-            return '<option value="'+t.id+'" '+sel+'>'+escH((t.title||t.id).substring(0,60))+' ['+t.status+']</option>';
-          }).join('')}
-      </select>
-      ${tk.chain_id?'<div style="margin-top:4px;font-size:11px;color:#9ca3af">🔗 Chain: <code style="font-size:10px">'+escH(tk.chain_id)+'</code></div>':''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="lbl">Notes & Tags</label>
+        <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
+        <textarea id="fNotes" class="inp" rows="2" style="font-size:12px" placeholder="Additional context…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
+      </div>
+      <div><label class="lbl">${t('modal.attach')}</label>
+        <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
+        <div class="att-dropzone" style="padding:8px;font-size:12px" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
+        <div class="att-previews" id="attPreviews"></div>
+      </div>
     </div>`;
 }
 
