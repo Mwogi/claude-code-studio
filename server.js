@@ -1466,12 +1466,17 @@ function processQueue() {
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
-    // Workdir lock: only for chain tasks sharing the SAME chain — prevents sequential chain steps
-    // from conflicting in the same directory. Different chains CAN run in parallel.
-    if (task.chain_id && task.workdir) {
-      const sameChainRunning = inProg.some(t => t.chain_id === task.chain_id && t.workdir === task.workdir)
-        || [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`);
-      if (sameChainRunning) continue;
+    // Chain sequencing: tasks in the same chain must run in sort_order.
+    // Block this task if any earlier task in the same chain is not yet done/cancelled.
+    if (task.chain_id) {
+      const chainTasks = stmts.getTasksByChain.all(task.chain_id);
+      const earlierPending = chainTasks.some(t => 
+        (t.sort_order || 0) < (task.sort_order || 0) && 
+        !['done', 'cancelled'].includes(t.status)
+      );
+      if (earlierPending) continue;
+      // Also check if same-chain task was just started in this queue cycle
+      if (task.workdir && [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`)) continue;
     }
     if (task.session_id) {
       // Shared session: one at a time per session
