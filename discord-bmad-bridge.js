@@ -124,9 +124,19 @@ function parseCommand(text) {
   // bmad status
   if (/^status$/i.test(rest)) return { action: 'status' };
   
-  // bmad reply <task-id> <message>
+  // bmad reply <task-id> <message>  OR  bmad reply <message> (auto-find awaiting task)
   const replyMatch = rest.match(/^reply\s+(\S+)\s+(.+)/i);
-  if (replyMatch) return { action: 'reply', taskId: replyMatch[1], message: replyMatch[2] };
+  if (replyMatch) {
+    // If first word looks like a task ID (alphanumeric 8+ chars), use it; otherwise treat entire thing as message
+    if (/^[a-z0-9]{8,}$/i.test(replyMatch[1])) {
+      return { action: 'reply', taskId: replyMatch[1], message: replyMatch[2] };
+    }
+    // No task ID — auto-find awaiting task
+    return { action: 'reply', taskId: null, message: rest.replace(/^reply\s+/i, '') };
+  }
+  // Simple "reply" with just a message
+  const simpleReply = rest.match(/^reply$/i);
+  if (simpleReply) return { action: 'help' };
   
   // bmad <workflow> "<project>" [description]
   // Or: bmad <workflow> <project> [description]
@@ -213,6 +223,32 @@ async function createTask(workflow, projectWorkdir, title, description, cookie) 
 }
 
 /**
+ * Find the most recent awaiting_input task
+ */
+async function findAwaitingTask(cookie) {
+  const http = require('http');
+  return new Promise((resolve, reject) => {
+    const opts = { hostname: '127.0.0.1', port: 3000, path: '/api/tasks', headers: {} };
+    if (cookie) opts.headers.Cookie = cookie;
+    http.get(opts, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const tasks = JSON.parse(data);
+          if (!Array.isArray(tasks)) { resolve(null); return; }
+          // Find most recent awaiting_input task
+          const awaiting = tasks
+            .filter(t => t.status === 'awaiting_input')
+            .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+          resolve(awaiting[0] || null);
+        } catch { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+/**
  * Reply to an awaiting_input task
  */
 async function replyToTask(taskId, message, cookie) {
@@ -276,6 +312,7 @@ module.exports = {
   findProject,
   createTask,
   replyToTask,
+  findAwaitingTask,
   getTaskStatus,
   activeThreadTasks,
   DISCORD_CHANNEL

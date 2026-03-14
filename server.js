@@ -3264,9 +3264,24 @@ app.post('/api/bmad/command', (req, res) => {
   
   if (parsed.action === 'reply') {
     const cookie = req.headers.cookie || '';
-    bmadBridge.replyToTask(parsed.taskId, parsed.message, cookie)
-      .then(r => res.json({ ok: true, text: `✅ Reply sent to task \`${parsed.taskId}\`` }))
-      .catch(e => res.json({ error: e.message }));
+    (async () => {
+      try {
+        let taskId = parsed.taskId;
+        let taskTitle = '';
+        if (!taskId) {
+          // Auto-find the most recent awaiting_input task
+          const task = await bmadBridge.findAwaitingTask(cookie);
+          if (!task) return res.json({ error: 'No tasks currently awaiting input.' });
+          taskId = task.id;
+          taskTitle = task.title;
+        }
+        await bmadBridge.replyToTask(taskId, parsed.message, cookie);
+        const label = taskTitle ? `**${taskTitle}** (\`${taskId.slice(0,8)}\`)` : `\`${taskId}\``;
+        res.json({ ok: true, text: `✅ Reply sent to ${label}` });
+      } catch (e) {
+        res.json({ error: e.message });
+      }
+    })();
     return;
   }
   
