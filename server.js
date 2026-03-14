@@ -3072,6 +3072,10 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
+// Kanban as default landing — must be before static middleware (which serves index.html for /)
+app.get('/', (req,res,next) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','kanban.html')); });
+app.get('/chat', (_,res) => res.sendFile(path.join(__dirname,'public','index.html')));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Language ─────────────────────────────────────────────────────────────────
@@ -3202,9 +3206,6 @@ app.post('/api/auth/change-password', async (req,res) => {
 app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
-app.get('/chat', (_,res) => res.sendFile(path.join(__dirname,'public','index.html')));
-// Default landing page = Kanban
-app.get('/', (req,res,next) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','kanban.html')); });
 app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','schedule.html')));
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
