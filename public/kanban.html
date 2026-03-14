@@ -290,8 +290,9 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
 .modal.has-chat{ max-width:1200px; height:92vh; min-height:600px; }
 .modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
-.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
-.modal-left .modal-body{ padding:16px; gap:10px; }
+.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow:hidden; }
+.modal-left .modal-body{ padding:16px; gap:10px; overflow-y:auto; flex:1; }
+.modal-left .modal-ft{ flex-shrink:0; }
 .modal-right{ flex:1; display:flex; flex-direction:column; min-width:0; height:100%; overflow:hidden; }
 .modal-right .chat-panel{ border:none; border-radius:0; flex:1; display:flex; flex-direction:column; height:100%; overflow:hidden; }
 .modal-right .chat-panel-hd{ padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
