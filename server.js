@@ -2174,6 +2174,8 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
+const BROWSER_TESTING_INSTRUCTION = `\n\nIMPORTANT — BROWSER TESTING: You have access to a Playwright MCP server (tools prefixed with mcp__playwright__). For ANY task involving frontend/UI changes, you MUST use Playwright to test in a real browser before marking the task as done. Read docs/testing-info.md for the dev server URL, login credentials, and OTP endpoint. Use playwright_navigate, playwright_click, playwright_fill, playwright_screenshot to verify your changes work visually. A task is NOT complete until browser-tested.`;
+
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
@@ -2200,10 +2202,23 @@ Re-read the task and list every requirement explicitly (numbered).
 For each requirement: run a command or inspect output that PROVES it is satisfied.
 Do NOT skip — execute actual commands and show the output.
 
-### Step 3 — Fix & Re-verify
+### Step 3 — Browser Testing (REQUIRED for UI/frontend tasks)
+If this task involves ANY frontend/UI changes:
+1. Read docs/testing-info.md for credentials and test URL
+2. Use the **Playwright MCP server** (mcp__playwright__*) to test in a real browser:
+   - Navigate to the dev server URL
+   - Log in with the credentials from testing-info.md
+   - Navigate to the relevant page/feature
+   - Take screenshots to verify the UI looks correct
+   - Test interactive features (click buttons, fill forms, etc.)
+   - Check the browser console for errors
+3. If Playwright MCP is not available, use curl to test API endpoints at minimum
+4. NO frontend task is complete until verified working in a real browser
+
+### Step 4 — Fix & Re-verify
 If any check fails: fix it immediately, then re-run the exact check to confirm it passes.
 
-### Step 4 — Self-Audit
+### Step 5 — Self-Audit
 Ask: "If a senior engineer reviews this right now, would they approve without any changes?"
 If the answer is no — fix the issues first.
 
@@ -2212,6 +2227,7 @@ If the answer is no — fix the issues first.
 VERIFICATION:
 ✅ [requirement 1]: [command / output as proof]
 ✅ [requirement 2]: [command / output as proof]
+🌐 [browser test]: [screenshot or description of what was verified in browser]
 ❌ [requirement N]: ISSUE FOUND → FIXED: [what was done] → ✅ confirmed
 FINAL: ✅ All requirements verified [/ ⚠️ N issues found and fixed]
 \`\`\``;
@@ -2245,6 +2261,7 @@ function buildSystemPrompt(skillIds, config) {
   prompt += ASK_USER_INSTRUCTION;
   prompt += NOTIFY_USER_INSTRUCTION;
   prompt += SET_UI_STATE_INSTRUCTION;
+  prompt += BROWSER_TESTING_INSTRUCTION;
   prompt += STATUS_LINE_INSTRUCTION;
   prompt += TOOL_CALL_INSTRUCTION;
 
