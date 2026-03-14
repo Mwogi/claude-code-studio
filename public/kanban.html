@@ -1624,7 +1624,7 @@ async function saveTask(){
   if(wfType) rawNotes=(rawNotes?rawNotes+'\n':'')+`[bmad-workflow:${wfType}]`;
   if(sprintTags) rawNotes=(rawNotes?rawNotes+' ':'')+sprintTags;
   if(phaseTags) rawNotes=(rawNotes?rawNotes+' ':'')+phaseTags;
-  const resolvedStatus=wfType?'bmad_workflow':($i('fStatus')?.value||'backlog');
+  const resolvedStatus = modalMode==='add' && wfType ? 'bmad_workflow' : ($i('fStatus')?.value||'backlog');
   const body={
     title,
     description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
