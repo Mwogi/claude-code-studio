@@ -1262,7 +1262,7 @@ async function openEditModal(id){
         if(!streamingEl) {
           streamingEl = document.createElement('div');
           streamingEl.className = 'chat-msg';
-          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE <span class="chat-ts">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span></div><div class="chat-text"></div>';
           body.appendChild(streamingEl);
         }
         const textEl = streamingEl.querySelector('.chat-text');
@@ -1292,7 +1292,7 @@ async function openEditModal(id){
         streamingEl = null;
         const startDiv = document.createElement('div');
         startDiv.className = 'chat-msg';
-        startDiv.innerHTML = `<div class="chat-role user">TASK</div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
+        startDiv.innerHTML = `<div class="chat-role user">TASK <span class="chat-ts">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span></div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
         body.appendChild(startDiv);
         if(wasAtBottom) body.scrollTop = body.scrollHeight;
       }
@@ -1316,7 +1316,7 @@ async function openEditModal(id){
           if(!streamingEl) {
             streamingEl = document.createElement('div');
             streamingEl.className = 'chat-msg';
-            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE <span class="chat-ts">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span></div><div class="chat-text"></div>';
             body.appendChild(streamingEl);
           }
           streamingEl.querySelector('.chat-text').textContent += d.buffer;
