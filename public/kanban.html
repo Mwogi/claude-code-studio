@@ -1527,7 +1527,7 @@ function getSessCfg(){
 
 function buildChatPanel(tk,msgs){
   const claudeId=tk.claude_session_id||'';
-  const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
+  const openUrl=`/chat?open_session=${encodeURIComponent(tk.session_id)}`;
   const isActive=isTaskActive(tk.status);
   let msgsHtml;
   if(!msgs.length){
