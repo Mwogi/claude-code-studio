@@ -262,6 +262,12 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 /* ─── Card ─── */
 .card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s,transform .1s; }
 .card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
+.activity-badge{ font-size:10px; padding:1px 6px; border-radius:8px; font-weight:500; display:inline-flex; align-items:center; gap:3px; }
+.activity-fresh{ background:rgba(34,197,94,.15); color:#22c55e; }
+.activity-warm{ background:rgba(234,179,8,.15); color:#eab308; }
+.activity-stale{ background:rgba(239,68,68,.15); color:#ef4444; }
+.activity-pulse{ animation:pulse-dot 1.5s ease-in-out infinite; }
+@keyframes pulse-dot{ 0%,100%{opacity:1} 50%{opacity:.4} }
 .card.dragging{ opacity:.4; cursor:grabbing; transform:scale(.97); }
 .card-ph{ border:2px dashed var(--accent); border-radius:var(--r-md); background:var(--abg); opacity:.5; }
 .card-title{ font-size:13px; font-weight:600; line-height:1.4; margin-bottom:5px; word-break:break-word; }
@@ -1036,11 +1042,21 @@ function makeCard(tk){
       chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}${waitTip}">${waitIcon} ${idx+1}/${total}</span>`;
     }
   }
+  // Activity badge for running tasks
+  let activityBadge='';
+  if(isTaskActive(tk.status) && tk.last_activity){
+    const ago=Date.now()-new Date(tk.last_activity+'Z').getTime();
+    const mins=Math.floor(ago/60000);
+    const cls=mins<2?'activity-fresh':mins<10?'activity-warm':'activity-stale';
+    const pulse=mins<2?'activity-pulse':'';
+    const label=mins<1?'just now':mins<60?mins+'m ago':Math.floor(mins/60)+'h ago';
+    activityBadge=`<span class="activity-badge ${cls} ${pulse}" title="Last activity: ${label}">⚡ ${label}</span>`;
+  }
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${wfBadge}${chainBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${schedBadge}${wfBadge}${chainBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
