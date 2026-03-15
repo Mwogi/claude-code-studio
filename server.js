@@ -1107,7 +1107,7 @@ async function startTask(task) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
-          db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.warn(`[taskWorker] task ${task.id}: chain retry ${(task.task_retry_count||0)+1}/${MAX_CHAIN_RETRIES}, reason: ${reason}, backoff: ${_retryBackoffMs}ms`);
           if (task.source_session_id) {
@@ -1175,7 +1175,7 @@ async function startTask(task) {
       // Exception: auto-retry for chain tasks, cancel for non-chain
       const failureMsg = `${err.name}: ${err.message}`;
       if (task.chain_id && (task.task_retry_count || 0) < 2) {
-        db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
+        db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
         _retryBackoffMs = 5000;
         log.warn(`[taskWorker] task ${task.id}: exception → auto-retry`);
       } else {
@@ -1539,8 +1539,8 @@ setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
     AND status != 'awaiting_input'
   `).all();
   if (orphaned.length) {
-    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
-    const reset = db.prepare(`UPDATE tasks SET status='todo', session_id=NULL WHERE id=?`);
+    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to bmad_workflow`);
+    const reset = db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL WHERE id=?`);
     for (const t of orphaned) {
       reset.run(t.id);
       log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
@@ -1625,7 +1625,7 @@ function autoModeProcess() {
     
     // Move backlog tasks to todo (which triggers BMAD chain expansion in processQueue)
     for (const task of backlogTasks) {
-      db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`).run(task.id);
+      db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(task.id);
       log.info(`[AutoMode] Moved to todo: "${task.title}" (${task.id})`);
     }
     
@@ -3380,7 +3380,7 @@ app.post('/api/tasks/:id/reply', (req, res) => {
   } catch (e) { log.error('reply addMsg failed', e.message); }
   
   // Set task back to todo so the worker picks it up and resumes with the user's reply
-  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`)
+  db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`)
     .run(task.id);
   
   wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
@@ -3526,7 +3526,7 @@ app.post('/api/tasks/:id/run', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   if (task.status === 'in_progress') return res.status(409).json({ error: 'Task already running' });
-  db.prepare(`UPDATE tasks SET status='todo', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
   setImmediate(processQueue);
   res.json({ ok: true, task: stmts.getTask.get(req.params.id) });
 });
