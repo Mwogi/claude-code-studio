@@ -1052,7 +1052,7 @@ function makeCard(tk){
     const cls=secs<120?'activity-fresh':mins<10?'activity-warm':'activity-stale';
     const pulse=secs<120?'activity-pulse':'';
     const label=secs<10?'just now':secs<60?secs+'s ago':mins<60?mins+'m ago':Math.floor(mins/60)+'h ago';
-    activityBadge=`<span class="activity-badge ${cls} ${pulse}" title="Last activity: ${label}">⚡ ${label}</span>`;
+    activityBadge=`<span class="activity-badge ${cls} ${pulse}" data-activity="${tk.last_activity}" title="Last activity: ${label}">⚡ ${label}</span>`;
   }
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
@@ -1077,6 +1077,23 @@ function makeCard(tk){
   });
   return el;
 }
+
+// ─── Live Activity Badge Updater (every 5s) ───────────────────────────────
+setInterval(()=>{
+  document.querySelectorAll('.activity-badge[data-activity]').forEach(el=>{
+    const ts=el.dataset.activity;
+    if(!ts) return;
+    const ago=Date.now()-new Date(ts+'Z').getTime();
+    const secs=Math.floor(ago/1000);
+    const mins=Math.floor(ago/60000);
+    const cls=secs<120?'activity-fresh':mins<10?'activity-warm':'activity-stale';
+    const pulse=secs<120?'activity-pulse':'';
+    const label=secs<10?'just now':secs<60?secs+'s ago':mins<60?mins+'m ago':Math.floor(mins/60)+'h ago';
+    el.className='activity-badge '+cls+' '+pulse;
+    el.textContent='⚡ '+label;
+    el.title='Last activity: '+label;
+  });
+}, 5000);
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){
