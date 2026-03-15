@@ -732,7 +732,7 @@ function broadcastToSession(sessionId, data) {
 }
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
-const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
+const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '3', 10));
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
@@ -1499,12 +1499,12 @@ function processQueue() {
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
-      // Independent: up to MAX_TASK_WORKERS concurrent
-      if (indepRunning < MAX_TASK_WORKERS) {
-        indepRunning++;
-        if (task.workdir) startedWorkdirs.add(task.workdir);
-        startTask(task).catch(e => console.error('[taskWorker]', e));
-      }
+      // Independent: up to MAX_TASK_WORKERS concurrent, workdir-locked
+      if (indepRunning >= MAX_TASK_WORKERS) continue;
+      if (task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
+      indepRunning++;
+      if (task.workdir) { occupiedWorkdirs.add(task.workdir); startedWorkdirs.add(task.workdir); }
+      startTask(task).catch(e => console.error('[taskWorker]', e));
     }
   }
 }
