@@ -648,7 +648,7 @@ const stmts = {
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
   // processQueue hot-path — prepared once, reused every 60 s
-  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE (status='todo' OR (status='bmad_workflow' AND notes LIKE '%[bmad-workflow:%')) AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
+  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE ((status='todo' OR status='bmad_workflow') AND notes LIKE '%[bmad-workflow:%') AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')`),
   getTasksByChain:   db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC`),
   // startTask hot-path
