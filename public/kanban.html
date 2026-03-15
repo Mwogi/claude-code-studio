@@ -361,6 +361,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .chat-reply-btn:hover{ opacity:.9; }
 .chat-msg{ padding:9px 14px; border-bottom:1px solid var(--border); }
 .chat-msg:last-child{ border-bottom:none; }
+.chat-ts{ font-size:10px; color:var(--muted); font-weight:400; margin-left:6px; }
 .chat-role{ font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:3px; letter-spacing:.5px; }
 .chat-role.user{ color:var(--blue); }
 .chat-role.assistant{ color:var(--accent2); }
@@ -1578,7 +1579,8 @@ function buildChatPanel(tk,msgs){
       const m=g.msg;
       const label=role==='user'?'YOU':'CLAUDE';
       const text=escH(m.content||'');
-      return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
+      const ts=m.created_at?`<span class="chat-ts">${new Date(m.created_at+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`:'';
+      return `<div class="chat-msg"><div class="chat-role ${role}">${label} ${ts}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
   const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
