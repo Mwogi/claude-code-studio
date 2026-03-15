@@ -547,7 +547,7 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
     'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
     'bmad.gate_warn':'⚠️ BMAD gate: попередня фаза ще не завершена',
@@ -582,7 +582,7 @@ const TR = {
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'⏳ In Progress','col.awaiting_input':'💬 Awaiting Input',
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
     'bmad.gate_warn':'⚠️ BMAD gate: previous phase not completed yet',
@@ -617,7 +617,7 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
     'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
     'bmad.gate_warn':'⚠️ BMAD gate: предыдущая фаза ещё не завершена',
@@ -664,8 +664,8 @@ document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 // BMAD phase columns (planning workflow) + standard kanban columns
 const BMAD_PHASES=['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
 const BMAD_PHASE_SET=new Set(BMAD_PHASES);
-// Helper: is a task actively running? (standard in_progress, bmad_workflow, OR any BMAD phase)
-function isTaskActive(status){ return status==='in_progress'||status==='bmad_workflow'||BMAD_PHASE_SET.has(status); }
+// Helper: is a task actively running? (standard in_progress OR any BMAD phase — NOT bmad_workflow which is just queued)
+function isTaskActive(status){ return status==='in_progress'||BMAD_PHASE_SET.has(status); }
 // Template mappings for BMAD phases (Task 8)
 const BMAD_PHASE_TEMPLATES={
   'bmad_brainstorm':'brainstorming-session',

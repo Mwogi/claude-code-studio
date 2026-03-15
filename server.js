@@ -789,7 +789,7 @@ async function startTask(task) {
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
         };
-        const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_workflow';
+        const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_implementation';
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
       } else {
         stmts.setTaskInProgress.run(task.id);
