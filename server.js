@@ -1495,11 +1495,19 @@ function processQueue() {
       if (task.workdir && [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`)) continue;
     }
     if (task.session_id) {
-      // Shared session: one at a time per session
+      // Shared session: one at a time per session, still respects workdir limit
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
+        if (task.workdir) {
+          const wdCount = (workdirCounts.get(task.workdir) || 0);
+          if (wdCount >= MAX_PER_WORKDIR) continue;
+          workdirCounts.set(task.workdir, wdCount + 1);
+        }
+        if (indepRunning >= MAX_TASK_WORKERS) break;
+        indepRunning++;
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
         if (task.chain_id && task.workdir) startedWorkdirs.add(`${task.chain_id}:${task.workdir}`);
+        log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'}, session=${task.session_id.slice(0,8)})`);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
@@ -1532,7 +1540,7 @@ setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
   `).all();
   if (orphaned.length) {
     log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
-    const reset = db.prepare(`UPDATE tasks SET status='todo' WHERE id=?`);
+    const reset = db.prepare(`UPDATE tasks SET status='todo', session_id=NULL WHERE id=?`);
     for (const t of orphaned) {
       reset.run(t.id);
       log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
