@@ -1287,7 +1287,8 @@ async function openEditModal(id){
           body.innerHTML = msgs.map(m => {
             const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
             const label=role==='user'?'YOU':role==='tool'?`TOOL: ${escH(m.tool_name||'')}`:'CLAUDE';
-            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
+            const ts=m.created_at?`<span class="chat-ts">${new Date(m.created_at+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`:'';
+            return `<div class="chat-msg"><div class="chat-role ${role}">${label} ${ts}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
           }).join('');
           body.scrollTop = body.scrollHeight;
         }).catch(()=>{});
