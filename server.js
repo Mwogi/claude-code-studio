@@ -732,7 +732,8 @@ function broadcastToSession(sessionId, data) {
 }
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
-const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '3', 10));
+const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '8', 10));
+const MAX_PER_WORKDIR = Math.max(1, parseInt(process.env.MAX_PER_WORKDIR || '5', 10));
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
@@ -1438,6 +1439,9 @@ function processQueue() {
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
   // Workdir-level lock: prevents parallel chain tasks from writing to the same directory concurrently
   const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
+  // Per-workdir running count (for MAX_PER_WORKDIR limit)
+  const workdirCounts = new Map();
+  inProg.forEach(t => { if (t.workdir) workdirCounts.set(t.workdir, (workdirCounts.get(t.workdir) || 0) + 1); });
   // Count independent running tasks (null session_id)
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
@@ -1499,11 +1503,14 @@ function processQueue() {
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
-      // Independent: up to MAX_TASK_WORKERS concurrent, workdir-locked
+      // Independent: up to MAX_TASK_WORKERS concurrent globally, up to MAX_PER_WORKDIR per project
       if (indepRunning >= MAX_TASK_WORKERS) continue;
-      if (task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
+      if (task.workdir) {
+        const wdCount = (workdirCounts.get(task.workdir) || 0);
+        if (wdCount >= MAX_PER_WORKDIR) continue;
+        workdirCounts.set(task.workdir, wdCount + 1);
+      }
       indepRunning++;
-      if (task.workdir) { occupiedWorkdirs.add(task.workdir); startedWorkdirs.add(task.workdir); }
       startTask(task).catch(e => console.error('[taskWorker]', e));
     }
   }
@@ -1534,7 +1541,7 @@ setInterval(processQueue, 15000);
 })();
 
 // ── Auto Mode: automatically move backlog → todo for auto-enabled projects ──
-const AUTO_MODE_CONCURRENCY = 3; // max concurrent chains per project (was 5, reduced to prevent OOM on <64GB instances)
+const AUTO_MODE_CONCURRENCY = 5; // max concurrent chains per project
 
 function autoModeProcess() {
   const projects = loadProjects();
