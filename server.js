@@ -1504,20 +1504,22 @@ function processQueue() {
       }
     } else {
       // Independent: up to MAX_TASK_WORKERS concurrent globally, up to MAX_PER_WORKDIR per project
-      if (indepRunning >= MAX_TASK_WORKERS) continue;
+      if (indepRunning >= MAX_TASK_WORKERS) break; // no more global slots
       if (task.workdir) {
         const wdCount = (workdirCounts.get(task.workdir) || 0);
-        if (wdCount >= MAX_PER_WORKDIR) continue;
+        if (wdCount >= MAX_PER_WORKDIR) continue; // skip this task, try next from different workdir
         workdirCounts.set(task.workdir, wdCount + 1);
       }
       indepRunning++;
+      log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'})`);
       startTask(task).catch(e => console.error('[taskWorker]', e));
     }
   }
 }
 // Run every 15s (fast enough to pick up unblocked tasks promptly,
 // light enough to be negligible — just two SELECT queries on SQLite)
-setInterval(processQueue, 15000);
+// Delay first processQueue by 5s to let orphan recovery finish first
+setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
 
 // ── Orphaned task recovery on startup ──
 // Tasks stuck in active BMAD phases after a server restart have no Claude process.
