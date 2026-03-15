@@ -937,7 +937,7 @@ function updateStats(){
   for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
   const total=tasks.length;
   const completed=counts.done;
-  const active=counts.todo+counts.in_progress;
+  const active=(counts.bmad_workflow||0)+(counts.in_progress||0);
   const pct=total>0?Math.round((completed/total)*100):0;
 
   el.innerHTML=`
@@ -953,8 +953,8 @@ function updateStats(){
     </div>
     <div class="kb-stat">
       <div class="kb-stat-dot dot-todo"></div>
-      <span class="kb-stat-num">${counts.todo}</span>
-      <span class="kb-stat-lbl">${t('col.todo')}</span>
+      <span class="kb-stat-num">${counts.bmad_workflow||0}</span>
+      <span class="kb-stat-lbl">${t('col.bmad_workflow')}</span>
     </div>
     <div class="kb-stat">
       <div class="kb-stat-dot dot-bmad_implementation"></div>
