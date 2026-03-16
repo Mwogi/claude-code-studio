@@ -1951,7 +1951,7 @@ function renderDocsSidebar(docs) {
   for (const [cat, files] of Object.entries(groups)) {
     html += `<div class="docs-cat">${escH(cat)}</div>`;
     for (const f of files) {
-      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : '📝';
+      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : /\.(png|jpg|jpeg|gif|svg|webp|bmp)$/i.test(f.name) ? '🖼️' : /\.(pdf|doc|docx|xls|xlsx)$/i.test(f.name) ? '📄' : '📝';
       const size = f.size < 1024 ? f.size + 'B' : Math.round(f.size / 1024) + 'KB';
       const date = new Date(f.modified).toLocaleDateString();
       html += `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
@@ -1983,12 +1983,33 @@ async function loadDoc(filePath, el) {
       <h1 style="margin:0;font-size:16px">${escH(d.name)}</h1>
       <div style="display:flex;gap:6px">
         <button onclick="downloadDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⬇️ Download</button>
-        <button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>
+        ${d.isImage || d.isBinary ? '' : `<button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>`}
         <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
       </div>
     </div>`;
     
-    if (d.ext === '.yaml' || d.ext === '.yml') {
+    if (d.isImage) {
+      // Image preview with zoom controls
+      content.innerHTML = toolbar + `<div style="text-align:center;padding:20px;overflow:auto;flex:1">
+        <div style="margin-bottom:12px;display:flex;gap:8px;justify-content:center">
+          <button onclick="imgZoom(-1)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:14px">➖</button>
+          <button onclick="imgZoom(0)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px">Fit</button>
+          <button onclick="imgZoom(1)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:14px">➕</button>
+          <span style="color:var(--muted);font-size:12px;align-self:center" id="imgZoomLabel">Fit</span>
+        </div>
+        <img id="docPreviewImg" src="${d.content}" alt="${escH(d.name)}" style="max-width:100%;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.3);cursor:zoom-in" onclick="window.open(this.src,'_blank')">
+        <div style="margin-top:8px;color:var(--muted);font-size:12px">${(d.size/1024).toFixed(1)} KB · Click image to open full size</div>
+      </div>`;
+    } else if (d.isBinary) {
+      // Binary file — download only
+      const sizeStr = d.size < 1024*1024 ? (d.size/1024).toFixed(1)+' KB' : (d.size/1024/1024).toFixed(1)+' MB';
+      content.innerHTML = toolbar + `<div class="docs-empty" style="text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">📄</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">${escH(d.name)}</div>
+        <div style="color:var(--muted);margin-bottom:16px">${sizeStr} · ${d.ext.toUpperCase().slice(1)} file</div>
+        <button onclick="downloadDocument()" style="background:var(--accent);color:#fff;border:none;padding:8px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⬇️ Download File</button>
+      </div>`;
+    } else if (d.ext === '.yaml' || d.ext === '.yml') {
       content.innerHTML = toolbar + `<div class="yaml-content">${escH(d.content)}</div>`;
     } else {
       content.innerHTML = toolbar + `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
@@ -2131,6 +2152,18 @@ function downloadDocument() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+let _imgZoomLevel = 0; // 0 = fit
+function imgZoom(dir) {
+  const img = document.getElementById('docPreviewImg');
+  const label = document.getElementById('imgZoomLabel');
+  if (!img) return;
+  if (dir === 0) { _imgZoomLevel = 0; img.style.maxWidth = '100%'; img.style.width = ''; label.textContent = 'Fit'; return; }
+  _imgZoomLevel = Math.max(25, Math.min(300, (_imgZoomLevel || 100) + dir * 25));
+  img.style.maxWidth = 'none';
+  img.style.width = _imgZoomLevel + '%';
+  label.textContent = _imgZoomLevel + '%';
 }
 
 function editDocument() {

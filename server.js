@@ -3907,6 +3907,8 @@ app.get('/api/bmad/docs', (req, res) => {
     { dir: path.join(workdir, '_bmad-output', 'analysis'), category: 'Analysis' },
     { dir: path.join(workdir, '_bmad-output'), category: 'Output' },
     { dir: path.join(workdir, 'docs'), category: 'Project Docs' },
+    { dir: path.join(workdir, 'tests'), category: 'Tests' },
+    { dir: path.join(workdir, 'tests', 'screenshots'), category: 'Screenshots' },
   ];
   // Also check openclaw workspace variations
   const variations = [baseName, baseName + '_app', baseName.replace(/-/g, '_'), baseName.replace(/_/g, '-')];
@@ -3942,7 +3944,7 @@ app.get('/api/bmad/docs', (req, res) => {
       }
     } catch {}
   }
-  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs'));
+  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs')) || fs.existsSync(path.join(workdir, 'tests'));
   res.json({ docs, workdir, hasBmad });
 });
 
@@ -3950,15 +3952,27 @@ app.get('/api/bmad/docs', (req, res) => {
 app.get('/api/bmad/doc', (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: 'path required' });
-  // Security: only allow reading from _bmad-output/ or docs/ within a project
   const normalized = path.resolve(filePath);
-  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace')) {
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/')) {
     return res.status(403).json({ error: 'Access denied — only BMAD output files allowed' });
   }
   try {
-    const content = fs.readFileSync(normalized, 'utf-8');
     const ext = path.extname(normalized).toLowerCase();
-    res.json({ content, name: path.basename(normalized), ext, size: content.length });
+    const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+    if (IMAGE_EXTS.has(ext)) {
+      // Return image as base64 data URL
+      const buf = fs.readFileSync(normalized);
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp', '.bmp':'image/bmp', '.ico':'image/x-icon' }[ext] || 'application/octet-stream';
+      const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+      res.json({ content: dataUrl, name: path.basename(normalized), ext, size: buf.length, isImage: true });
+    } else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx'].includes(ext)) {
+      // Binary docs — return metadata only, use download endpoint
+      const stat = fs.statSync(normalized);
+      res.json({ content: null, name: path.basename(normalized), ext, size: stat.size, isBinary: true });
+    } else {
+      const content = fs.readFileSync(normalized, 'utf-8');
+      res.json({ content, name: path.basename(normalized), ext, size: content.length });
+    }
   } catch (e) {
     res.status(404).json({ error: 'File not found' });
   }
