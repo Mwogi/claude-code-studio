@@ -3908,6 +3908,16 @@ app.delete('/api/bmad/doc', (req, res) => {
   }
 });
 
+// GET /api/bmad/doc/download?path=... — download a document file
+app.get('/api/bmad/doc/download', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  const normalized = path.resolve(filePath);
+  if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
+  const filename = path.basename(normalized);
+  res.download(normalized, filename);
+});
+
 // GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
 app.get('/api/bmad/sprint-status', (req, res) => {
   const workdir = req.query.workdir || WORKDIR;

@@ -1964,6 +1964,7 @@ async function loadDoc(filePath, el) {
     const toolbar = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
       <h1 style="margin:0;font-size:16px">${escH(d.name)}</h1>
       <div style="display:flex;gap:6px">
+        <button onclick="downloadDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⬇️ Download</button>
         <button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>
         <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
       </div>
@@ -2103,6 +2104,16 @@ async function handleDocUpload(input) {
   input.value = ''; // reset file input
 }
 // ─── End Document Upload ──────────────────────────────────────────────────
+
+function downloadDocument() {
+  if (!_editingDocPath) return;
+  const a = document.createElement('a');
+  a.href = `/api/bmad/doc/download?path=${encodeURIComponent(_editingDocPath)}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 function editDocument() {
   if (!_editingDocPath) return;
