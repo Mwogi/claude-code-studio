@@ -4622,7 +4622,7 @@ app.post('/api/projects', (req,res) => {
     // Auto-install BMAD in new local projects (background, non-blocking)
     if (!fs.existsSync(path.join(workdir, '_bmad'))) {
       const { execFile: ef } = require('child_process');
-      ef('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
+      ef('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--output-folder', '_bmad-output', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
         if (err) log.warn('BMAD auto-install failed', { workdir, error: err.message });
         else log.info('BMAD auto-installed', { workdir });
       });
