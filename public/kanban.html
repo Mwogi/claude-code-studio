@@ -446,7 +446,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
   <div class="hdr-l">
     <div class="logo" onclick="toggleKbSidebar()" style="cursor:pointer" title="Projects & Settings">CCS</div>
     <nav class="nav-sw" aria-label="Навігація між розділами">
-      <a class="nav-sw-btn" href="/" data-tip="Чат">
+      <a class="nav-sw-btn" href="/chat" data-tip="Chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         Chat
       </a>
@@ -663,7 +663,7 @@ document.getElementById('addBtnLabel').textContent=t('hdr.add');
 document.getElementById('kbStatusEl').textContent=t('hdr.connected');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
 document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
-document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
+document.querySelector('a.nav-sw-btn[href="/chat"]').setAttribute('data-tip', t('nav.chat'));
 document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', t('nav.kanban'));
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
@@ -857,7 +857,7 @@ function showAddProjectForm() {
   // Open the Chat page's Add Project modal in a popup window
   const w = 600, h = 700;
   const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
-  const popup = window.open('/?addProject=1', 'addProject', `width=${w},height=${h},left=${left},top=${top},resizable=yes`);
+  const popup = window.open('/chat?addProject=1', 'addProject', `width=${w},height=${h},left=${left},top=${top},resizable=yes`);
   if(popup) {
     closeProjDropdown();
     // Poll for popup close, then reload projects
@@ -866,7 +866,7 @@ function showAddProjectForm() {
     }, 500);
   } else {
     // Fallback: navigate
-    window.location.href = '/?addProject=1';
+    window.location.href = '/chat?addProject=1';
   }
 }
 function hideAddProjectForm() {}
