@@ -201,6 +201,92 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-master'],
     model: 'sonnet',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-status/\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
+  },
+  // ── Core Tools ──
+  'distillator': {
+    label: '🗜️ Distillator (Compress Document)',
+    agent: 'master',
+    skills: ['bmad-distillator'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-distillator skill from ${workdir}/_bmad/core/skills/bmad-distillator/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCompress the document(s) described in the task into a lossless, LLM-optimized distillate. Save output to ${workdir}/_bmad-output/planning-artifacts/`
+  },
+  'advanced-elicitation': {
+    label: '🧠 Advanced Elicitation (Refine Content)',
+    agent: 'master',
+    skills: ['bmad-advanced-elicitation'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/_bmad/core/skills/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
+  },
+  'adversarial-review': {
+    label: '😈 Adversarial Review (Find Problems)',
+    agent: 'master',
+    skills: ['bmad-review-adversarial-general'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/skills/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
+  },
+  'edge-case-review': {
+    label: '🔬 Edge Case Hunter',
+    agent: 'master',
+    skills: ['bmad-review-edge-case-hunter'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/_bmad/core/skills/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
+  },
+  'editorial-prose': {
+    label: '✍️ Editorial Review — Prose',
+    agent: 'master',
+    skills: ['bmad-editorial-review-prose'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
+  },
+  'editorial-structure': {
+    label: '🏗️ Editorial Review — Structure',
+    agent: 'master',
+    skills: ['bmad-editorial-review-structure'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
+  },
+  'index-docs': {
+    label: '📇 Index Documents',
+    agent: 'master',
+    skills: ['bmad-index-docs'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/_bmad/core/skills/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
+  },
+  // ── Technical Writer Agent Workflows ──
+  'write-document': {
+    label: '📝 Write Document (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWrite the document described in the task. Follow the tech writer agent's WD trigger workflow. Save output to ${workdir}/docs/`
+  },
+  'validate-doc': {
+    label: '✅ Validate Document (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the document described in the task using the tech writer VD trigger. Check for completeness, accuracy, and consistency.`
+  },
+  'mermaid-generate': {
+    label: '🧜 Generate Mermaid Diagram',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate a Mermaid diagram as described in the task using the tech writer MG trigger. Output valid Mermaid syntax.`
+  },
+  'explain-concept': {
+    label: '💡 Explain Concept (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nExplain the concept described in the task using the tech writer EC trigger. Make it clear and accessible.`
+  },
+  'bmad-help': {
+    label: '❓ BMAD Help (What\'s Next?)',
+    agent: 'master',
+    skills: ['bmad-help'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/_bmad/core/skills/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
   }
 };
 
@@ -789,6 +875,11 @@ async function startTask(task) {
           'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
+          'distillator': 'bmad_implementation', 'advanced-elicitation': 'bmad_brainstorm',
+          'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+          'editorial-prose': 'bmad_qa', 'editorial-structure': 'bmad_qa', 'index-docs': 'bmad_implementation',
+          'write-document': 'bmad_implementation', 'validate-doc': 'bmad_qa', 'mermaid-generate': 'bmad_implementation',
+          'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
         };
         const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_implementation';
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
