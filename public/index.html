@@ -8326,6 +8326,13 @@ async function browseDirs(dirPath) {
       self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
       self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
       list.appendChild(self);
+
+      // "Create new folder" row
+      const newRow = document.createElement('div');
+      newRow.className = 'dii';
+      newRow.style.cssText = 'border-top:1px solid var(--border);padding:6px 8px;display:flex;align-items:center;gap:6px';
+      newRow.innerHTML = `<span class="di" style="color:var(--accent)">＋</span><input id="newFolderInput" type="text" placeholder="New project folder name..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--fg);font-size:12px;outline:none" onclick="event.stopPropagation()"><button onclick="event.stopPropagation();createNewFolder()" style="padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">Create</button>`;
+      list.appendChild(newRow);
     }
 
     // Drives or subdirectories — single click selects, double click navigates
@@ -8352,6 +8359,23 @@ async function browseDirs(dirPath) {
 function highlightSelected(el) {
   $i('dirList').querySelectorAll('.dii').forEach(d => d.classList.remove('selected'));
   el.classList.add('selected');
+}
+
+async function createNewFolder() {
+  const input = $i('newFolderInput');
+  const name = (input?.value || '').trim();
+  if (!name) { toast('Enter a folder name', true); return; }
+  if (/[<>:"|?*]/.test(name)) { toast('Invalid folder name characters', true); return; }
+  const newPath = (dirBrowsePath || '/home') + '/' + name;
+  try {
+    const r = await fetch('/api/create-dir', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ path: newPath }) });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    // Navigate into the new folder and auto-fill project name
+    $i('projNameInput').value = name;
+    browseDirs(newPath);
+    toast('Folder created: ' + name);
+  } catch(e) { toast('Failed to create folder: ' + e.message, true); }
 }
 
 async function selectDir() {

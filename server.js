@@ -4733,6 +4733,19 @@ app.get('/api/browse-dirs', (req, res) => {
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
+// Create a new directory (for new project creation)
+app.post('/api/create-dir', (req, res) => {
+  const { path: dirPath } = req.body;
+  if (!dirPath) return res.status(400).json({ error: 'path required' });
+  try {
+    if (fs.existsSync(dirPath)) return res.status(400).json({ error: 'Folder already exists' });
+    fs.mkdirSync(dirPath, { recursive: true });
+    res.json({ ok: true, path: dirPath });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Initialize project directory (create dir + optional git init)
 app.post('/api/project/init', (req, res) => {
   const { workdir, gitInit } = req.body;
