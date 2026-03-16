@@ -3981,7 +3981,7 @@ app.post('/api/bmad/doc', (req, res) => {
   if (!filePath || content === undefined) return res.status(400).json({ error: 'filePath and content required' });
   const normalized = path.resolve(filePath);
   // Security: only allow writing to docs/, _bmad-output/, or _bmad/ within a project
-  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/')) {
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/') && !normalized.includes('.openclaw/workspace')) {
     return res.status(403).json({ error: 'Access denied — can only write to docs/ or _bmad-output/' });
   }
   try {
@@ -3999,7 +3999,7 @@ app.delete('/api/bmad/doc', (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: 'path required' });
   const normalized = path.resolve(filePath);
-  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output')) {
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/') && !normalized.includes('.openclaw/workspace')) {
     return res.status(403).json({ error: 'Access denied' });
   }
   try {
