@@ -3900,60 +3900,57 @@ app.get('/api/bmad/docs', (req, res) => {
   const baseName = path.basename(workdir);
   const homeDir = os.homedir();
   const ocWorkspace = path.join(homeDir, '.openclaw', 'workspace');
-  // Scan dirs: project workdir + openclaw workspace variations
-  const scanDirs = [
-    { dir: path.join(workdir, '_bmad-output', 'planning-artifacts'), category: 'Planning' },
-    { dir: path.join(workdir, '_bmad-output', 'implementation-artifacts'), category: 'Implementation' },
-    { dir: path.join(workdir, '_bmad-output', 'analysis'), category: 'Analysis' },
-    { dir: path.join(workdir, '_bmad-output'), category: 'Output' },
-    { dir: path.join(workdir, 'docs'), category: 'Project Docs' },
-    { dir: path.join(workdir, 'tests'), category: 'Tests' },
-    { dir: path.join(workdir, 'tests', 'screenshots'), category: 'Screenshots' },
-  ];
-  // Also check openclaw workspace variations
+  const ALLOWED_EXTS = new Set(['.md', '.yaml', '.yml', '.txt', '.json', '.csv', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp']);
+
+  function scanDir(dir, category) {
+    try {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const fp = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          scanDir(fp, category);
+        } else if (entry.isFile() && ALLOWED_EXTS.has(path.extname(entry.name).toLowerCase())) {
+          const stat = fs.statSync(fp);
+          docs.push({
+            name: entry.name,
+            category,
+            path: fp,
+            relativePath: path.relative(workdir, fp),
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+          });
+        }
+      }
+    } catch {}
+  }
+
+  scanDir(path.join(workdir, '_bmad-output'), 'BMAD Output');
+  scanDir(path.join(workdir, 'docs'), 'Project Docs');
+  scanDir(path.join(workdir, 'tests'), 'Tests');
+  scanDir(path.join(workdir, 'test-screenshots'), 'Screenshots');
+  scanDir(path.join(workdir, 'test-results'), 'Test Results');
+
   const variations = [baseName, baseName + '_app', baseName.replace(/-/g, '_'), baseName.replace(/_/g, '-')];
   for (const v of variations) {
     const ocDir = path.join(ocWorkspace, v, '_bmad-output');
     if (fs.existsSync(ocDir)) {
-      scanDirs.push({ dir: path.join(ocDir, 'planning-artifacts'), category: 'Planning' });
-      scanDirs.push({ dir: path.join(ocDir, 'implementation-artifacts'), category: 'Implementation' });
-      scanDirs.push({ dir: path.join(ocDir, 'analysis'), category: 'Analysis' });
-      scanDirs.push({ dir: ocDir, category: 'Output' });
-      break; // found it
+      scanDir(ocDir, 'BMAD Output');
+      break;
     }
   }
-  const seen = new Set();
-  for (const { dir, category } of scanDirs) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      for (const f of fs.readdirSync(dir)) {
-        const fp = path.join(dir, f);
-        const stat = fs.statSync(fp);
-        if (!stat.isFile()) continue;
-        if (!['.md', '.yaml', '.yml', '.txt', '.json', '.csv', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.svg'].includes(path.extname(f).toLowerCase())) continue;
-        if (seen.has(f)) continue; // deduplicate
-        seen.add(f);
-        docs.push({
-          name: f,
-          category,
-          path: fp,
-          relativePath: path.relative(workdir, fp),
-          size: stat.size,
-          modified: stat.mtime.toISOString(),
-        });
-      }
-    } catch {}
-  }
-  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs')) || fs.existsSync(path.join(workdir, 'tests'));
+
+  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs')) || fs.existsSync(path.join(workdir, 'tests')) || fs.existsSync(path.join(workdir, 'test-screenshots'));
   res.json({ docs, workdir, hasBmad });
 });
+
 
 // GET /api/bmad/doc?path=... — read a single BMAD document
 app.get('/api/bmad/doc', (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: 'path required' });
   const normalized = path.resolve(filePath);
-  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/')) {
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/')) {
     return res.status(403).json({ error: 'Access denied — only BMAD output files allowed' });
   }
   try {

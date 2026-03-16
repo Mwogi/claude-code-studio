@@ -134,7 +134,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-panel-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .docs-panel-title { font-size:15px; font-weight:700; color:var(--fg); }
 .docs-panel-body { display:flex; flex:1; overflow:hidden; }
-.docs-sidebar { width:240px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
+.docs-sidebar { width:280px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
 .docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
 .docs-content h1,.docs-content h2,.docs-content h3 { color:var(--fg); margin:1em 0 .5em; }
 .docs-content h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:6px; }
@@ -150,16 +150,30 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-content th { background:var(--s2); font-weight:600; }
 .docs-content .yaml-content { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; background:var(--s2); padding:12px; border-radius:6px; }
 .docs-empty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
-.docs-cat { padding:6px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:8px; }
+.docs-cat { padding:6px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:4px; cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none; }
 .docs-cat:first-child { margin-top:0; }
-.docs-file { padding:8px 16px; cursor:pointer; font-size:13px; color:var(--fg2); display:flex; align-items:center; gap:8px; transition:background .15s; }
+.docs-cat:hover { color:var(--fg); }
+.docs-cat .chevron { font-size:9px; transition:transform .15s; display:inline-block; }
+.docs-cat.collapsed .chevron { transform:rotate(-90deg); }
+.docs-cat.collapsed + .docs-folder-contents { display:none; }
+.docs-subfolder { padding:2px 0 2px 12px; }
+.docs-subfolder-label { padding:4px 12px; font-size:11px; font-weight:600; color:var(--fg2); cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none; border-radius:4px; margin:1px 4px; }
+.docs-subfolder-label:hover { background:var(--s2); }
+.docs-subfolder-label .chevron { font-size:8px; transition:transform .15s; display:inline-block; }
+.docs-subfolder-label.collapsed .chevron { transform:rotate(-90deg); }
+.docs-subfolder-label.collapsed ~ .docs-subfolder-files { display:none; }
+.docs-subfolder-count { font-size:9px; color:var(--muted); font-weight:400; margin-left:auto; }
+.docs-file { padding:5px 12px 5px 24px; cursor:pointer; font-size:12px; color:var(--fg2); display:flex; align-items:center; gap:6px; transition:background .15s; border-radius:4px; margin:1px 4px; }
 .docs-file:hover { background:var(--s2); }
-.docs-file.active { background:var(--accent); color:#fff; border-radius:0; }
-.docs-file-icon { font-size:14px; flex-shrink:0; }
+.docs-file.active { background:var(--accent); color:#fff; border-radius:4px; }
+.docs-file-icon { font-size:12px; flex-shrink:0; }
 .docs-file-info { flex:1; min-width:0; }
-.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.docs-file-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+.docs-file-meta { font-size:9px; color:var(--muted); margin-top:1px; }
 .docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
+.docs-search { padding:6px 8px; margin:0 8px 6px; border:1px solid var(--border); border-radius:6px; background:var(--s2); color:var(--fg); font-size:12px; width:calc(100% - 16px); outline:none; }
+.docs-search:focus { border-color:var(--accent); }
+.docs-search::placeholder { color:var(--muted); }
 /* Docs editor */
 .docs-editor { display:flex; flex:1; overflow:hidden; height:100%; }
 .docs-editor-left { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); }
@@ -1938,32 +1952,120 @@ async function loadDocsList() {
 function renderDocsSidebar(docs) {
   const sidebar = $i('docsSidebar');
   if (!docs.length) {
-    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No BMAD documents yet.<br>Run a workflow to generate them.</div>';
+    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No documents yet.<br>Run a workflow to generate them.</div>';
     return;
   }
-  // Group by category
-  const groups = {};
-  for (const doc of docs) {
-    if (!groups[doc.category]) groups[doc.category] = [];
-    groups[doc.category].push(doc);
-  }
-  let html = '';
-  for (const [cat, files] of Object.entries(groups)) {
-    html += `<div class="docs-cat">${escH(cat)}</div>`;
-    for (const f of files) {
-      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : /\.(png|jpg|jpeg|gif|svg|webp|bmp)$/i.test(f.name) ? '🖼️' : /\.(pdf|doc|docx|xls|xlsx)$/i.test(f.name) ? '📄' : '📝';
-      const size = f.size < 1024 ? f.size + 'B' : Math.round(f.size / 1024) + 'KB';
-      const date = new Date(f.modified).toLocaleDateString();
-      html += `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
-        <span class="docs-file-icon">${icon}</span>
-        <div class="docs-file-info">
-          <div class="docs-file-name">${escH(f.name)}</div>
-          <div class="docs-file-meta">${size} · ${date}</div>
-        </div>
-      </div>`;
+
+  // Build folder tree from relativePath
+  // Group: top-level folder → subfolder → files
+  const tree = {};
+  for (const f of docs) {
+    const parts = f.relativePath.split('/');
+    let topFolder, subFolder, fileName;
+    if (parts.length === 1) {
+      topFolder = 'Root'; subFolder = null; fileName = parts[0];
+    } else if (parts.length === 2) {
+      topFolder = parts[0]; subFolder = null; fileName = parts[1];
+    } else {
+      topFolder = parts[0]; subFolder = parts.slice(1, -1).join('/'); fileName = parts[parts.length - 1];
+    }
+    if (!tree[topFolder]) tree[topFolder] = { files: [], subs: {} };
+    if (subFolder) {
+      if (!tree[topFolder].subs[subFolder]) tree[topFolder].subs[subFolder] = [];
+      tree[topFolder].subs[subFolder].push(f);
+    } else {
+      tree[topFolder].files.push(f);
     }
   }
+
+  const FOLDER_ICONS = {
+    '_bmad-output': '🔮', 'docs': '📚', 'tests': '🧪', 'test-screenshots': '📸', 'test-results': '📋', 'Root': '📁'
+  };
+  const FOLDER_LABELS = {
+    '_bmad-output': 'BMAD Output', 'docs': 'Project Docs', 'tests': 'Tests', 'test-screenshots': 'Screenshots', 'test-results': 'Test Results'
+  };
+
+  function fileIcon(name) {
+    if (/\.(yaml|yml)$/i.test(name)) return '📊';
+    if (/\.(png|jpg|jpeg|gif|svg|webp|bmp)$/i.test(name)) return '🖼️';
+    if (/\.(pdf|doc|docx|xls|xlsx)$/i.test(name)) return '📄';
+    if (/\.(json)$/i.test(name)) return '{}';
+    if (/\.(csv)$/i.test(name)) return '📈';
+    return '📝';
+  }
+
+  function fileRow(f) {
+    const size = f.size < 1024 ? f.size + 'B' : f.size < 1048576 ? Math.round(f.size / 1024) + 'KB' : (f.size / 1048576).toFixed(1) + 'MB';
+    return `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
+      <span class="docs-file-icon">${fileIcon(f.name)}</span>
+      <div class="docs-file-info">
+        <div class="docs-file-name">${escH(f.name)}</div>
+        <div class="docs-file-meta">${size}</div>
+      </div>
+    </div>`;
+  }
+
+  let html = '<input class="docs-search" id="docsSearchInput" type="text" placeholder="🔍 Search documents..." oninput="filterDocs(this.value)">';
+
+  // Sort top folders: BMAD Output first, then docs, then screenshots, then rest
+  const folderOrder = ['_bmad-output', 'docs', 'test-screenshots', 'tests', 'test-results'];
+  const sortedFolders = Object.keys(tree).sort((a, b) => {
+    const ai = folderOrder.indexOf(a), bi = folderOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  for (const folder of sortedFolders) {
+    const node = tree[folder];
+    const totalFiles = node.files.length + Object.values(node.subs).reduce((s, arr) => s + arr.length, 0);
+    const icon = FOLDER_ICONS[folder] || '📁';
+    const label = FOLDER_LABELS[folder] || folder;
+    const folderId = 'df_' + folder.replace(/[^a-z0-9]/gi, '_');
+
+    html += `<div class="docs-cat" onclick="this.classList.toggle('collapsed')" id="${folderId}">
+      <span class="chevron">▼</span>${icon} ${escH(label)} <span style="font-weight:400;font-size:9px;color:var(--muted)">(${totalFiles})</span>
+    </div>`;
+    html += `<div class="docs-folder-contents" data-folder="${escH(folderId)}">`;
+
+    // Subfolders first
+    const subKeys = Object.keys(node.subs).sort();
+    for (const sub of subKeys) {
+      const subFiles = node.subs[sub];
+      const subId = folderId + '_' + sub.replace(/[^a-z0-9]/gi, '_');
+      const subIcon = sub.includes('planning') ? '📋' : sub.includes('implementation') ? '⚙️' : sub.includes('analysis') ? '🔬' : '📂';
+      html += `<div class="docs-subfolder">
+        <div class="docs-subfolder-label" onclick="this.classList.toggle('collapsed')" id="${subId}">
+          <span class="chevron">▼</span>${subIcon} ${escH(sub)}<span class="docs-subfolder-count">${subFiles.length}</span>
+        </div>
+        <div class="docs-subfolder-files" data-sub="${escH(subId)}">`;
+      for (const f of subFiles.sort((a, b) => a.name.localeCompare(b.name))) {
+        html += fileRow(f);
+      }
+      html += `</div></div>`;
+    }
+
+    // Direct files
+    for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
+      html += fileRow(f);
+    }
+
+    html += `</div>`;
+  }
+
   sidebar.innerHTML = html;
+}
+
+function filterDocs(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.docs-file').forEach(el => {
+    const name = (el.querySelector('.docs-file-name')?.textContent || '').toLowerCase();
+    const path = (el.getAttribute('title') || '').toLowerCase();
+    el.style.display = (!q || name.includes(q) || path.includes(q)) ? '' : 'none';
+  });
+  // Show all folders/subfolders when searching
+  if (q) {
+    document.querySelectorAll('.docs-cat.collapsed, .docs-subfolder-label.collapsed').forEach(el => el.classList.remove('collapsed'));
+    document.querySelectorAll('.docs-folder-contents, .docs-subfolder-files').forEach(el => el.style.display = '');
+  }
 }
 
 async function loadDoc(filePath, el) {
