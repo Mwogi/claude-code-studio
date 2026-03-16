@@ -3779,6 +3779,29 @@ function parseSprintStatus(filePath) {
   }
 }
 
+// POST /api/bmad/upload — upload documents into BMAD folders
+const bmadUpload = multer({ dest: path.join(os.tmpdir(), 'bmad-upload'), limits: { fileSize: 50 * 1024 * 1024 } });
+app.post('/api/bmad/upload', bmadUpload.array('files', 20), (req, res) => {
+  const { workdir, folder } = req.body;
+  if (!workdir || !folder) return res.status(400).json({ error: 'workdir and folder required' });
+  // Validate folder is within allowed BMAD paths
+  const allowedFolders = ['docs', '_bmad-output/planning-artifacts', '_bmad-output/implementation-artifacts', '_bmad'];
+  if (!allowedFolders.includes(folder)) return res.status(400).json({ error: 'Invalid target folder' });
+  const targetDir = path.join(workdir, folder);
+  try {
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    let count = 0;
+    for (const file of (req.files || [])) {
+      const dest = path.join(targetDir, file.originalname);
+      fs.renameSync(file.path, dest);
+      count++;
+    }
+    res.json({ ok: true, count, folder });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/bmad/docs?workdir=... — list BMAD output documents
 app.get('/api/bmad/docs', (req, res) => {
   const workdir = req.query.workdir || WORKDIR;

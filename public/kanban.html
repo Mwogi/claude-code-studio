@@ -2029,6 +2029,42 @@ function renderMarkdown(md) {
 let _editingDocPath = null;
 
 function newDocument() {
+
+// ─── Document Upload ──────────────────────────────────────────────────────
+let _uploadTargetFolder = 'docs'; // default upload target
+function uploadDocTrigger() {
+  // Show folder picker: docs/, _bmad-output/planning-artifacts/, _bmad-output/implementation-artifacts/
+  const folders = [
+    { label: '📁 docs/', value: 'docs' },
+    { label: '📁 _bmad-output/planning-artifacts/', value: '_bmad-output/planning-artifacts' },
+    { label: '📁 _bmad-output/implementation-artifacts/', value: '_bmad-output/implementation-artifacts' },
+    { label: '📁 _bmad/ (framework)', value: '_bmad' },
+  ];
+  const sel = prompt('Upload to which folder?\\n' + folders.map((f,i) => `${i+1}. ${f.label}`).join('\\n') + '\\n\\nEnter number (1-4):', '1');
+  const idx = parseInt(sel) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= folders.length) return;
+  _uploadTargetFolder = folders[idx].value;
+  $i('docUploadInput').click();
+}
+
+async function handleDocUpload(input) {
+  if (!input.files.length || !curWorkdir) return;
+  const formData = new FormData();
+  formData.append('workdir', curWorkdir);
+  formData.append('folder', _uploadTargetFolder);
+  for (const file of input.files) {
+    formData.append('files', file);
+  }
+  try {
+    const r = await fetch('/api/bmad/upload', { method: 'POST', body: formData });
+    const d = await r.json();
+    if (d.error) { alert('Upload failed: ' + d.error); return; }
+    alert(`Uploaded ${d.count} file(s) to ${_uploadTargetFolder}/`);
+    loadDocsList(); // refresh sidebar
+  } catch(e) { alert('Upload failed: ' + e.message); }
+  input.value = ''; // reset file input
+}
+// ─── End Document Upload ──────────────────────────────────────────────────
   _editingDocPath = null;
   const content = $i('docsContent');
   content.innerHTML = buildEditor('', '', true);
@@ -2327,6 +2363,8 @@ async function doSprintSync() {
     <span class="docs-panel-title">📄 BMAD Documents</span>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
+      <button onclick="uploadDocTrigger()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📤 Upload</button>
+      <input type="file" id="docUploadInput" multiple accept=".md,.yaml,.yml,.json,.txt,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleDocUpload(this)">
       <button class="modal-close" onclick="toggleDocsPanel()">×</button>
     </div>
   </div>
