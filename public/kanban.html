@@ -2040,7 +2040,9 @@ function uploadDocTrigger() {
     { label: '📁 _bmad-output/implementation-artifacts/', value: '_bmad-output/implementation-artifacts' },
     { label: '📁 _bmad/ (framework)', value: '_bmad' },
   ];
-  const sel = prompt('Upload to which folder?\\n' + folders.map((f,i) => `${i+1}. ${f.label}`).join('\\n') + '\\n\\nEnter number (1-4):', '1');
+  const msg = 'Upload to which folder?\n' + folders.map((f,i) => (i+1) + '. ' + f.label).join('\n') + '\n\nEnter number (1-4):';
+  const sel = prompt(msg, '1');
+  if (sel === null) return; // cancelled
   const idx = parseInt(sel) - 1;
   if (isNaN(idx) || idx < 0 || idx >= folders.length) return;
   _uploadTargetFolder = folders[idx].value;
@@ -2363,8 +2365,8 @@ async function doSprintSync() {
     <span class="docs-panel-title">📄 BMAD Documents</span>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
-      <button onclick="uploadDocTrigger()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📤 Upload</button>
       <input type="file" id="docUploadInput" multiple accept=".md,.yaml,.yml,.json,.txt,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleDocUpload(this)">
+      <button onclick="uploadDocTrigger()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📤 Upload</button>
       <button class="modal-close" onclick="toggleDocsPanel()">×</button>
     </div>
   </div>
