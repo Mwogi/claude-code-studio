@@ -3837,7 +3837,7 @@ app.get('/api/bmad/docs', (req, res) => {
         const fp = path.join(dir, f);
         const stat = fs.statSync(fp);
         if (!stat.isFile()) continue;
-        if (!['.md', '.yaml', '.yml', '.txt'].includes(path.extname(f).toLowerCase())) continue;
+        if (!['.md', '.yaml', '.yml', '.txt', '.json', '.csv', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.svg'].includes(path.extname(f).toLowerCase())) continue;
         if (seen.has(f)) continue; // deduplicate
         seen.add(f);
         docs.push({
