@@ -2029,6 +2029,14 @@ function renderMarkdown(md) {
 let _editingDocPath = null;
 
 function newDocument() {
+  _editingDocPath = null;
+  const content = $i('docsContent');
+  content.innerHTML = buildEditor('', '', true);
+  // Deselect sidebar
+  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
+  // Focus title
+  setTimeout(() => $i('docEditorTitle')?.focus(), 100);
+}
 
 // ─── Document Upload ──────────────────────────────────────────────────────
 let _uploadTargetFolder = 'docs'; // default upload target
@@ -2095,14 +2103,6 @@ async function handleDocUpload(input) {
   input.value = ''; // reset file input
 }
 // ─── End Document Upload ──────────────────────────────────────────────────
-  _editingDocPath = null;
-  const content = $i('docsContent');
-  content.innerHTML = buildEditor('', '', true);
-  // Deselect sidebar
-  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
-  // Focus title
-  setTimeout(() => $i('docEditorTitle')?.focus(), 100);
-}
 
 function editDocument() {
   if (!_editingDocPath) return;
