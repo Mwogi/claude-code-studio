@@ -1106,14 +1106,18 @@ async function startTask(task) {
           // Check if this is an interactive/planning task that needs user input
           // Check if Claude is asking a question at the END of its response (last 300 chars)
           const tail = (fullText || '').slice(-300);
-          const isAskingQuestion = tail.includes('?') && (
+          const hasQuestionMark = tail.includes('?') || tail.includes('❓') || tail.includes('⁉');
+          const hasQuestionPattern = (
             tail.includes('Would you') || tail.includes('Do you') || tail.includes('Should I') ||
             tail.includes('What ') || tail.includes('Which ') || tail.includes('How ') ||
             tail.includes('please ') || tail.includes('let me know') || tail.includes('your thoughts') ||
             tail.includes('prefer') || tail.includes('ready to') || tail.includes('like to') ||
             tail.includes('want to') || tail.includes('option') || tail.includes('choose') ||
+            tail.includes('Waiting for input') || tail.includes('waiting for input') ||
+            tail.includes('select one') || tail.includes('your choice') ||
             /\*\*\[.\]/.test(tail)
           );
+          const isAskingQuestion = hasQuestionMark && hasQuestionPattern;
           
           if (isAskingQuestion) {
             // Claude is waiting for user input — park the task
@@ -2301,6 +2305,14 @@ This is REQUIRED behavior, not optional. The tool is fire-and-forget — executi
 
 const BROWSER_TESTING_INSTRUCTION = `\n\nIMPORTANT — BROWSER TESTING: You have access to a Playwright MCP server (tools prefixed with mcp__playwright__). For ANY task involving frontend/UI changes, you MUST use Playwright to test in a real browser before marking the task as done. Read docs/testing-info.md for the dev server URL, login credentials, and OTP endpoint. Use playwright_navigate, playwright_click, playwright_fill, playwright_screenshot to verify your changes work visually. A task is NOT complete until browser-tested.`;
 
+const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
+- If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
+- If you find additional issues during implementation, FIX THEM if they're related to the task scope. Log what you found and fixed.
+- If you encounter an error, debug and resolve it yourself. Try alternative approaches. Only give up after 3 attempts.
+- If an adversarial review or QA step finds issues, FIX the real issues automatically — do not present them as options.
+- Never output menus like [W] Walk through / [F] Fix / [S] Skip. Just fix.
+- End with a clear summary of what was done, what was fixed, and any caveats.`;
+
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
@@ -2387,6 +2399,7 @@ function buildSystemPrompt(skillIds, config) {
   prompt += NOTIFY_USER_INSTRUCTION;
   prompt += SET_UI_STATE_INSTRUCTION;
   prompt += BROWSER_TESTING_INSTRUCTION;
+  prompt += AUTONOMOUS_INSTRUCTION;
   prompt += STATUS_LINE_INSTRUCTION;
   prompt += TOOL_CALL_INSTRUCTION;
 
