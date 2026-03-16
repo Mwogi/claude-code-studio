@@ -1913,7 +1913,7 @@ async function loadDocsList() {
     _docsCache = d.docs;
     renderDocsSidebar(d.docs);
     // Also show/hide the docs button
-    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+    $i('bmadDocsBtn').style.display = (d.docs.length || d.hasBmad) ? '' : 'none';
   } catch { }
 }
 
@@ -2210,7 +2210,7 @@ async function checkBmadDocs() {
   try {
     const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
     const d = await r.json();
-    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+    $i('bmadDocsBtn').style.display = (d.docs.length || d.hasBmad) ? '' : 'none';
   } catch { $i('bmadDocsBtn').style.display = 'none'; }
 }
 async function checkSprintStatus() {

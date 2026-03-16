@@ -3851,7 +3851,8 @@ app.get('/api/bmad/docs', (req, res) => {
       }
     } catch {}
   }
-  res.json({ docs, workdir });
+  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs'));
+  res.json({ docs, workdir, hasBmad });
 });
 
 // GET /api/bmad/doc?path=... — read a single BMAD document
