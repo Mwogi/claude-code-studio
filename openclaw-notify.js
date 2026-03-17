@@ -28,11 +28,15 @@ function _projectTag(projectName) {
   return projectName ? `**[${projectName}]** ` : '';
 }
 
+function _taskTag(task) {
+  return task.task_number ? `#${task.task_number} ` : '';
+}
+
 function taskStarted(task, projectName) {
   const model = task.model || 'sonnet';
   const phase = (task.notes || '').match(/\[bmad-phase:(\w+)\]/)?.[1] || '';
   const phaseLabel = phase ? ` → ${phase.replace('bmad_', '').toUpperCase()}` : '';
-  notify(`🚀 ${_projectTag(projectName)}Task Started${phaseLabel}: ${task.title}\nModel: ${model}`);
+  notify(`🚀 ${_projectTag(projectName)}${_taskTag(task)}Task Started${phaseLabel}: ${task.title}\nModel: ${model}`);
 }
 
 function taskCompleted(task, durationMs, projectName, summary) {
@@ -40,11 +44,11 @@ function taskCompleted(task, durationMs, projectName, summary) {
   const phase = (task.notes || '').match(/\[bmad-phase:(\w+)\]/)?.[1] || '';
   const phaseLabel = phase ? ` (${phase.replace('bmad_', '')})` : '';
   const summaryText = summary ? `\n\n${summary}` : '';
-  notify(`✅ ${_projectTag(projectName)}Task Done${phaseLabel}: ${task.title}\n⏱️ ${mins}min${summaryText}`);
+  notify(`✅ ${_projectTag(projectName)}${_taskTag(task)}Task Done${phaseLabel}: ${task.title}\n⏱️ ${mins}min${summaryText}`);
 }
 
 function taskFailed(task, reason, projectName) {
-  notify(`❌ ${_projectTag(projectName)}Task Failed: ${task.title}\n💬 ${(reason || 'Unknown error').substring(0, 200)}`);
+  notify(`❌ ${_projectTag(projectName)}${_taskTag(task)}Task Failed: ${task.title}\n💬 ${(reason || 'Unknown error').substring(0, 200)}`);
 }
 
 function progressSummary(projectName, stats) {
@@ -65,7 +69,7 @@ function progressSummary(projectName, stats) {
 function taskAwaitingInput(task, projectName, contextSnippet) {
   const prefix = projectName ? `**[${projectName}]** ` : '';
   const context = contextSnippet ? `\n\n${contextSnippet}` : '';
-  notify(`💬 ${prefix}Awaiting Input: ${task.title}${context}\n\nReply in Claude Studio to continue.`);
+  notify(`💬 ${prefix}${_taskTag(task)}Awaiting Input: ${task.title}${context}\n\nReply in Claude Studio to continue.`);
 }
 
 module.exports = { notify, taskStarted, taskCompleted, taskFailed, progressSummary, taskAwaitingInput };
