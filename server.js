@@ -2817,7 +2817,7 @@ async function runPartyMode(p) {
   const agentPerspectives = [];
   for (const agent of PARTY_AGENTS) {
     ws.send(JSON.stringify({ type:'agent_status', agent: agent.id, status:`${agent.emoji} ${agent.name} reviewing...`, ...(tabId ? { tabId } : {}) }));
-    const agentSkillPrompt = config.skills[agent.id] ? buildSystemPrompt([agent.id], config) : `You are ${agent.name}. Be concise.`;
+    const agentSkillPrompt = config.skills[agent.id] ? buildSystemPrompt([agent.id], config) : `You are ${agent.name}. Be concise.${AUTONOMOUS_INSTRUCTION}`;
     const agentPrompt = `As ${agent.name}, review this task in 2-3 sentences from your specialist perspective. Focus on your key concern, approach, or recommendation.\n\nTASK: ${prompt}`;
     let agentText = '';
     await new Promise(res => {
@@ -2873,7 +2873,7 @@ async function runPartyMode(p) {
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       const _bmadSkillId = BMAD_ROLE_TO_SKILL[agent.role?.toLowerCase()];
-      let agentSp = _bmadSkillId && config.skills[_bmadSkillId] ? buildSystemPrompt([_bmadSkillId], config) : `You are ${agent.role}. Complete your assigned task thoroughly.`;
+      let agentSp = _bmadSkillId && config.skills[_bmadSkillId] ? buildSystemPrompt([_bmadSkillId], config) : `You are ${agent.role}. Complete your assigned task thoroughly.${AUTONOMOUS_INSTRUCTION}`;
       let agentText = '';
       await new Promise(res => {
         let _s = false; const _r = () => { if (!_s) { _s = true; res(); } };
@@ -2986,7 +2986,7 @@ async function runMultiAgent(p) {
           }
         } catch {}
       }
-      if (!agentSp) agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
+      if (!agentSp) agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.${AUTONOMOUS_INSTRUCTION}`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
       let agentText = '';
 
