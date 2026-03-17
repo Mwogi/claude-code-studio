@@ -726,13 +726,14 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,task_number) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
   updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
+  nextTaskNumber: db.prepare(`SELECT COALESCE(MAX(task_number), 0) + 1 as next_num FROM tasks WHERE workdir=?`),
   // processQueue hot-path — prepared once, reused every 60 s
   getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE ((status='todo' OR status='bmad_workflow') AND notes LIKE '%[bmad-workflow:%') AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')`),
@@ -1312,12 +1313,13 @@ function scheduleNextRun(task) {
     return;
   }
   const newId = genId();
+  const _tn = stmts.nextTaskNumber.get(task.workdir || '').next_num;
   stmts.createTask.run(
     newId, task.title, task.description || '', task.notes || '', 'todo', task.sort_order || 0,
     task.session_id || null, task.workdir || null, task.model || 'sonnet',
     task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
     null, null, null, null,
-    next, task.recurrence, task.recurrence_end_at || null
+    next, task.recurrence, task.recurrence_end_at || null, _tn
   );
   log.info(`[schedule] Next run queued: "${task.title}" → ${new Date(next * 1000).toISOString()}`);
 }
@@ -1506,14 +1508,15 @@ function processQueue() {
       for (let i = 0; i < subtasks.length; i++) {
         const st = subtasks[i];
         const realDeps = (st.depends || []).map(d => taskIds[d]);
-        stmts.createTask.run(
+          const _tn2 = stmts.nextTaskNumber.get(workdir || '').next_num;
+          stmts.createTask.run(
           taskIds[i], st.title.substring(0, 200), st.description.substring(0, 2000),
           `[bmad:${storyId}] [bmad-phase:${st.bmadPhase}] Chain subtask ${i+1}/${subtasks.length}`,
           'todo', st.sort,
           chainSessionId, workdir,
           st.model || task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
           null, realDeps.length ? JSON.stringify(realDeps) : null,
-          chainId, null, null, null, null
+          chainId, null, null, null, null, _tn2
         );
       }
       // Remove the original task — it's been replaced by the chain subtasks
@@ -3391,7 +3394,8 @@ app.post('/api/tasks', (req, res) => {
   }
   
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null);
+  const taskNum = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -3709,6 +3713,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
       const taskId = idMap[t.id];
       const realDeps = (t.depends_on || []).map(d => idMap[d]).filter(Boolean);
 
+      const _tn3 = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
       stmts.createTask.run(
         taskId,
         (t.title || t.role || 'Subtask').substring(0, 200),
@@ -3724,7 +3729,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
         source_session_id || null,
-        null, null, null  // scheduled_at, recurrence, recurrence_end_at
+        null, null, null, _tn3  // scheduled_at, recurrence, recurrence_end_at, task_number
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -4090,10 +4095,11 @@ app.post('/api/bmad/sprint-sync', express.json(), (req, res) => {
         const notes = `${bmadTag} Sprint: ${parsed.meta.project}`;
         const sortOrder = epic.stories.indexOf(story);
 
+        const _tn4 = stmts.nextTaskNumber.get(workdir || '').next_num;
         stmts.createTask.run(
           id, title, description, notes,
           story.kanbanStatus, sortOrder, null, workdir,
-          null, null, null, null, null, null, null, null, null, null, null
+          null, null, null, null, null, null, null, null, null, null, null, _tn4
         );
         created.push({ id: story.id, kanbanId: id, status: story.kanbanStatus });
       }
@@ -6203,6 +6209,7 @@ wss.on('connection', (ws) => {
               const a = finalAgents[i];
               const taskId = idMap[a.id];
               const realDeps = (a.depends_on || []).map(d => idMap[d]).filter(Boolean);
+              const _tn5 = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
               stmts.createTask.run(
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
@@ -6211,7 +6218,7 @@ wss.on('connection', (ws) => {
                 sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
-                null, null, null  // scheduled_at, recurrence, recurrence_end_at
+                null, null, null, _tn5  // scheduled_at, recurrence, recurrence_end_at, task_number
               );
               created.push(stmts.getTask.get(taskId));
             }

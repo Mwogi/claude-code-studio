@@ -1069,7 +1069,7 @@ function makeCard(tk){
     activityBadge=`<span class="activity-badge ${cls} ${pulse}" data-activity="${tk.last_activity}" title="Last activity: ${label}">⚡ ${label}</span>`;
   }
   el.innerHTML=`
-    <div class="card-title">${escH(tk.title)}</div>
+    <div class="card-title">${tk.task_number ? `<span style="color:var(--muted);font-size:11px;font-weight:500">#${tk.task_number}</span> ` : ''}${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
       ${schedBadge}${wfBadge}${chainBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
@@ -1208,7 +1208,7 @@ async function openEditModal(id){
   if(!tk)return;
   modalMode='edit';editingId=id;
   try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
-  $i('modalTitle').textContent=t('modal.edit');
+  $i('modalTitle').textContent=(tk.task_number ? `#${tk.task_number} · ` : '') + t('modal.edit');
   $i('modalBody').innerHTML=buildForm(tk);
   setTimeout(()=>{renderAttPreviews();renderNotesTags(tk.notes||'',$i('fWorkflow')?.value||'');},0);
   $i('modalFt').innerHTML=`
