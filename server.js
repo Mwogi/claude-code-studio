@@ -1135,11 +1135,11 @@ async function startTask(task) {
             const projName = getProjectName(task.workdir);
             openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
           } else {
-          // ✅ Success
-          db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          // ✅ Success — AI-completed tasks go to done_review for user approval (auto-moves to done after 24h)
+          db.prepare(`UPDATE tasks SET status='done_review', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
-          log.info(`[taskWorker] task ${task.id}: done`);
+          log.info(`[taskWorker] task ${task.id}: done_review (pending user review)`);
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
           // Notify Telegram about completed task
@@ -1147,7 +1147,7 @@ async function startTask(task) {
             telegramBot.notifyTaskComplete({
               sessionId,
               title: task.title || 'Task',
-              status: 'done',
+              status: 'done_review',
               duration: Date.now() - _taskStartedAt,
             }).catch(() => {});
           }
@@ -1574,7 +1574,7 @@ function processQueue() {
           }
           const allDone = deps.every(depId => {
             const dep = stmts.getTask.get(depId);
-            return dep && dep.status === 'done';
+            return dep && ['done', 'done_review', 'archived'].includes(dep.status);
           });
           if (!allDone) continue; // deps not ready yet
         }
@@ -1584,9 +1584,9 @@ function processQueue() {
     // Block this task if any earlier task in the same chain is not yet done/cancelled.
     if (task.chain_id) {
       const chainTasks = stmts.getTasksByChain.all(task.chain_id);
-      const earlierPending = chainTasks.some(t => 
-        (t.sort_order || 0) < (task.sort_order || 0) && 
-        !['done', 'cancelled'].includes(t.status)
+      const earlierPending = chainTasks.some(t =>
+        (t.sort_order || 0) < (task.sort_order || 0) &&
+        !['done', 'done_review', 'archived', 'cancelled'].includes(t.status)
       );
       if (earlierPending) continue;
       // Also check if same-chain task was just started in this queue cycle
@@ -1676,7 +1676,7 @@ function autoModeProcess() {
         AND chain_id NOT IN (
           SELECT DISTINCT chain_id FROM tasks
           WHERE workdir=? AND chain_id IS NOT NULL
-            AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','cancelled')
+            AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','done_review','archived','cancelled')
         )
     `).get(workdir, workdir);
 
@@ -1705,16 +1705,16 @@ function autoModeProcess() {
     if (!backlogTasks.length) {
       // Check if ALL tasks are done — auto mode complete
       const remaining = db.prepare(`
-        SELECT COUNT(*) as cnt FROM tasks 
-        WHERE workdir=? AND status NOT IN ('done','cancelled')
+        SELECT COUNT(*) as cnt FROM tasks
+        WHERE workdir=? AND status NOT IN ('done','done_review','archived','cancelled')
       `).get(workdir);
-      
+
       if (remaining.cnt === 0) {
         // All done! Disable auto mode
         proj.autoMode = false;
         delete proj.autoModeStartedAt;
         saveProjects(projects);
-        const doneCount = db.prepare(`SELECT COUNT(*) as cnt FROM tasks WHERE workdir=? AND status='done'`).get(workdir);
+        const doneCount = db.prepare(`SELECT COUNT(*) as cnt FROM tasks WHERE workdir=? AND status IN ('done','done_review','archived')`).get(workdir);
         openclawNotify.notify(`🎉 **Auto Mode Complete**: ${proj.name}\n✅ All ${doneCount.cnt} tasks finished!`);
         log.info(`[AutoMode] ALL DONE for project "${proj.name}" — disabling auto mode`);
       }
@@ -1741,6 +1741,36 @@ function autoModeProcess() {
 // Run auto mode check every 15 seconds (same cadence as processQueue)
 setInterval(autoModeProcess, 15000);
 
+// ── Auto-archive: done_review → done (after 24h) and done → archived (after 48h) ──
+function autoArchiveProcess() {
+  try {
+    // Move done_review tasks older than 24h to done (user didn't review in time)
+    const reviewedCount = db.prepare(`
+      UPDATE tasks SET status='done', updated_at=datetime('now')
+      WHERE status='done_review'
+        AND updated_at < datetime('now', '-24 hours')
+    `).run();
+    if (reviewedCount.changes > 0) {
+      log.info(`[autoArchive] Auto-approved ${reviewedCount.changes} done_review task(s) → done`);
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    }
+    // Move done tasks older than 48h to archived
+    const archivedCount = db.prepare(`
+      UPDATE tasks SET status='archived', updated_at=datetime('now')
+      WHERE status='done'
+        AND updated_at < datetime('now', '-48 hours')
+    `).run();
+    if (archivedCount.changes > 0) {
+      log.info(`[autoArchive] Archived ${archivedCount.changes} done task(s) → archived`);
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    }
+  } catch (e) {
+    log.warn('[autoArchive] error', { error: e.message });
+  }
+}
+// Run every 5 minutes
+setInterval(autoArchiveProcess, 5 * 60 * 1000);
+
 // ── Periodic Progress Summary via OpenClaw (every 2 hours) ──
 setInterval(() => {
   try {
@@ -1756,13 +1786,13 @@ setInterval(() => {
       const projName = require('path').basename(projPath);
       const backlog = tasks.filter(t => t.status === 'backlog').length;
       const todo = tasks.filter(t => t.status === 'todo').length;
-      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'cancelled').length;
-      const done = tasks.filter(t => t.status === 'done').length;
+      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'done_review' && t.status !== 'archived' && t.status !== 'cancelled').length;
+      const done = tasks.filter(t => ['done','done_review','archived'].includes(t.status)).length;
       const total = tasks.filter(t => t.status !== 'cancelled').length;
       // Recently completed (last 2 hours)
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
       const recentlyCompleted = tasks
-        .filter(t => t.status === 'done' && t.updated_at > twoHoursAgo)
+        .filter(t => ['done','done_review'].includes(t.status) && t.updated_at > twoHoursAgo)
         .map(t => t.title);
       if (active > 0 || recentlyCompleted.length > 0) {
         openclawNotify.progressSummary(projName, { backlog, todo, active, done, total, recentlyCompleted });
@@ -1794,7 +1824,7 @@ setTimeout(() => {
       const assistantMsg = db.prepare(
         `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
       ).get(task.session_id);
-      if (assistantMsg) newStatus = 'done'; // completed before/during restart
+      if (assistantMsg) newStatus = 'done_review'; // completed before/during restart — needs user review
     }
     db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
       .run(newStatus, task.id);
@@ -3358,7 +3388,7 @@ app.get('/api/tasks', (req, res) => {
       ...t,
       is_active: t.session_id ? activeTasks.has(t.session_id) : false,
     };
-    if (t.session_id && ['in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'].includes(t.status)) {
+    if (t.session_id && ['in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','done_review','awaiting_input'].includes(t.status)) {
       const last = lastActivityStmt.get(t.session_id);
       out.last_activity = last?.created_at || t.updated_at;
     }
@@ -3593,7 +3623,7 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
   if (updates.status && merged.notes) {
     const bmadMatch = (merged.notes || '').match(/\[bmad:([^\]]+)\]/);
     if (bmadMatch) {
-      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','cancelled':'backlog' };
+      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','done_review':'done','archived':'done','cancelled':'backlog' };
       const bmadStatus = REVERSE_MAP[merged.status];
       if (bmadStatus) {
         const wd = merged.workdir || WORKDIR;

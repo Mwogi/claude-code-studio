@@ -258,6 +258,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .dot-in_progress{ background:var(--orange); }
 .dot-awaiting_input{ background:#f59e0b; }
 .dot-done{ background:var(--green); }
+.dot-done_review{ background:#f59e0b; }
+.dot-archived{ background:var(--muted); }
 .dot-cancelled{ background:var(--red); }
 /* BMAD upstream workflow colour */
 .dot-bmad_workflow{ background:#9333ea; }
@@ -270,6 +272,19 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 /* BMAD phase column accent */
 .col-head.bmad-col{ border-color:rgba(124,106,239,.35); background:linear-gradient(135deg,rgba(124,106,239,.12),rgba(124,106,239,.05)); }
 .col-head.bmad-col .col-title{ color:var(--accent2); }
+/* Done for Review column — amber accent */
+.col-head.review-col{ border-color:rgba(245,158,11,.35); background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.05)); cursor:default; }
+.col-head.review-col .col-title{ color:#f59e0b; }
+/* Archive column — collapsed by default, click to toggle */
+.col.col-archive{ width:48px; overflow:hidden; transition:width .25s ease; }
+.col.col-archive.expanded{ width:268px; }
+.col-head.archive-col{ border-color:rgba(120,120,120,.2); background:var(--s2); cursor:pointer; user-select:none; }
+.col-head.archive-col .col-title{ color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.col.col-archive:not(.expanded) .col-body,
+.col.col-archive:not(.expanded) .col-add{ display:none; }
+.col.col-archive:not(.expanded) .col-head{ writing-mode:vertical-rl; height:auto; width:44px; padding:12px 6px; flex-direction:column; gap:6px; border-radius:var(--r-md); }
+.col.col-archive:not(.expanded) .col-head .col-title{ font-size:10px; letter-spacing:.4px; }
+.col.col-archive:not(.expanded) .col-dot{ display:none; }
 /* BMAD board section divider */
 .board-divider{ flex-shrink:0; width:1px; background:var(--border); margin:0 8px; align-self:stretch; opacity:.6; }
 
@@ -567,7 +582,8 @@ const TR = {
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
-    'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
+    'col.done':'Виконано','col.done_review':'✅📋 На огляд','col.archived':'📦 Архів',
+    'col.cancelled':'Скасовано','col.empty':'Немає задач',
     'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
@@ -602,7 +618,8 @@ const TR = {
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'⏳ In Progress','col.awaiting_input':'💬 Awaiting Input',
-    'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
+    'col.done':'Done','col.done_review':'✅📋 Done for Review','col.archived':'📦 Archive',
+    'col.cancelled':'Cancelled','col.empty':'No tasks',
     'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
@@ -637,7 +654,8 @@ const TR = {
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
-    'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
+    'col.done':'Выполнено','col.done_review':'✅📋 На проверку','col.archived':'📦 Архив',
+    'col.cancelled':'Отменено','col.empty':'Нет задач',
     'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
     'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
@@ -709,11 +727,18 @@ const COLS=[
   {id:'bmad_qa',dot:'dot-bmad_qa',bmad:true,bmadOrder:4},
   // ── Standard: right side ──
   {id:'done',dot:'dot-done'},
+  {id:'done_review',dot:'dot-done_review',review:true},
   {id:'cancelled',dot:'dot-cancelled'},
+  {id:'archived',dot:'dot-archived',archive:true},
 ];
 let tasks=[],sessions=[],projects=[];
 let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
 let pendingAttachments=[]; // [{name, type, base64}]
+// Activity timestamp cache: taskId → last_activity string (UTC, no Z suffix)
+// Preserved across renderBoard() calls so timers don't reset to zero on re-render
+// Also persisted to sessionStorage to survive page reloads
+const activityCache = new Map(JSON.parse(sessionStorage.getItem('activityCache')||'[]'));
+function persistActivityCache(){ try{sessionStorage.setItem('activityCache',JSON.stringify([...activityCache]));}catch{} }
 
 // ─── Session settings (persisted) ─────────────────────────────────────────
 let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30};
@@ -954,10 +979,10 @@ function startAutoRefresh(){
 function updateStats(){
   const el=$i('kbStats');
   if(!el)return;
-  const counts={backlog:0,todo:0,in_progress:0,done:0,cancelled:0};
+  const counts={backlog:0,todo:0,in_progress:0,done:0,done_review:0,archived:0,cancelled:0};
   for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
   const total=tasks.length;
-  const completed=counts.done;
+  const completed=(counts.done||0)+(counts.done_review||0)+(counts.archived||0);
   const active=(counts.bmad_workflow||0)+(counts.in_progress||0);
   const pct=total>0?Math.round((completed/total)*100):0;
 
@@ -988,6 +1013,11 @@ function updateStats(){
       <span class="kb-stat-num">${counts.done}</span>
       <span class="kb-stat-lbl">${t('col.done')}</span>
     </div>
+    ${counts.done_review>0?`<div class="kb-stat">
+      <div class="kb-stat-dot dot-done_review"></div>
+      <span class="kb-stat-num">${counts.done_review}</span>
+      <span class="kb-stat-lbl">Review</span>
+    </div>`:''}
     <div class="kb-progress">
       <div class="kb-progress-bar"><div class="kb-progress-fill" style="width:${pct}%"></div></div>
       <span class="kb-progress-pct">${pct}%</span>
@@ -997,7 +1027,14 @@ function updateStats(){
 
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
-  const board=$i('board');board.innerHTML='';
+  const board=$i('board');
+  // Snapshot activity timestamps before destroying DOM so timers don't reset on re-render
+  board.querySelectorAll('.card[data-id]').forEach(card=>{
+    const badge=card.querySelector('.activity-badge[data-activity]');
+    if(badge&&badge.dataset.activity) activityCache.set(card.dataset.id, badge.dataset.activity);
+  });
+  persistActivityCache();
+  board.innerHTML='';
   let lastWasBmad=false;
   for(const col of COLS){
     if(col.hidden) continue; // Skip hidden columns (e.g., in_progress)
@@ -1010,12 +1047,35 @@ function renderBoard(){
     board.appendChild(makeColumn(col,colTasks));
     lastWasBmad=isBmad;
   }
+  // Evict completed tasks from activity cache to avoid stale data
+  const activeIds=new Set(tasks.filter(tk=>isTaskActive(tk.status)).map(tk=>tk.id));
+  activityCache.forEach((_,id)=>{ if(!activeIds.has(id)) activityCache.delete(id); });
   updateStats();
 }
 function makeColumn(col,colTasks){
-  const el=document.createElement('div');el.className='col';
-  const hd=document.createElement('div');hd.className='col-head'+(col.bmad?' bmad-col':'');
+  const el=document.createElement('div');
+  let colClass='col';
+  if(col.archive) colClass+=' col-archive';
+  el.className=colClass;
+  // Restore archived expanded state from localStorage
+  if(col.archive){
+    const archExpanded=localStorage.getItem('archive_col_expanded')==='1';
+    if(archExpanded) el.classList.add('expanded');
+  }
+  let headClass='col-head';
+  if(col.bmad) headClass+=' bmad-col';
+  else if(col.review) headClass+=' review-col';
+  else if(col.archive) headClass+=' archive-col';
+  const hd=document.createElement('div');hd.className=headClass;
   hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
+  // Archive column: click header to toggle collapse/expand
+  if(col.archive){
+    hd.title=t('col.archived')+' — click to expand/collapse';
+    hd.onclick=()=>{
+      el.classList.toggle('expanded');
+      localStorage.setItem('archive_col_expanded', el.classList.contains('expanded')?'1':'0');
+    };
+  }
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
   setupDropZone(body);
@@ -1050,7 +1110,7 @@ function makeCard(tk){
     const chainTasks=tasks.filter(t=>t.chain_id===tk.chain_id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     const idx=chainTasks.findIndex(t=>t.id===tk.id);
     const total=chainTasks.length;
-    const earlierPending=chainTasks.some(t=>(t.sort_order||0)<(tk.sort_order||0)&&!['done','cancelled'].includes(t.status));
+    const earlierPending=chainTasks.some(t=>(t.sort_order||0)<(tk.sort_order||0)&&!['done','done_review','archived','cancelled'].includes(t.status));
     if(total>1){
       const waitIcon=earlierPending&&tk.status==='todo'?'⏳':'🔗';
       const waitTip=earlierPending?' (waiting for previous task)':'';
@@ -1058,15 +1118,19 @@ function makeCard(tk){
     }
   }
   // Activity badge for running tasks
+  // Use server-provided last_activity; fall back to activityCache to preserve timestamps across re-renders
   let activityBadge='';
-  if(isTaskActive(tk.status) && tk.last_activity){
-    const ago=Date.now()-new Date(tk.last_activity+'Z').getTime();
+  const _actTs = tk.last_activity || (isTaskActive(tk.status) ? activityCache.get(tk.id) : null);
+  if(isTaskActive(tk.status) && _actTs){
+    // Update cache with latest known value (server wins if available)
+    if(tk.last_activity) { activityCache.set(tk.id, tk.last_activity); persistActivityCache(); }
+    const ago=Date.now()-new Date(_actTs.endsWith('Z')?_actTs:_actTs+'Z').getTime();
     const secs=Math.floor(ago/1000);
     const mins=Math.floor(ago/60000);
     const cls=secs<120?'activity-fresh':mins<10?'activity-warm':'activity-stale';
     const pulse=secs<120?'activity-pulse':'';
     const label=secs<10?'just now':secs<60?secs+'s ago':mins<60?mins+'m ago':Math.floor(mins/60)+'h ago';
-    activityBadge=`<span class="activity-badge ${cls} ${pulse}" data-activity="${tk.last_activity}" title="Last activity: ${label}">⚡ ${label}</span>`;
+    activityBadge=`<span class="activity-badge ${cls} ${pulse}" data-activity="${_actTs}" title="Last activity: ${label}">⚡ ${label}</span>`;
   }
   el.innerHTML=`
     <div class="card-title">${tk.task_number ? `<span style="color:var(--muted);font-size:11px;font-weight:500">#${tk.task_number}</span> ` : ''}${escH(tk.title)}</div>
@@ -1097,7 +1161,8 @@ setInterval(()=>{
   document.querySelectorAll('.activity-badge[data-activity]').forEach(el=>{
     const ts=el.dataset.activity;
     if(!ts) return;
-    const ago=Date.now()-new Date(ts+'Z').getTime();
+    // Safe UTC parse: if already has Z/+00 don't double-append
+    const ago=Date.now()-new Date(ts.endsWith('Z')?ts:ts+'Z').getTime();
     const secs=Math.floor(ago/1000);
     const mins=Math.floor(ago/60000);
     const cls=secs<120?'activity-fresh':mins<10?'activity-warm':'activity-stale';
