@@ -1,9 +1,11 @@
 ---
+name: 'step-06-resolve-findings'
+description: 'Automatically fix real review findings, skip noise, commit'
 ---
 
 # Step 6: Resolve Findings
 
-**Goal:** Handle adversarial review findings interactively, apply fixes, finalize tech-spec.
+**Goal:** Automatically fix all real findings from the adversarial review. No user interaction.
 
 ---
 
@@ -18,49 +20,17 @@ From previous steps:
 
 ---
 
-## RESOLUTION OPTIONS
+## AUTONOMOUS EXECUTION (MANDATORY)
 
-Present: "How would you like to handle these findings?"
+**DO NOT present menus, options, or ask for user input.**
+**DO NOT output [W] / [F] / [S] choices.**
 
-Display:
+Proceed directly:
 
-**[W] Walk through** - Discuss each finding individually
-**[F] Fix automatically** - Automatically fix issues classified as "real"
-**[S] Skip** - Acknowledge and proceed to commit
-
-### Menu Handling Logic:
-
-- IF W: Execute WALK THROUGH section below
-- IF F: Execute FIX AUTOMATICALLY section below
-- IF S: Execute SKIP section below
-
-### EXECUTION RULES:
-
-- ALWAYS halt and wait for user input after presenting menu
-- ONLY proceed when user makes a selection
-
----
-
-## WALK THROUGH [W]
-
-For each finding in order:
-
-1. Present the finding with context
-2. Ask: **fix now / skip / discuss**
-3. If fix: Apply the fix immediately
-4. If skip: Note as acknowledged, continue
-5. If discuss: Provide more context, re-ask
-6. Move to next finding
-
-After all findings processed, summarize what was fixed/skipped.
-
----
-
-## FIX AUTOMATICALLY [F]
-
-1. Filter findings to only those classified as "real"
-2. Apply fixes for each real finding
-3. Report what was fixed:
+1. Filter findings to only those classified as "real" AND introduced by this diff
+2. Apply fixes for each real finding immediately
+3. Skip findings classified as "noise", "uncertain", or pre-existing
+4. Report what was fixed:
 
 ```
 **Auto-fix Applied:**
@@ -68,16 +38,10 @@ After all findings processed, summarize what was fixed/skipped.
 - F3: {description of fix}
 ...
 
-Skipped (noise/uncertain): F2, F4
+Skipped (noise/pre-existing): F2, F4
 ```
 
----
-
-## SKIP [S]
-
-1. Acknowledge all findings were reviewed
-2. Note that user chose to proceed without fixes
-3. Continue to completion
+If no real findings need fixing, state "No fixes needed" and proceed to completion.
 
 ---
 
@@ -87,29 +51,18 @@ If `{execution_mode}` is "tech-spec":
 
 1. Load `{tech_spec_path}`
 2. Update status to "Completed"
-3. Add review notes:
-   ```
-   ## Review Notes
-   - Adversarial review completed
-   - Findings: {count} total, {fixed} fixed, {skipped} skipped
-   - Resolution approach: {walk-through/auto-fix/skip}
-   ```
-4. Save changes
+3. Add review notes
 
 ---
 
 ## COMPLETION OUTPUT
 
 ```
-**Review complete. Ready to commit.**
-
 **Implementation Summary:**
 - {what was implemented}
 - Files modified: {count}
 - Tests: {status}
-- Review findings: {X} addressed, {Y} skipped
-
-{Explain what was implemented based on user_skill_level}
+- Review findings: {X} fixed, {Y} skipped (pre-existing/noise)
 ```
 
 ---
@@ -117,28 +70,11 @@ If `{execution_mode}` is "tech-spec":
 ## WORKFLOW COMPLETE
 
 This is the final step. The Quick Dev workflow is now complete.
-
-User can:
-
-- Commit changes
-- Run additional tests
-- Start new Quick Dev session
-
----
+All changes should be committed automatically.
 
 ## SUCCESS METRICS
 
-- User presented with resolution options
-- Chosen approach executed correctly
-- Fixes applied cleanly (if applicable)
-- Tech-spec updated with final status (Mode A)
+- All real findings from this diff are fixed
+- No user interaction required
+- Changes committed
 - Completion summary provided
-- User understands what was implemented
-
-## FAILURE MODES
-
-- Not presenting resolution options
-- Auto-fixing "noise" or "uncertain" findings
-- Not updating tech-spec after resolution (Mode A)
-- No completion summary
-- Leaving user unclear on next steps
