@@ -527,8 +527,11 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
 @media (max-width: 480px) {
   /* ─── Kanban columns: 85vw with snap scroll ─── */
-  .col { width: 85vw; scroll-snap-align: start; }
-  .board { gap: 6px; padding: 8px 6px 14px; scroll-snap-type: x mandatory; }
+  .col { width: 85vw; min-width: 85vw; max-width: 85vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 85vw; min-width: 85vw; max-width: 85vw; }
+  .board { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; gap: 6px; padding: 8px 6px 14px; }
   /* Hide board divider to save space */
   .board-divider { display: none; }
 
@@ -665,7 +668,56 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
   /* ─── No horizontal overflow ─── */
   html, body { max-width: 100vw; overflow-x: hidden; }
-  .board { overflow-x: auto; }
+}
+
+/* ─── Mobile: 481px–767px snap scroll (phones & small tablets) ─── */
+@media (min-width: 481px) and (max-width: 767px) {
+  /* Body: prevent horizontal page scroll */
+  body { overflow-x: hidden; }
+  /* Board: horizontal scroll with snap */
+  .board {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 8px 16px;
+    gap: 8px;
+  }
+  /* Columns: 85vw so one column fills the viewport */
+  .col { width: 85vw; min-width: 85vw; max-width: 85vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 85vw; min-width: 85vw; max-width: 85vw; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Cards: full width, no truncation */
+  .card { width: 100%; box-sizing: border-box; }
+  /* Board divider: hide to save space */
+  .board-divider { display: none; }
+}
+
+/* ─── Tablet layout (768px–1023px): 2 columns visible, rest scroll ─── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Body: prevent horizontal page scroll */
+  body { overflow-x: hidden; }
+  /* Board: horizontal scroll with snap, show ~2 columns */
+  .board {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 12px 18px;
+    gap: 10px;
+  }
+  /* Each column: ~48% of viewport so 2 fit, rest scrollable */
+  .col { width: 48vw; min-width: 48vw; max-width: 48vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 48vw; min-width: 48vw; max-width: 48vw; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Cards: full width, no truncation */
+  .card { width: 100%; box-sizing: border-box; }
+  /* Board divider: hide to save space */
+  .board-divider { display: none; }
 }
 
 /* ─── Sidebar overlay backdrop (shown when sidebar open) ─── */
