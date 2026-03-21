@@ -443,10 +443,10 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .hdr { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
   .hdr-l { gap: 6px; flex-wrap: wrap; }
   .hb span { display: none; }
-  .hb { padding: 5px 8px; min-height: 40px; }
+  .hb { padding: 5px 8px; min-height: 44px; min-width: 44px; justify-content: center; }
   .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
   .nav-sw-btn span { display: none; }
-  .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; }
+  .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; min-height: 44px; }
   .board { padding: 10px 8px 16px; gap: 8px; }
   .col { width: 240px; }
   .modal { max-width: 95vw; max-height: 92vh; max-height: 92dvh; }
@@ -458,13 +458,92 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .card-actions { opacity: 1; }
   /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
   .inp, .sel, .proj-dd-search input { font-size: 16px; }
+  /* Touch targets ≥44px */
+  .logo { width: 44px; height: 44px; border-radius: 12px; }
+  .nav-sw-btn { min-height: 44px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .modal-close { padding: 8px 12px; font-size: 24px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .col-add { padding: 12px; min-height: 44px; font-size: 14px; }
+  .col-cnt { font-size: 12px; padding: 2px 8px; }
+  /* Sidebar session & project touch targets */
+  .kb-sidebar-sess { padding: 10px 16px 10px 36px; min-height: 44px; display: flex; align-items: center; }
+  .kb-sidebar-hd .modal-close { font-size: 24px; padding: 8px; min-width: 44px; min-height: 44px; }
+  .kb-sidebar-proj-hd { min-height: 44px; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Card action buttons larger touch targets */
+  .cbtn { padding: 8px 10px; font-size: 16px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .card-actions { display: flex !important; gap: 4px; }
+  /* Attachment chip remove larger */
+  .att-chip button { padding: 6px; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
+  /* Docs panel improvements */
+  .docs-file { padding: 10px 12px 10px 24px; min-height: 44px; display: flex; align-items: center; }
+  .docs-cat { padding: 10px 12px; min-height: 44px; }
+  .docs-search { font-size: 16px; padding: 10px 12px; }
+  /* Chat reply bar */
+  .chat-reply-input { font-size: 16px; padding: 10px 12px; min-height: 44px; }
+  .chat-reply-btn { min-height: 44px; padding: 10px 16px; font-size: 14px; }
+  /* Badge readability */
+  .activity-badge { font-size: 12px; padding: 3px 8px; }
+  .card-foot .badge { font-size: 12px; padding: 3px 8px; }
+  /* Status dots slightly larger */
+  .col-dot { width: 10px; height: 10px; }
+  .kb-stat-dot { width: 9px; height: 9px; }
 }
 @media (max-width: 480px) {
-  .col { width: 85vw; }
+  /* ─── Kanban columns: 85vw with snap scroll ─── */
+  .col { width: 85vw; scroll-snap-align: start; }
   .board { gap: 6px; padding: 8px 6px 14px; scroll-snap-type: x mandatory; }
-  .col { scroll-snap-align: start; }
-  .hdr-meta { display: none; }
+  /* Hide board divider to save space */
+  .board-divider { display: none; }
+
+  /* ─── Header: two-row layout so all controls are accessible ─── */
+  /* Row 1 is: hdr-l (logo+nav) + hdr-btns, both flex children of .hdr */
+  /* Row 2 is: hdr-meta (project dropdown) wrapping inside hdr-l */
+  .hdr { flex-wrap: wrap; padding: 6px 8px; gap: 4px; }
+  .hdr-l { flex-wrap: wrap; flex: 1; min-width: 0; gap: 6px; align-items: center; }
+  .hdr-btns { flex-shrink: 0; }
+  /* Project dropdown row: full width inside hdr-l, so it drops to second row */
+  .hdr-meta { display: flex; width: 100%; }
+  .proj-dd-wrap { display: inline-block !important; flex: 1; }
+  .proj-dd-btn { max-width: 100%; width: 100%; }
+  /* Project dropdown menu: full-width on small screens */
+  .proj-dd-menu { min-width: unset; width: calc(100vw - 24px); left: 0; max-width: none; }
+  /* Status badge: smaller on mobile */
+  .status-dot { font-size: 11px; }
+  /* Refresh timestamp hidden to save space */
+  .refresh-ts { display: none; }
+
+  /* ─── Sidebar: full-width on very small screens ─── */
+  .kb-sidebar { width: 100vw; }
+
+  /* ─── Stats bar: hide progress bar to save space ─── */
   .kb-progress { display: none; }
+
+  /* ─── Modal: full-screen on mobile ─── */
+  .ov { padding: 0; }
+  .modal { max-width: 100vw !important; max-height: 100dvh !important; height: 100dvh; border-radius: 0; border: none; }
+  .modal.has-chat { min-height: unset; height: 100dvh; }
+  .modal-split { flex-direction: column; }
+  .modal-left { flex: 1 1 auto; max-height: none; overflow-y: auto; border-bottom: 1px solid var(--border); }
+  .modal-right { flex: 0 0 auto; max-height: 50vh; }
+
+  /* Confirm modal: also respect 100vw cap */
+  .modal { max-width: 100vw !important; }
+}
+
+/* ─── Sidebar overlay backdrop (shown when sidebar open) ─── */
+.kb-sidebar-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, .5);
+  z-index: 1499;
+  display: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.kb-sidebar-overlay.visible { display: block; }
+
+/* ─── Tablet (481–768px): sidebar slightly narrower ─── */
+@media (min-width: 481px) and (max-width: 800px) {
+  .kb-sidebar { width: min(280px, 85vw); }
 }
 </style>
 </head>
@@ -535,6 +614,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
   <div class="kb-sidebar-body" id="kbSidebarBody"></div>
 </div>
+<!-- Sidebar overlay backdrop (mobile) -->
+<div class="kb-sidebar-overlay" id="kbSidebarOverlay" onclick="toggleKbSidebar()"></div>
 
 <!-- Board -->
 <div class="board" id="board"></div>
@@ -1855,11 +1936,14 @@ let _kbSidebarOpen = false;
 function toggleKbSidebar() {
   _kbSidebarOpen = !_kbSidebarOpen;
   const sidebar = $i('kbSidebar');
+  const overlay = $i('kbSidebarOverlay');
   if (_kbSidebarOpen) {
     sidebar.classList.remove('collapsed');
+    if (overlay) overlay.classList.add('visible');
     renderKbSidebar();
   } else {
     sidebar.classList.add('collapsed');
+    if (overlay) overlay.classList.remove('visible');
   }
 }
 
