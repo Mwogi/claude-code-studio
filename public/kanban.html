@@ -960,6 +960,248 @@ textarea.inp{ resize:vertical; min-height:80px; }
   /* description textarea slightly smaller */
   #fDesc { min-height:150px !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE TASK MODAL — full overhaul for phones (<768px)
+   All rules confined to max-width:767px so desktop is untouched.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  /* ── R1: Full-screen overlay + modal ── */
+  #taskOv { padding:0; align-items:stretch; }
+  #taskOv .modal {
+    max-width:100vw !important;
+    width:100vw;
+    max-height:100dvh !important;
+    height:100dvh;
+    border-radius:0 !important;
+    border:none !important;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #taskOv .modal.has-chat { min-height:unset; height:100dvh; }
+
+  /* ── R2: Header — fixed top, title truncated, close + status badge visible ── */
+  #taskOv .modal-hd {
+    flex-shrink:0;
+    position:sticky;
+    top:0;
+    z-index:20;
+    background:var(--s1);
+    padding:12px 16px;
+    min-height:52px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border-bottom:1px solid var(--border);
+  }
+  #taskOv .modal-hd-title {
+    font-size:14px;
+    font-weight:700;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    min-width:0;
+  }
+  #taskOv .modal-close {
+    flex-shrink:0;
+    min-width:44px;
+    min-height:44px;
+    padding:0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+    border-radius:8px;
+  }
+
+  /* ── Tab bar: horizontally scrollable (R8) ── */
+  #taskOv .modal-tab-bar {
+    display:flex;
+    flex-shrink:0;
+    background:var(--s2);
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  #taskOv .modal-tab-bar::-webkit-scrollbar { display:none; }
+  #taskOv .modal-tab-btn {
+    flex:1;
+    min-width:80px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    background:none;
+    border:none;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+    font-family:inherit;
+    transition:color .15s, border-color .15s;
+    text-align:center;
+    min-height:44px;
+  }
+  #taskOv .modal-tab-btn.active { color:var(--accent2); border-bottom-color:var(--accent); }
+
+  /* ── Modal split: column layout, fills remaining height ── */
+  #taskOv .modal-split {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  /* ── R3 & R7: Left panel (details/form) — scrollable content, fixed footer ── */
+  #taskOv .modal-left {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border-right:none;
+    border-bottom:none;
+    max-height:none;
+    height:100%;
+  }
+  #taskOv .modal-left .modal-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:12px 14px;
+    gap:12px;
+    /* R7: single-column form */
+    display:flex;
+    flex-direction:column;
+  }
+  /* R7: single-column, full-width inputs, 44px touch targets */
+  #taskOv .modal-left .grid2 { grid-template-columns:1fr; }
+  #taskOv .modal-left .form-grid-4 { grid-template-columns:1fr; }
+  #taskOv .modal-left .form-grid-2 { grid-template-columns:1fr; }
+  #taskOv .modal-left .inp,
+  #taskOv .modal-left .sel { width:100%; min-height:44px; font-size:16px; }
+  #taskOv .modal-left .btn { min-height:44px; }
+
+  /* R9: Footer — fixed at bottom, buttons full-width stacked ── */
+  #taskOv .modal-left .modal-ft {
+    flex-shrink:0;
+    display:flex;
+    flex-direction:row;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:10px 14px;
+    padding-bottom:max(10px, env(safe-area-inset-bottom, 10px));
+    border-top:1px solid var(--border);
+    background:var(--s1);
+  }
+  #taskOv .modal-left .modal-ft .btn {
+    flex:1 1 auto;
+    min-height:44px;
+    justify-content:center;
+    font-size:14px;
+  }
+
+  /* ── R4 & R5: Right panel (chat) — scrollable messages, fixed input ── */
+  #taskOv .modal-right {
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+    display:none; /* hidden until chat tab selected */
+    flex-direction:column;
+  }
+  /* Show chat panel when tab toggled */
+  #taskOv .modal-split.show-chat .modal-right {
+    display:flex;
+    flex-direction:column;
+  }
+  #taskOv .modal-split.show-chat .modal-left { display:none; }
+
+  /* Chat panel fills right panel */
+  #taskOv .modal-right .chat-panel,
+  #taskOv #chatContainer {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    overflow:hidden;
+    border:none;
+    border-radius:0;
+  }
+  /* Chat header */
+  #taskOv .modal-right .chat-panel-hd {
+    flex-shrink:0;
+    padding:8px 14px;
+    border-bottom:1px solid var(--border);
+    background:var(--s2);
+  }
+  /* R4: chat messages area — scrollable, takes remaining space ── */
+  #taskOv .modal-right .chat-panel-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:10px 14px;
+    min-height:0;
+  }
+  /* R4: full-width bubbles, readable font ≥14px ── */
+  #taskOv .modal-right .chat-msg {
+    width:100%;
+    box-sizing:border-box;
+    margin-bottom:10px;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:14px;
+    line-height:1.55;
+  }
+  #taskOv .modal-right .chat-text { font-size:14px; line-height:1.55; }
+  #taskOv .modal-right .chat-role { font-size:11px; }
+
+  /* R5: Chat input — fixed at bottom, full-width ── */
+  #taskOv .modal-right .chat-reply-bar,
+  #taskOv .chat-reply-bar {
+    flex-shrink:0;
+    display:flex;
+    gap:6px;
+    padding:8px 12px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom, 8px));
+    background:var(--s2);
+    border-top:1px solid var(--border);
+  }
+  #taskOv .chat-reply-input {
+    flex:1;
+    font-size:16px !important;
+    padding:10px 12px;
+    min-height:44px;
+  }
+  #taskOv .chat-reply-btn {
+    flex-shrink:0;
+    min-height:44px;
+    padding:10px 16px;
+    font-size:14px;
+  }
+
+  /* R6: Tool call groups collapsed by default, tap to expand ── */
+  /* <details> is closed by default in HTML; we just ensure the summary is tappable */
+  #taskOv .modal-right .chat-tools-group { margin-bottom:8px; }
+  #taskOv .modal-right .chat-tools-summary {
+    padding:10px 12px;
+    min-height:44px;
+    display:flex;
+    align-items:center;
+    cursor:pointer;
+    font-size:13px;
+  }
+  #taskOv .modal-right .chat-tools-detail {
+    max-height:150px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* ── Session copy ID: hide on mobile to reduce clutter ── */
+  #taskOv .modal-right .chat-panel-hd .mono-tag { display:none; }
+}
 </style>
 </head>
 <body>
