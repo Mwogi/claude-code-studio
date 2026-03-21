@@ -545,6 +545,232 @@ textarea.inp{ resize:vertical; min-height:80px; }
 @media (min-width: 481px) and (max-width: 800px) {
   .kb-sidebar { width: min(280px, 85vw); }
 }
+
+/* ─── Form grids (responsive classes, replace inline styles) ─── */
+.form-grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+/* fsel: form select — base size controlled via class not inline style */
+.fsel { font-size:12px; }
+/* fnotes: notes textarea */
+.fnotes { font-size:12px; }
+/* att-dropzone-form: form attachment dropzone */
+.att-dropzone-form { padding:8px; font-size:12px; }
+
+/* ─── Mobile Tab Bar (Chat | Details) ─── */
+.modal-tabs { display:none; } /* unused */
+.modal-tab-bar { display:none; } /* hidden on desktop */
+.modal-tab-bar.no-chat-tab { display:none !important; } /* no tabs when no chat session */
+/* Tab content panels — desktop: all visible in split layout */
+.modal-tab-panel { display:flex; flex-direction:column; height:100%; overflow:hidden; }
+
+/* ─── Mobile: ≤ 480px — Full overhaul ─── */
+@media (max-width: 480px) {
+  /* ── Form grids: single column ── */
+  .form-grid-4 { grid-template-columns:1fr; }
+  .form-grid-2 { grid-template-columns:1fr; }
+  .fsel { font-size:16px !important; }
+  .fnotes { font-size:16px !important; }
+  .att-dropzone-form { padding:10px 12px; font-size:14px; }
+
+  /* ── Task Modal: truly full-screen ── */
+  .ov { padding:0; align-items:stretch; }
+  .modal {
+    max-width:100vw !important;
+    width:100vw;
+    max-height:100dvh !important;
+    height:100dvh;
+    border-radius:0;
+    border:none;
+    display:flex;
+    flex-direction:column;
+  }
+  .modal.has-chat { min-height:unset; height:100dvh; }
+
+  /* ── Modal header: fixed, prominent ── */
+  .modal-hd {
+    flex-shrink:0;
+    padding:12px 16px;
+    min-height:52px;
+    display:flex;
+    align-items:center;
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:var(--s1);
+  }
+  .modal-hd-title { font-size:14px; }
+
+  /* ── Modal body: scrollable area ── */
+  .modal-body { overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1; }
+
+  /* ── Modal split: tab-based on mobile ── */
+  .modal-split {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  /* ── Mobile tab bar ── */
+  .modal-tab-bar {
+    display:flex;
+    flex-shrink:0;
+    background:var(--s2);
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .modal-tab-bar::-webkit-scrollbar { display:none; }
+  .modal-tab-btn {
+    flex:1;
+    min-width:80px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    background:none;
+    border:none;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+    font-family:inherit;
+    transition:color .15s, border-color .15s;
+    text-align:center;
+  }
+  .modal-tab-btn.active { color:var(--accent2); border-bottom-color:var(--accent); }
+
+  /* ── Left panel (details/form): takes full split height ── */
+  .modal-left {
+    flex:1;
+    border-right:none;
+    border-bottom:none;
+    overflow:hidden;
+    max-height:none;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+  }
+  .modal-left .modal-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:12px 14px;
+  }
+  /* Footer sticky at bottom of details panel */
+  .modal-left .modal-ft {
+    flex-shrink:0;
+    flex-wrap:wrap;
+    padding:10px 12px;
+    padding-bottom:max(10px, env(safe-area-inset-bottom));
+    gap:8px;
+    display:flex;
+  }
+  .modal-left .modal-ft .btn { flex:1 1 auto; min-height:44px; justify-content:center; font-size:14px; }
+
+  /* ── Right panel (chat): full height, hidden by default, shown via tab ── */
+  .modal-right {
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+    display:none; /* hidden until chat tab selected */
+  }
+  /* When chat tab is active (.modal-chat-visible class added by JS) */
+  .modal-split.show-chat .modal-right { display:flex; flex-direction:column; }
+  .modal-split.show-chat .modal-left { display:none; }
+
+  /* ── Chat panel: full-width, fixed input ── */
+  .modal-right .chat-panel { flex:1; display:flex; flex-direction:column; height:100%; border:none; border-radius:0; }
+  .modal-right .chat-panel-hd {
+    flex-shrink:0;
+    padding:8px 12px;
+    flex-wrap:wrap;
+    gap:4px;
+  }
+  .modal-right .chat-panel-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:8px 12px;
+    font-size:13px;
+  }
+  .modal-right .chat-msg { margin-bottom:10px; padding:8px 10px; }
+  .modal-right .chat-text { font-size:13px; line-height:1.5; }
+  .modal-right .chat-role { font-size:11px; }
+  /* Reply bar: fixed to bottom of chat panel */
+  .chat-reply-bar {
+    flex-shrink:0;
+    padding:8px 12px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom));
+    background:var(--s2);
+  }
+  .chat-reply-input { font-size:16px !important; padding:10px 12px; min-height:44px; }
+  .chat-reply-btn { min-height:44px; padding:10px 16px; font-size:14px; }
+  /* Tool call details collapsed on mobile (max-height reduction) */
+  .modal-right .chat-tools-detail { max-height:120px; }
+  /* Session copy ID hidden on mobile to reduce clutter */
+  .modal-right .chat-panel-hd .mono-tag { display:none; }
+
+  /* ── Task form: single column, large touch targets ── */
+  .modal-left .modal-body { padding:12px; gap:12px; }
+  #fDesc { min-height:120px !important; font-size:14px !important; }
+  #fTitle { font-size:16px !important; min-height:44px; }
+  .lbl { font-size:12px; }
+  /* Session config: vertical stack */
+  .sc-row { flex-direction:column; align-items:stretch; gap:8px; }
+  .sc-seg { flex-wrap:wrap; justify-content:flex-start; }
+  .sc-sep { display:none; }
+  .sc-btn { min-height:44px; font-size:14px; flex:1; }
+  .sc-grp-lbl { font-size:11px; }
+  .sc-turns { min-height:44px; font-size:16px; width:100%; }
+  /* Status/workflow selectors: full-width, touch-friendly */
+  .sel, .inp { min-height:44px; }
+
+  /* ── Chain Info: vertical steps ── */
+  .chain-steps-list { display:flex; flex-direction:column; gap:8px; }
+  .chain-step-item {
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:10px 12px;
+    background:var(--s2);
+    border-radius:var(--r-sm);
+    border:1px solid var(--border);
+  }
+  .chain-step-indicator {
+    flex-shrink:0;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:var(--s3);
+    border:2px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+  }
+  .chain-step-indicator.current { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chain-step-indicator.done { background:rgba(63,185,80,.2); border-color:var(--green); color:var(--green); }
+  .chain-step-body { flex:1; min-width:0; }
+  .chain-step-title { font-size:13px; font-weight:600; color:var(--text); word-break:break-word; }
+  .chain-step-status { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  /* ── Confirm modal: also full-width ── */
+  #confirmOv .modal { max-width:calc(100vw - 24px) !important; }
+}
+
+/* ─── Mobile CSS: 481–800px (medium: tablet) ─── */
+@media (min-width: 481px) and (max-width: 800px) {
+  /* form grids: 2 columns at tablet */
+  .form-grid-4 { grid-template-columns:1fr 1fr; }
+  .fsel { font-size:14px !important; }
+  .modal-ft .btn { min-height:44px; }
+  /* description textarea slightly smaller */
+  #fDesc { min-height:150px !important; }
+}
 </style>
 </head>
 <body>
@@ -627,7 +853,12 @@ textarea.inp{ resize:vertical; min-height:80px; }
       <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="modal-split">
+    <!-- Mobile tab bar (hidden on desktop via CSS) -->
+    <div class="modal-tab-bar" id="modalTabBar">
+      <button class="modal-tab-btn active" id="tabBtnDetails" onclick="switchModalTab('details')">Details</button>
+      <button class="modal-tab-btn" id="tabBtnChat" onclick="switchModalTab('chat')">Chat</button>
+    </div>
+    <div class="modal-split" id="modalSplit">
       <div class="modal-left">
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-ft" id="modalFt"></div>
@@ -1328,6 +1559,46 @@ function getDragAfter(container,y){
   },{offset:-Infinity,el:null}).el;
 }
 
+// ─── Mobile tab switcher (layout/CSS only — no business logic) ───────────
+function switchModalTab(tab) {
+  const split = $i('modalSplit');
+  const btnDetails = $i('tabBtnDetails');
+  const btnChat = $i('tabBtnChat');
+  if (!split) return;
+  if (tab === 'chat') {
+    split.classList.add('show-chat');
+    if (btnDetails) btnDetails.classList.remove('active');
+    if (btnChat) btnChat.classList.add('active');
+  } else {
+    split.classList.remove('show-chat');
+    if (btnDetails) btnDetails.classList.add('active');
+    if (btnChat) btnChat.classList.remove('active');
+  }
+}
+function resetModalTabs() {
+  const split = $i('modalSplit');
+  const btnDetails = $i('tabBtnDetails');
+  const btnChat = $i('tabBtnChat');
+  if (split) split.classList.remove('show-chat');
+  if (btnDetails) btnDetails.classList.add('active');
+  if (btnChat) btnChat.classList.remove('active');
+}
+function updateModalTabBar(hasChat) {
+  const bar = $i('modalTabBar');
+  const btnChat = $i('tabBtnChat');
+  if (!bar) return;
+  if (hasChat) {
+    // Show tab bar (CSS media query controls whether it renders on desktop)
+    bar.classList.remove('no-chat-tab');
+    if (btnChat) btnChat.style.display = '';
+  } else {
+    // Hide chat tab — only show when task has a session
+    bar.classList.add('no-chat-tab');
+    if (btnChat) btnChat.style.display = 'none';
+  }
+  resetModalTabs();
+}
+
 // ─── Modal: Add ────────────────────────────────────────────────────────────
 function openAddModal(defaultStatus='backlog'){
   if(!curWorkdir){toast(t('toast.no_project'),true);return;}
@@ -1345,6 +1616,7 @@ function openAddModal(defaultStatus='backlog'){
   if(modal) { modal.classList.remove('has-chat'); modal.classList.add('no-chat'); }
   $i('chatContainer').innerHTML = '';
   if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
+  updateModalTabBar(false);
   setTimeout(()=>{$i('fTitle')?.focus();renderNotesTags('','');},60);
 }
 
@@ -1375,17 +1647,20 @@ async function openEditModal(id){
       modalChat.style.display = '';
       modal.classList.add('has-chat');
       modal.classList.remove('no-chat');
+      updateModalTabBar(true);
     }catch{
       chatContainer.innerHTML = '';
       modalChat.style.display = 'none';
       modal.classList.remove('has-chat');
       modal.classList.add('no-chat');
+      updateModalTabBar(false);
     }
   } else {
     chatContainer.innerHTML = '';
     modalChat.style.display = 'none';
     modal.classList.remove('has-chat');
     modal.classList.add('no-chat');
+    updateModalTabBar(false);
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
   // ── WebSocket streaming for live task output ──
@@ -1513,11 +1788,11 @@ function buildForm(tk={}){
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()" style="font-size:12px">${statusOpts}</select></div>
-      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()" style="font-size:12px">${sessOpts}</select></div>
+    <div class="form-grid-4">
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel fsel" onchange="onFStatusChange()">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel fsel" onchange="onFSessionChange()">${sessOpts}</select></div>
       <div><label class="lbl">BMAD Workflow</label>
-        <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)" style="font-size:12px">
+        <select id="fWorkflow" class="sel fsel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
           <option value=""${wfVal===''?' selected':''}>None</option>
           <optgroup label="Analysis">
             <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
@@ -1571,7 +1846,7 @@ function buildForm(tk={}){
         </select>
       </div>
       <div><label class="lbl">🔗 Run After</label>
-        <select id="fAfter" class="sel" style="font-size:12px">
+        <select id="fAfter" class="sel fsel">
           <option value="">None</option>
           ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
             .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
@@ -1622,14 +1897,14 @@ function buildForm(tk={}){
         </button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="form-grid-2">
       <div><label class="lbl">Notes & Tags</label>
         <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
-        <textarea id="fNotes" class="inp" rows="2" style="font-size:12px" placeholder="Additional context…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
+        <textarea id="fNotes" class="inp fnotes" rows="2" placeholder="Additional context…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
       </div>
       <div><label class="lbl">${t('modal.attach')}</label>
         <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
-        <div class="att-dropzone" style="padding:8px;font-size:12px" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
+        <div class="att-dropzone att-dropzone-form" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
         <div class="att-previews" id="attPreviews"></div>
       </div>
     </div>`;
