@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Kanban — Claude Code Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,6 +60,11 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .nav-sw-btn{ display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:6px; font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; transition:all .15s; white-space:nowrap; }
 .nav-sw-btn:hover{ color:var(--text); background:rgba(255,255,255,.05); }
 .nav-sw-btn.active{ background:var(--s2); color:var(--accent2); box-shadow:0 1px 3px rgba(0,0,0,.3); }
+
+/* ─── Hamburger button (mobile only) ─── */
+.hdr-hamburger{ display:none; background:var(--s2); border:1px solid var(--border); color:var(--muted); padding:5px 9px; border-radius:7px; cursor:pointer; font-size:18px; min-height:44px; min-width:44px; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; line-height:1; }
+.hdr-hamburger:hover{ color:var(--text); border-color:var(--accent2); background:var(--s3); }
+.hdr-hamburger:active{ transform:scale(0.95); }
 
 /* ─── Project dropdown in header ─── */
 .proj-dd-wrap { position: relative; display: none; }
@@ -135,7 +140,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-panel-title { font-size:15px; font-weight:700; color:var(--fg); }
 .docs-panel-body { display:flex; flex:1; overflow:hidden; }
 .docs-sidebar { width:280px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
-.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); word-wrap:break-word; overflow-wrap:break-word; }
 .docs-content h1,.docs-content h2,.docs-content h3 { color:var(--fg); margin:1em 0 .5em; }
 .docs-content h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:6px; }
 .docs-content h2 { font-size:16px; }
@@ -444,7 +449,12 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .hdr-l { gap: 6px; flex-wrap: wrap; }
   .hb span { display: none; }
   .hb { padding: 5px 8px; min-height: 44px; min-width: 44px; justify-content: center; }
-  .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
+  /* Hamburger: visible on mobile */
+  .hdr-hamburger { display: inline-flex; }
+  /* Nav tabs: horizontally scrollable, equal spacing */
+  .nav-sw { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .nav-sw::-webkit-scrollbar { display: none; }
+  .nav-sw-btn { flex: 1; justify-content: center; padding: 4px 8px; font-size: 12px; min-width: 60px; }
   .nav-sw-btn span { display: none; }
   .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; min-height: 44px; }
   .board { padding: 10px 8px 16px; gap: 8px; }
@@ -477,15 +487,18 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .att-chip button { padding: 6px; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
 
   /* ─── Task Cards: readable body text, min touch area ─── */
-  .card { cursor: pointer; min-height: 44px; padding: 12px 13px; }
-  .card-title { font-size: 14px; }
+  .card { cursor: pointer; min-height: 48px; padding: 12px 13px; }
+  /* Title: 2-line max with ellipsis */
+  .card-title { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .card-desc { font-size: 13px; -webkit-line-clamp: 3; }
   .card-foot { gap: 6px; row-gap: 6px; }
   .card-foot .badge { font-size: 12px; padding: 3px 8px; }
   .activity-badge { font-size: 12px; padding: 3px 8px; }
-  /* Ensure activity badge is always visible (not clipped by flex overflow) */
+  /* Ensure activity badge and all badges wrap to next line if needed */
   .card-foot { flex-wrap: wrap; align-items: center; }
   .card-time { font-size: 12px; }
+  /* Ensure gap between interactive elements */
+  .card-foot > * { margin-bottom: 2px; }
 
   /* ─── Docs panel: touch-friendly file list & close button ─── */
   .docs-file { padding: 10px 12px 10px 24px; min-height: 44px; display: flex; align-items: center; }
@@ -523,6 +536,30 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
   /* ─── No horizontal overflow ─── */
   html, body { max-width: 100vw; overflow-x: hidden; }
+
+  /* ─── Caption font sizes: min 12px on mobile ─── */
+  .badge { font-size: 12px; }
+  .activity-badge { font-size: 12px; }
+  .col-cnt { font-size: 12px; }
+  .kb-stat-lbl { font-size: 12px; }
+  .card-time { font-size: 12px; }
+  .chat-ts { font-size: 11px; }
+
+  /* ─── Spacing between interactive elements: min 8px ─── */
+  .hdr-btns { gap: 8px; }
+  .card-foot { gap: 8px; row-gap: 8px; }
+  .card-foot > * { margin-bottom: 0; }
+  .hdr-l { gap: 8px; }
+}
+
+/* ─── Mobile: <768px — project selector full-width, header row 2 ─── */
+@media (max-width: 767px) {
+  /* Project selector: full-width row below logo+nav on phones/tablets */
+  .hdr-meta { display: flex; width: 100%; order: 3; }
+  .proj-dd-wrap { display: inline-block !important; flex: 1; }
+  .proj-dd-btn { max-width: 100%; width: 100%; }
+  /* Project dropdown menu: full-width */
+  .proj-dd-menu { min-width: unset; width: calc(100vw - 24px); left: 0; max-width: none; }
 }
 
 @media (max-width: 480px) {
@@ -1209,6 +1246,10 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <!-- Header -->
 <div class="hdr">
   <div class="hdr-l">
+    <!-- Hamburger: mobile sidebar toggle (shown on mobile, hides on desktop) -->
+    <button class="hdr-hamburger" id="hdrHamburger" onclick="toggleKbSidebar()" title="Projects & Settings" aria-label="Toggle sidebar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="logo" onclick="toggleKbSidebar()" style="cursor:pointer" title="Projects & Settings">CCS</div>
     <nav class="nav-sw" aria-label="Навігація між розділами">
       <a class="nav-sw-btn" href="/chat" data-tip="Chat">
@@ -2652,6 +2693,36 @@ function toggleKbSidebar() {
     if (overlay) overlay.classList.remove('visible');
   }
 }
+
+// ─── Swipe-left to close sidebar ─────────────────────────────────────────────
+(function initSidebarSwipe() {
+  let _swipeStartX = null, _swipeStartY = null;
+  const SWIPE_THRESHOLD = 50; // px leftward swipe to dismiss
+  const SWIPE_MAX_Y = 80;     // max vertical drift to count as horizontal swipe
+
+  document.addEventListener('touchstart', function(e) {
+    const sidebar = $i('kbSidebar');
+    if (!sidebar || sidebar.classList.contains('collapsed')) return;
+    const touch = e.touches[0];
+    _swipeStartX = touch.clientX;
+    _swipeStartY = touch.clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if (_swipeStartX === null) return;
+    const sidebar = $i('kbSidebar');
+    if (!sidebar || sidebar.classList.contains('collapsed')) { _swipeStartX = null; return; }
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - _swipeStartX;
+    const dy = Math.abs(touch.clientY - _swipeStartY);
+    _swipeStartX = null;
+    _swipeStartY = null;
+    // Swipe left (negative dx) by threshold, with limited vertical drift
+    if (dx < -SWIPE_THRESHOLD && dy < SWIPE_MAX_Y) {
+      if (_kbSidebarOpen) toggleKbSidebar();
+    }
+  }, { passive: true });
+})();
 
 async function renderKbSidebar() {
   const body = $i('kbSidebarBody');
