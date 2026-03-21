@@ -611,15 +611,19 @@ textarea.inp{ resize:vertical; min-height:80px; }
   /* ─── Docs Panel: full-screen slide-out, stacked layout on mobile ─── */
   /* Panel header: prominent close button */
   .docs-panel-hd {
-    padding: 12px 12px 12px 16px;
-    min-height: 56px;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .docs-panel-hd > div { gap: 6px; flex-wrap: wrap; }
-  #docsNewBtn {
+    padding: 8px 12px;
     min-height: 44px;
-    padding: 8px 14px;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .docs-panel-hd > div { gap: 6px; flex-wrap: nowrap; }
+  .docs-panel-title { font-size: 14px; }
+  /* Show files toggle on mobile */
+  #docsToggleFiles { display: inline-flex !important; }
+  /* Compact buttons on mobile */
+  #docsNewBtn {
+    min-height: 36px;
+    padding: 4px 10px;
     font-size: 13px;
     font-weight: 700;
   }
@@ -644,15 +648,22 @@ textarea.inp{ resize:vertical; min-height:80px; }
     flex-direction: column;
     overflow: hidden;
   }
-  /* Sidebar: compact horizontal scroll list on mobile */
+  /* Sidebar: collapsible on mobile — hidden when a doc is being viewed */
   .docs-sidebar {
     width: 100%;
-    max-height: 220px;
+    max-height: 180px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     flex-shrink: 0;
+    transition: max-height 0.2s ease, padding 0.2s ease;
+  }
+  .docs-sidebar.collapsed {
+    max-height: 0;
+    padding: 0;
+    border-bottom: none;
+    overflow: hidden;
   }
   /* Doc content: takes remaining space */
   .docs-content {
@@ -3000,6 +3011,14 @@ async function loadDoc(filePath, el) {
   document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
   
+  // Auto-collapse sidebar on mobile when a doc is selected
+  if (window.innerWidth < 768) {
+    const sidebar = $i('docsSidebar');
+    if (sidebar) sidebar.classList.add('collapsed');
+    const toggleBtn = $i('docsToggleFiles');
+    if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+  }
+  
   const content = $i('docsContent');
   content.innerHTML = '<div class="docs-empty">Loading…</div>';
   try {
@@ -3108,6 +3127,23 @@ function newDocument() {
 
 // ─── Document Upload ──────────────────────────────────────────────────────
 let _uploadTargetFolder = 'docs'; // default upload target
+function toggleDocsSidebar() {
+  const sidebar = $i('docsSidebar');
+  if (!sidebar) return;
+  sidebar.classList.toggle('collapsed');
+}
+
+// Show/hide files toggle button based on viewport
+window.addEventListener('resize', () => {
+  const toggleBtn = $i('docsToggleFiles');
+  if (!toggleBtn) return;
+  if (window.innerWidth >= 768) {
+    toggleBtn.style.display = 'none';
+    const sidebar = $i('docsSidebar');
+    if (sidebar) sidebar.classList.remove('collapsed');
+  }
+});
+
 function uploadDocTrigger() {
   // Show upload modal with folder selection
   let modal = $i('uploadFolderModal');
@@ -3482,6 +3518,7 @@ async function doSprintSync() {
   <div class="docs-panel-hd">
     <span class="docs-panel-title">📄 BMAD Documents</span>
     <div style="display:flex;gap:8px;align-items:center">
+      <button id="docsToggleFiles" onclick="toggleDocsSidebar()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none">📁 Files</button>
       <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
       <input type="file" id="docUploadInput" multiple accept=".md,.yaml,.yml,.json,.txt,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleDocUpload(this)">
       <button onclick="uploadDocTrigger()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📤 Upload</button>
