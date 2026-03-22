@@ -67,6 +67,34 @@ const BMAD_WORKFLOWS = {
     model: 'opus',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the research workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/research/\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain research, market research, and technical research. Save findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
   },
+  'domain-research': {
+    label: '🌐 Domain Research',
+    agent: 'analyst',
+    skills: ['bmad-domain-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-domain-research skill from ${workdir}/_bmad/core/skills/bmad-domain-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research.md`
+  },
+  'market-research': {
+    label: '📊 Market Research',
+    agent: 'analyst',
+    skills: ['bmad-market-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-market-research skill from ${workdir}/_bmad/core/skills/bmad-market-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research.md`
+  },
+  'technical-research': {
+    label: '🔭 Technical Research',
+    agent: 'analyst',
+    skills: ['bmad-technical-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-technical-research skill from ${workdir}/_bmad/core/skills/bmad-technical-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research.md`
+  },
+  'product-brief-preview': {
+    label: '📄 Product Brief (Preview)',
+    agent: 'analyst',
+    skills: ['bmad-product-brief-preview'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-product-brief-preview skill from ${workdir}/.claude/skills/bmad-product-brief-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate or update the product brief through guided discovery. Save output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+  },
   planning: {
     label: '📋 Planning → PRD',
     agent: 'product-manager',
@@ -130,6 +158,22 @@ const BMAD_WORKFLOWS = {
     model: 'sonnet',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
+  },
+  'quick-dev-new-preview': {
+    label: '🚀 Quick Dev (New Preview)',
+    agent: 'developer',
+    skills: ['bmad-quick-dev-new-preview'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read the bmad-quick-dev-new-preview skill from ${workdir}/.claude/skills/bmad-quick-dev-new-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the user request using the new preview quick-dev workflow. Read the task description for the requirement.`
+  },
+  'quick-flow-solo-dev': {
+    label: '🎯 Quick Flow Solo Dev',
+    agent: 'developer',
+    skills: ['bmad-quick-flow-solo-dev'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/quick-flow-solo-dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
   },
   'generate-context': {
     label: '📑 Generate Project Context',
@@ -881,10 +925,13 @@ async function startTask(task) {
         const wfType = task._bmadWorkflowType || '';
         const WORKFLOW_TO_PHASE = {
           'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
+          'domain-research': 'bmad_brainstorm', 'market-research': 'bmad_brainstorm', 'technical-research': 'bmad_brainstorm',
+          'product-brief-preview': 'bmad_brainstorm',
           'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
           'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
           'sprint-planning': 'bmad_implementation', 'create-story': 'bmad_implementation',
           'dev-story': 'bmad_implementation', 'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
+          'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
           'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',

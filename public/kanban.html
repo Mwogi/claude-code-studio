@@ -2284,7 +2284,11 @@ function buildForm(tk={}){
           <option value=""${wfVal===''?' selected':''}>None</option>
           <optgroup label="Analysis">
             <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
+            <option value="product-brief-preview"${wfVal==='product-brief-preview'?' selected':''}>📄 Product Brief (Preview)</option>
             <option value="research"${wfVal==='research'?' selected':''}>🔬 Research</option>
+            <option value="domain-research"${wfVal==='domain-research'?' selected':''}>🌐 Domain Research</option>
+            <option value="market-research"${wfVal==='market-research'?' selected':''}>📊 Market Research</option>
+            <option value="technical-research"${wfVal==='technical-research'?' selected':''}>🔭 Technical Research</option>
           </optgroup>
           <optgroup label="Planning">
             <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
@@ -2306,6 +2310,8 @@ function buildForm(tk={}){
             <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
             <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
             <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
+            <option value="quick-dev-new-preview"${wfVal==='quick-dev-new-preview'?' selected':''}>🚀 Quick Dev (New Preview)</option>
+            <option value="quick-flow-solo-dev"${wfVal==='quick-flow-solo-dev'?' selected':''}>🎯 Quick Flow Solo Dev</option>
           </optgroup>
           <optgroup label="Tools">
             <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
