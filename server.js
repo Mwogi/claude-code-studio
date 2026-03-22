@@ -3729,7 +3729,7 @@ app.get('/shared/:token', (req, res) => {
   const now = new Date().toISOString();
   const share = db.prepare(`SELECT * FROM shared_docs WHERE id=? AND (expires_at IS NULL OR expires_at > ?)`).get(token, now);
   if (!share) return res.status(404).send(sharedDoc404());
-  const filePath = share.file_path;
+  const filePath = path.resolve(share.project_id || '', share.file_path);
   if (!fs.existsSync(filePath)) return res.status(404).send(sharedDoc404());
   try {
     const ext = path.extname(filePath).toLowerCase();
@@ -4811,12 +4811,13 @@ app.get('/api/bmad/doc/download', (req, res) => {
 app.post('/api/docs/share', express.json(), (req, res) => {
   const { projectId, filePath, expiresIn } = req.body;
   if (!projectId || !filePath) return res.status(400).json({ error: 'projectId and filePath required' });
-  // Security: only allow sharing files accessible via /api/bmad/doc
-  const normalized = path.resolve(filePath);
-  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/')) {
-    return res.status(403).json({ error: 'Access denied — only BMAD output files can be shared' });
+  // Resolve file path relative to project workdir
+  const fullPath = path.resolve(projectId, filePath);
+  // Security: must be within the project workdir
+  if (!fullPath.startsWith(path.resolve(projectId))) {
+    return res.status(403).json({ error: 'Access denied — path traversal detected' });
   }
-  if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
+  if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'File not found' });
   // Check if a share already exists for this file+project (reuse/update it)
   const existing = db.prepare('SELECT * FROM shared_docs WHERE project_id=? AND file_path=?').get(projectId, filePath);
   let expiresAt = null;
