@@ -1327,7 +1327,7 @@ function scheduleNextRun(task) {
   const newId = genId();
   const _tn = stmts.nextTaskNumber.get(task.workdir || '').next_num;
   stmts.createTask.run(
-    newId, task.title, task.description || '', task.notes || '', 'todo', task.sort_order || 0,
+    newId, task.title, task.description || '', task.notes || '', task.status || 'bmad_workflow', task.sort_order || 0,
     task.session_id || null, task.workdir || null, task.model || 'sonnet',
     task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
     null, null, null, null,
