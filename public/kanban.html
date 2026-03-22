@@ -176,6 +176,11 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
 .docs-file-meta { font-size:9px; color:var(--muted); margin-top:1px; }
 .docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
+.docs-share-btn { background:none; border:none; cursor:pointer; font-size:12px; padding:2px 4px; opacity:0; transition:opacity .15s; border-radius:4px; flex-shrink:0; }
+.docs-file:hover .docs-share-btn { opacity:1; }
+.docs-file.active .docs-share-btn { opacity:0.7; color:#fff; }
+.docs-file.active .docs-share-btn:hover { opacity:1; }
+.doc-share-indicator { font-size:10px; vertical-align:middle; margin-left:3px; }
 .docs-search { padding:6px 8px; margin:0 8px 6px; border:1px solid var(--border); border-radius:6px; background:var(--s2); color:var(--fg); font-size:12px; width:calc(100% - 16px); outline:none; }
 .docs-search:focus { border-color:var(--accent); }
 .docs-search::placeholder { color:var(--muted); }
@@ -2862,6 +2867,7 @@ function toggleSidebarProj(el, workdir) {
 // ─── BMAD Docs Panel ──────────────────────────────────────────────────────
 let _docsOpen = false;
 let _docsCache = null;
+let _docsShares = [];
 
 function toggleDocsPanel() {
   const panel = $i('docsPanel');
@@ -2877,9 +2883,15 @@ function toggleDocsPanel() {
 async function loadDocsList() {
   if (!curWorkdir) return;
   try {
-    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
-    const d = await r.json();
+    const [docsR, sharesR] = await Promise.all([
+      apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`),
+      apiFetch(`/api/docs/shares?projectId=${encodeURIComponent(curWorkdir)}`).catch(() => null)
+    ]);
+    const d = await docsR.json();
     _docsCache = d.docs;
+    if (sharesR && sharesR.ok) {
+      _docsShares = await sharesR.json();
+    }
     renderDocsSidebar(d.docs);
     // Also show/hide the docs button
     $i('bmadDocsBtn').style.display = (d.docs.length || d.hasBmad) ? '' : 'none';
@@ -2933,12 +2945,15 @@ function renderDocsSidebar(docs) {
 
   function fileRow(f) {
     const size = f.size < 1024 ? f.size + 'B' : f.size < 1048576 ? Math.round(f.size / 1024) + 'KB' : (f.size / 1048576).toFixed(1) + 'MB';
-    return `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
+    const isShared = _docsShares.some(s => s.file_path === f.path);
+    const shareIndicator = isShared ? ' <span class="doc-share-indicator" title="Shared">🔗</span>' : '';
+    return `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}" data-filepath="${escH(f.path)}">
       <span class="docs-file-icon">${fileIcon(f.name)}</span>
       <div class="docs-file-info">
-        <div class="docs-file-name">${escH(f.name)}</div>
+        <div class="docs-file-name">${escH(f.name)}${shareIndicator}</div>
         <div class="docs-file-meta">${size}</div>
       </div>
+      <button class="docs-share-btn" onclick="event.stopPropagation();openShareModal('${escH(f.path)}')" title="Share document">🔗</button>
     </div>`;
   }
 
@@ -3005,6 +3020,116 @@ function filterDocs(query) {
   }
 }
 
+// ─── Document Sharing UI ─────────────────────────────────────────────────────
+async function openShareModal(filePath) {
+  if (!curWorkdir) { toast('No project selected', true); return; }
+  // Check if already shared
+  const existing = _docsShares.find(s => s.file_path === filePath);
+  const name = filePath.split('/').pop();
+  let modal = document.getElementById('shareDocModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'shareDocModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.6);z-index:4000;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;color:var(--fg);font-size:15px">🔗 Share Document</h3>
+        <button onclick="document.getElementById('shareDocModal').remove()" style="background:none;border:none;color:var(--fg2);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px">×</button>
+      </div>
+      <p style="color:var(--fg2);font-size:13px;margin:0 0 16px">${escH(name)}</p>
+      ${existing ? `
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Share URL</label>
+        <div style="display:flex;gap:6px">
+          <input id="shareUrlInput" type="text" value="${escH(existing.url)}" readonly style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:12px;font-family:monospace;cursor:text" onclick="this.select()">
+          <button onclick="copyShareUrl()" style="background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">📋 Copy</button>
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Update Expiry</label>
+        <select id="shareExpiry" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:13px;width:100%">
+          <option value="">Never</option>
+          <option value="1">1 hour</option>
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="updateShare('${escH(filePath)}')" style="flex:1;background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 Update Link</button>
+        <button onclick="revokeShare('${escH(existing.id)}','${escH(filePath)}')" style="flex:1;background:none;color:var(--red);border:1px solid var(--red);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🗑️ Revoke</button>
+      </div>
+      ` : `
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Expiry</label>
+        <select id="shareExpiry" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:13px;width:100%">
+          <option value="">Never</option>
+          <option value="1">1 hour</option>
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+      </div>
+      <button onclick="createShare('${escH(filePath)}')" style="width:100%;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔗 Create Share Link</button>
+      `}
+    </div>`;
+  modal.style.display = 'flex';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
+async function createShare(filePath) {
+  const expiresIn = $i('shareExpiry')?.value || '';
+  try {
+    const r = await apiFetch('/api/docs/share', { method:'POST', body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.file_path !== filePath);
+    _docsShares.push({ id: d.token, project_id: curWorkdir, file_path: filePath, url: d.url, expires_at: d.expires_at });
+    renderDocsSidebar(_docsCache || []);
+    await openShareModal(filePath);
+    toast('Share link created!');
+  } catch (e) { toast('Failed to create share link', true); }
+}
+
+async function updateShare(filePath) {
+  const expiresIn = $i('shareExpiry')?.value || '';
+  try {
+    const r = await apiFetch('/api/docs/share', { method:'POST', body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.file_path !== filePath);
+    _docsShares.push({ id: d.token, project_id: curWorkdir, file_path: filePath, url: d.url, expires_at: d.expires_at });
+    renderDocsSidebar(_docsCache || []);
+    await openShareModal(filePath);
+    toast('Share link updated!');
+  } catch (e) { toast('Failed to update share link', true); }
+}
+
+async function revokeShare(token, filePath) {
+  try {
+    const r = await apiFetch(`/api/docs/share/${token}`, { method:'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.id !== token);
+    renderDocsSidebar(_docsCache || []);
+    document.getElementById('shareDocModal')?.remove();
+    toast('Share link revoked');
+  } catch (e) { toast('Failed to revoke share link', true); }
+}
+
+function copyShareUrl() {
+  const inp = $i('shareUrlInput');
+  if (!inp) return;
+  inp.select();
+  navigator.clipboard.writeText(inp.value).then(() => toast('URL copied!')).catch(() => {
+    document.execCommand('copy');
+    toast('URL copied!');
+  });
+}
+
 async function loadDoc(filePath, el) {
   _editingDocPath = filePath;
   // Highlight active
@@ -3031,6 +3156,7 @@ async function loadDoc(filePath, el) {
       <div style="display:flex;gap:6px">
         <button onclick="downloadDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⬇️ Download</button>
         ${d.isImage || d.isBinary ? '' : `<button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>`}
+        <button onclick="openShareModal('${escH(filePath)}')" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🔗 Share</button>
         <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
       </div>
     </div>`;

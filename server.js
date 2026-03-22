@@ -634,6 +634,18 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`)
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_workdir TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'web'`); } catch(e) {}
+// Shared docs: public read-only document links
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shared_docs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT,
+    created_by TEXT DEFAULT 'user'
+  );
+  CREATE INDEX IF NOT EXISTS idx_shared_docs_project ON shared_docs(project_id);
+`);
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -1632,8 +1644,8 @@ setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
 // Reset them to 'todo' so processQueue picks them up again.
 (function recoverOrphanedTasks() {
   const orphaned = db.prepare(`
-    SELECT id, title, status FROM tasks 
-    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','bmad_workflow')
+    SELECT id, title, status, session_id FROM tasks 
+    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
     AND status != 'awaiting_input'
   `).all();
   if (orphaned.length) {
@@ -3238,6 +3250,215 @@ app.post('/api/internal/set-ui-state', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Public shared document page — NO AUTH ───────────────────────────────────
+// Must be registered BEFORE auth middleware so it's accessible without login.
+app.get('/shared/:token', (req, res) => {
+  const { token } = req.params;
+  if (!/^[a-f0-9]{32}$/i.test(token)) {
+    return res.status(404).send(sharedDoc404());
+  }
+  const now = new Date().toISOString();
+  const share = db.prepare(`SELECT * FROM shared_docs WHERE id=? AND (expires_at IS NULL OR expires_at > ?)`).get(token, now);
+  if (!share) return res.status(404).send(sharedDoc404());
+  const filePath = share.file_path;
+  if (!fs.existsSync(filePath)) return res.status(404).send(sharedDoc404());
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const name = path.basename(filePath);
+    const stat = fs.statSync(filePath);
+    const modified = stat.mtime;
+    const projectName = path.basename(share.project_id || '');
+    let content = '';
+    let isText = true;
+    if (['.png','.jpg','.jpeg','.gif','.svg','.webp','.bmp'].includes(ext)) {
+      isText = false;
+      const buf = fs.readFileSync(filePath);
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp', '.bmp':'image/bmp' }[ext] || 'image/octet-stream';
+      content = `<img src="data:${mime};base64,${buf.toString('base64')}" alt="${escHtml(name)}" style="max-width:100%;border-radius:8px">`;
+    } else if (['.pdf','.doc','.docx','.xls','.xlsx'].includes(ext)) {
+      isText = false;
+      content = `<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">📄</div><div style="font-size:18px;font-weight:600;margin-bottom:8px">${escHtml(name)}</div><p style="color:#94a3b8">Binary file — download not available on shared view.</p></div>`;
+    } else {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      if (ext === '.md') {
+        content = `<div class="md-rendered">${sharedRenderMarkdown(raw)}</div>`;
+      } else if (ext === '.yaml' || ext === '.yml') {
+        content = `<pre class="code-block language-yaml">${escHtml(raw)}</pre>`;
+      } else if (ext === '.json') {
+        let pretty = raw;
+        try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch {}
+        content = `<pre class="code-block language-json">${escHtml(pretty)}</pre>`;
+      } else {
+        content = `<pre class="code-block">${escHtml(raw)}</pre>`;
+      }
+    }
+    const modStr = modified.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    const expiryStr = share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString('en-US')}` : '';
+    res.send(sharedDocPage({ name, projectName, modStr, expiryStr, content, token }));
+  } catch (e) {
+    res.status(500).send(sharedDoc404('Error loading document'));
+  }
+});
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function sharedRenderMarkdown(md) {
+  let html = escHtml(md);
+  // Fenced code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const cls = lang ? ` class="language-${lang}"` : '';
+    return `<pre class="code-block"><code${cls}>${code}</code></pre>`;
+  });
+  // Inline code
+  html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
+  // Headers
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold/italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // HR
+  html = html.replace(/^---$/gm, '<hr>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?=<li>)|$)/g, '$1$2');
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Tables
+  html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+    const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // Paragraphs
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  html = html.replace(/([^>])\n([^<])/g, '$1<br>$2');
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  return html;
+}
+
+function sharedDocPage({ name, projectName, modStr, expiryStr, content, token }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(name)} — Claude Code Studio</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--s1:#1a1d27;--s2:#21263a;--s3:#2a2f45;
+  --fg:#e2e8f0;--fg2:#94a3b8;--border:#2d3748;
+  --accent:#6366f1;--green:#22c55e;--red:#ef4444;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','Fira Code','Consolas',monospace;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+header{background:var(--s1);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10}
+.header-left{display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:8px;color:var(--fg2);font-size:13px}
+.brand-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.doc-title{font-size:18px;font-weight:700;color:var(--fg)}
+.doc-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.meta-chip{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--fg2);background:var(--s2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)}
+main{flex:1;max-width:860px;width:100%;margin:0 auto;padding:32px 24px}
+footer{background:var(--s1);border-top:1px solid var(--border);padding:16px 24px;text-align:center;font-size:12px;color:var(--fg2)}
+footer a{color:var(--fg2)}footer a:hover{color:var(--accent)}
+/* Markdown rendered */
+.md-rendered h1,.md-rendered h2,.md-rendered h3,.md-rendered h4{color:var(--fg);font-weight:700;margin:1.5em 0 .6em}
+.md-rendered h1{font-size:1.9em;border-bottom:1px solid var(--border);padding-bottom:.4em}
+.md-rendered h2{font-size:1.45em;border-bottom:1px solid var(--border);padding-bottom:.3em}
+.md-rendered h3{font-size:1.2em}
+.md-rendered p{margin:.8em 0;color:var(--fg)}
+.md-rendered ul,.md-rendered ol{margin:.8em 0 .8em 1.6em}
+.md-rendered li{margin:.3em 0}
+.md-rendered blockquote{border-left:3px solid var(--accent);margin:1em 0;padding:.5em 1em;background:var(--s2);border-radius:0 6px 6px 0;color:var(--fg2)}
+.md-rendered hr{border:none;border-top:1px solid var(--border);margin:1.5em 0}
+.md-rendered strong{color:var(--fg);font-weight:600}
+.md-rendered em{font-style:italic}
+.md-rendered a{color:var(--accent)}
+.md-rendered table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px}
+.md-rendered th{background:var(--s3);color:var(--fg);text-align:left;padding:8px 12px;border:1px solid var(--border);font-weight:600}
+.md-rendered td{padding:7px 12px;border:1px solid var(--border);color:var(--fg)}
+.md-rendered tr:nth-child(even) td{background:var(--s2)}
+/* Code */
+.code-block{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;color:#e2e8f0;white-space:pre}
+.md-rendered pre.code-block{margin:1em 0}
+.inline-code{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:0.9em;color:#fbbf24}
+@media(max-width:600px){
+  header{padding:12px 16px}
+  .doc-title{font-size:15px}
+  main{padding:20px 16px}
+  .doc-meta{gap:8px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="brand"><div class="brand-dot"></div>Claude Code Studio</div>
+    <div class="doc-title">📄 ${escHtml(name)}</div>
+  </div>
+  <div class="doc-meta">
+    ${projectName ? `<span class="meta-chip">📁 ${escHtml(projectName)}</span>` : ''}
+    <span class="meta-chip">🗓 ${escHtml(modStr)}</span>
+    ${expiryStr ? `<span class="meta-chip">⏳ ${escHtml(expiryStr)}</span>` : ''}
+    <span class="meta-chip" style="color:#94a3b8">🔒 Read-only</span>
+  </div>
+</header>
+<main>
+${content}
+</main>
+<footer>
+  Shared via <a href="/" target="_blank">Claude Code Studio</a> &nbsp;·&nbsp; Read-only view
+</footer>
+</body>
+</html>`;
+}
+
+function sharedDoc404(msg) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Document Not Found — Claude Code Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e2e8f0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.box{max-width:420px;padding:40px 32px}
+.icon{font-size:64px;margin-bottom:20px}
+h1{font-size:24px;font-weight:700;margin-bottom:8px}
+p{color:#94a3b8;font-size:15px;margin-bottom:24px}
+a{color:#6366f1;text-decoration:none;font-size:14px}a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">🔗</div>
+  <h1>${msg || 'Document Not Found'}</h1>
+  <p>This share link is invalid, has expired, or the document was revoked.</p>
+  <a href="/">← Back to Claude Code Studio</a>
+</div>
+</body>
+</html>`;
+}
+
 app.use(auth.authMiddleware);
 
 // Prevent browser caching for all API responses.
@@ -4077,6 +4298,54 @@ app.get('/api/bmad/doc/download', (req, res) => {
   if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
   const filename = path.basename(normalized);
   res.download(normalized, filename);
+});
+
+// ─── Document Sharing ────────────────────────────────────────────────────────
+
+// POST /api/docs/share — create a share link for a document
+app.post('/api/docs/share', express.json(), (req, res) => {
+  const { projectId, filePath, expiresIn } = req.body;
+  if (!projectId || !filePath) return res.status(400).json({ error: 'projectId and filePath required' });
+  // Security: only allow sharing files accessible via /api/bmad/doc
+  const normalized = path.resolve(filePath);
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/')) {
+    return res.status(403).json({ error: 'Access denied — only BMAD output files can be shared' });
+  }
+  if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
+  // Check if a share already exists for this file+project (reuse/update it)
+  const existing = db.prepare('SELECT * FROM shared_docs WHERE project_id=? AND file_path=?').get(projectId, filePath);
+  let expiresAt = null;
+  if (expiresIn) expiresAt = new Date(Date.now() + expiresIn * 3600 * 1000).toISOString();
+  if (existing) {
+    db.prepare('UPDATE shared_docs SET expires_at=? WHERE id=?').run(expiresAt, existing.id);
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return res.json({ url: `${proto}://${host}/shared/${existing.id}`, token: existing.id, expires_at: expiresAt });
+  }
+  const token = crypto.randomBytes(16).toString('hex');
+  db.prepare('INSERT INTO shared_docs (id, project_id, file_path, expires_at, created_by) VALUES (?,?,?,?,?)').run(token, projectId, filePath, expiresAt, 'user');
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  res.json({ url: `${proto}://${host}/shared/${token}`, token, expires_at: expiresAt });
+});
+
+// DELETE /api/docs/share/:token — revoke a share link
+app.delete('/api/docs/share/:token', (req, res) => {
+  const { token } = req.params;
+  const result = db.prepare('DELETE FROM shared_docs WHERE id=?').run(token);
+  if (result.changes === 0) return res.status(404).json({ error: 'Share not found' });
+  res.json({ ok: true });
+});
+
+// GET /api/docs/shares?projectId=X — list active shares for a project
+app.get('/api/docs/shares', (req, res) => {
+  const { projectId } = req.query;
+  if (!projectId) return res.status(400).json({ error: 'projectId required' });
+  const now = new Date().toISOString();
+  const shares = db.prepare(`SELECT * FROM shared_docs WHERE project_id=? AND (expires_at IS NULL OR expires_at > ?)`).all(projectId, now);
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  res.json(shares.map(s => ({ ...s, url: `${proto}://${host}/shared/${s.id}` })));
 });
 
 // GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
