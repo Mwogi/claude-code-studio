@@ -3294,7 +3294,8 @@ app.get('/shared/:token', (req, res) => {
     }
     const modStr = modified.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
     const expiryStr = share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString('en-US')}` : '';
-    res.send(sharedDocPage({ name, projectName, modStr, expiryStr, content, token }));
+    const sharedAtStr = new Date(share.created_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    res.send(sharedDocPage({ name, projectName, modStr, expiryStr, content, token, sharedAtStr }));
   } catch (e) {
     res.status(500).send(sharedDoc404('Error loading document'));
   }
@@ -3351,7 +3352,7 @@ function sharedRenderMarkdown(md) {
   return html;
 }
 
-function sharedDocPage({ name, projectName, modStr, expiryStr, content, token }) {
+function sharedDocPage({ name, projectName, modStr, expiryStr, content, token, sharedAtStr }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3425,7 +3426,7 @@ footer a{color:var(--fg2)}footer a:hover{color:var(--accent)}
 ${content}
 </main>
 <footer>
-  Shared via <a href="/" target="_blank">Claude Code Studio</a> &nbsp;·&nbsp; Read-only view
+  Shared via <a href="/" target="_blank">Claude Code Studio</a> &nbsp;·&nbsp; Read-only view${sharedAtStr ? ` &nbsp;·&nbsp; Shared ${escHtml(sharedAtStr)}` : ''}
 </footer>
 </body>
 </html>`;
