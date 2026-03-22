@@ -1540,15 +1540,40 @@ async function startTask(task) {
           const hitContinueLimit = taskContinueCount >= MAX_AUTO_CONTINUES;
           
           if (hitContinueLimit && !hasCompletionMarker) {
-            // Agent timed out without completing — mark as failed, not done
-            log.warn(`[taskWorker] task ${task.id}: agent exhausted ${MAX_AUTO_CONTINUES} auto-continues without completion marker — marking as failed`);
-            db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='timeout_incomplete', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-              .run(task.id);
-            try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
-            try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
-            wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
-            const projName = getProjectName(task.workdir);
-            openclawNotify.taskFailed(task, projName, 'Timed out — exhausted auto-continues without completing');
+            // Agent timed out without completing — auto-retry up to 2 times
+            const retryCount = task.task_retry_count || 0;
+            const MAX_TIMEOUT_RETRIES = 2;
+            
+            if (retryCount < MAX_TIMEOUT_RETRIES) {
+              // Re-queue with continuation context
+              log.warn(`[taskWorker] task ${task.id}: timed out without completion — re-queuing (retry ${retryCount + 1}/${MAX_TIMEOUT_RETRIES})`);
+              
+              // Save what was done so far as context for the retry
+              const progressSummary = (fullText || '').slice(-3000).trim();
+              const continuationNote = `\n\n---\nPREVIOUS ATTEMPT CONTEXT (retry ${retryCount + 1}):\nThe previous attempt ran out of turns before completing. Here is what was accomplished:\n\n${progressSummary}\n\n---\nCONTINUE FROM WHERE THE PREVIOUS ATTEMPT LEFT OFF. Do NOT restart from scratch. Complete the remaining work and save the output file.`;
+              
+              // Update task: reset to bmad_workflow, increment retry count, append continuation context
+              const updatedDesc = (task.description || '') + continuationNote;
+              db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL, failure_reason='timeout_retry_${retryCount + 1}', task_retry_count=?, description=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(retryCount + 1, updatedDesc, task.id);
+              
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              const projName = getProjectName(task.workdir);
+              openclawNotify.taskFailed(task, projName, `Timed out — auto-retrying (${retryCount + 1}/${MAX_TIMEOUT_RETRIES})`);
+              
+              // Trigger queue processing after a short delay
+              setTimeout(processQueue, 5000);
+            } else {
+              // Exhausted retries — now truly cancel
+              log.error(`[taskWorker] task ${task.id}: timed out after ${MAX_TIMEOUT_RETRIES} retries — cancelling`);
+              db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='timeout_exhausted', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(task.id);
+              try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
+              try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              const projName = getProjectName(task.workdir);
+              openclawNotify.taskFailed(task, projName, `Timed out after ${MAX_TIMEOUT_RETRIES} retries — cancelled. Manual intervention needed.`);
+            }
           } else {
           // Check if this is an interactive/planning task that needs user input
           // Check if Claude is asking a question at the END of its response (last 300 chars)
