@@ -832,6 +832,287 @@ for (const [name, stmt] of Object.entries(stmts)) wrapStmt(stmt, name);
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
+// ─── BMAD Story & Sprint Status Integration ──────────────────────────────
+// Generates story files for dev tasks and maintains sprint-status.yaml per project.
+// Story files provide structured acceptance criteria, task tracking, and dev records.
+// Sprint-status.yaml provides a single source of truth for all task statuses.
+
+const STORY_TEMPLATE = `# Story: {{title}}
+
+Status: {{status}}
+Task ID: {{task_id}}
+Task Number: #{{task_number}}
+Workflow: {{workflow}}
+Model: {{model}}
+Created: {{created_at}}
+
+## Description
+
+{{description}}
+
+## Acceptance Criteria
+
+{{acceptance_criteria}}
+
+## Tasks / Subtasks
+
+{{subtasks}}
+
+## Dev Notes
+
+{{dev_notes}}
+
+### References
+
+- Task source: Claude Code Studio task #{{task_number}}
+
+## Dev Agent Record
+
+### Agent Model Used
+
+{{model}}
+
+### Completion Notes List
+
+_(Updated by agent on completion)_
+
+### Change Log
+
+_(Updated by agent during implementation)_
+
+### File List
+
+_(Updated by agent — list all files created or modified)_
+`;
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
+}
+
+/**
+ * Extract acceptance criteria from task description.
+ * Looks for numbered lists, checkbox lists, or "acceptance criteria" sections.
+ */
+function extractAcceptanceCriteria(description) {
+  if (!description) return '- [ ] Implementation matches task description\n- [ ] No regressions introduced\n- [ ] Code compiles/builds without errors';
+  
+  // Look for explicit AC section
+  const acMatch = description.match(/(?:acceptance criteria|requirements|expected behavior)[:\s]*\n([\s\S]*?)(?:\n##|\n---|\n\n\n|$)/i);
+  if (acMatch) {
+    const lines = acMatch[1].trim().split('\n').filter(l => l.trim());
+    return lines.map(l => {
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return cleaned ? `- [ ] ${cleaned}` : '';
+    }).filter(Boolean).join('\n') || '- [ ] Implementation matches task description';
+  }
+
+  // Look for numbered/bulleted lists
+  const listLines = description.split('\n').filter(l => /^\s*[-*\d]+[.)]\s/.test(l));
+  if (listLines.length >= 2) {
+    return listLines.map(l => {
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return `- [ ] ${cleaned}`;
+    }).join('\n');
+  }
+
+  return '- [ ] Implementation matches task description\n- [ ] No regressions introduced\n- [ ] Code compiles/builds without errors';
+}
+
+/**
+ * Extract subtasks from description (## Tasks, ## Steps, ## Fix sections)
+ */
+function extractSubtasks(description) {
+  if (!description) return '- [ ] Implement changes\n- [ ] Verify build passes';
+  
+  const taskMatch = description.match(/(?:## (?:Tasks|Steps|Fix|Implementation|Changes))[:\s]*\n([\s\S]*?)(?:\n##|$)/i);
+  if (taskMatch) {
+    const lines = taskMatch[1].trim().split('\n').filter(l => l.trim());
+    return lines.map(l => {
+      if (/^\s*[-*]\s*\[[ x]\]/.test(l)) return l; // already checkbox
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return cleaned ? `- [ ] ${cleaned}` : '';
+    }).filter(Boolean).join('\n') || '- [ ] Implement changes';
+  }
+
+  // Numbered steps
+  const steps = description.split('\n').filter(l => /^\s*\d+[.)]\s/.test(l));
+  if (steps.length >= 2) {
+    return steps.map(l => {
+      const cleaned = l.replace(/^\s*\d+[.)]\s*/, '').trim();
+      return `- [ ] ${cleaned}`;
+    }).join('\n');
+  }
+
+  return '- [ ] Implement changes\n- [ ] Verify build passes';
+}
+
+/**
+ * Generate a story file for a task before it starts.
+ * Returns the path to the generated story file.
+ */
+function generateStoryFile(task) {
+  const workdir = task.workdir || WORKDIR;
+  const outputDir = path.join(workdir, '_bmad-output', 'implementation-artifacts');
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const slug = slugify(task.title);
+  const storyFilename = `story-${task.task_number || 0}-${slug}.md`;
+  const storyPath = path.join(outputDir, storyFilename);
+
+  // Don't regenerate if story already exists (e.g. task retry)
+  if (fs.existsSync(storyPath)) return storyPath;
+
+  const wfType = task._bmadWorkflowType || 'quick-dev';
+  const content = STORY_TEMPLATE
+    .replace(/\{\{title\}\}/g, task.title || 'Untitled')
+    .replace(/\{\{status\}\}/g, 'in-progress')
+    .replace(/\{\{task_id\}\}/g, task.id || '')
+    .replace(/\{\{task_number\}\}/g, String(task.task_number || 0))
+    .replace(/\{\{workflow\}\}/g, wfType)
+    .replace(/\{\{model\}\}/g, task.model || 'sonnet')
+    .replace(/\{\{created_at\}\}/g, new Date().toISOString())
+    .replace(/\{\{description\}\}/g, task.description || task.title || '')
+    .replace(/\{\{acceptance_criteria\}\}/g, extractAcceptanceCriteria(task.description))
+    .replace(/\{\{subtasks\}\}/g, extractSubtasks(task.description))
+    .replace(/\{\{dev_notes\}\}/g, task.notes ? task.notes.replace(/\[bmad-workflow:[\w-]+\]/g, '').trim() : '_(none)_');
+
+  fs.writeFileSync(storyPath, content, 'utf8');
+  log.info(`[bmad-story] Generated story file: ${storyFilename}`);
+  return storyPath;
+}
+
+/**
+ * Update story file status and completion notes after task finishes.
+ */
+function updateStoryOnCompletion(task, status, completionText) {
+  const workdir = task.workdir || WORKDIR;
+  const outputDir = path.join(workdir, '_bmad-output', 'implementation-artifacts');
+  const slug = slugify(task.title);
+  const storyPath = path.join(outputDir, `story-${task.task_number || 0}-${slug}.md`);
+
+  if (!fs.existsSync(storyPath)) return;
+
+  try {
+    let content = fs.readFileSync(storyPath, 'utf8');
+    
+    // Update status
+    content = content.replace(/^Status: .+$/m, `Status: ${status}`);
+    
+    // Add completion notes
+    if (completionText) {
+      const summary = completionText.slice(-1500).trim();
+      content = content.replace(
+        '_(Updated by agent on completion)_',
+        `**Completed:** ${new Date().toISOString()}\n\n${summary}`
+      );
+    }
+
+    fs.writeFileSync(storyPath, content, 'utf8');
+    log.info(`[bmad-story] Updated story status → ${status}: story-${task.task_number}-${slug}.md`);
+  } catch (e) {
+    log.warn(`[bmad-story] Failed to update story: ${e.message}`);
+  }
+}
+
+/**
+ * Generate/update sprint-status.yaml for a project workdir.
+ * Reads all tasks for that workdir and produces a structured YAML status file.
+ */
+function updateSprintStatus(workdir) {
+  if (!workdir) return;
+  const outputDir = path.join(workdir, '_bmad-output');
+  fs.mkdirSync(outputDir, { recursive: true });
+  const statusPath = path.join(outputDir, 'sprint-status.yaml');
+
+  try {
+    const tasks = db.prepare(`
+      SELECT id, title, status, notes, task_number, chain_id, sort_order, created_at, updated_at
+      FROM tasks WHERE workdir=? 
+      ORDER BY chain_id NULLS LAST, sort_order ASC, created_at ASC
+    `).all(workdir);
+
+    if (!tasks.length) return;
+
+    // Map statuses to BMAD sprint statuses
+    const STATUS_MAP = {
+      'backlog': 'backlog',
+      'todo': 'backlog',
+      'bmad_workflow': 'ready-for-dev',
+      'in_progress': 'in-progress',
+      'bmad_brainstorm': 'in-progress',
+      'bmad_prd': 'in-progress',
+      'bmad_architecture': 'in-progress',
+      'bmad_implementation': 'in-progress',
+      'bmad_qa': 'review',
+      'awaiting_input': 'in-progress',
+      'done_review': 'review',
+      'done': 'done',
+      'archived': 'done',
+      'cancelled': 'cancelled',
+      'failed': 'failed',
+    };
+
+    // Group by chain
+    const chains = new Map();
+    const standalone = [];
+    for (const t of tasks) {
+      if (t.chain_id) {
+        if (!chains.has(t.chain_id)) chains.set(t.chain_id, []);
+        chains.get(t.chain_id).push(t);
+      } else {
+        standalone.push(t);
+      }
+    }
+
+    let yaml = `# Sprint Status\n`;
+    yaml += `# Generated: ${new Date().toISOString()}\n`;
+    yaml += `# Project: ${path.basename(workdir)}\n`;
+    yaml += `# Tracking: Claude Code Studio\n\n`;
+
+    // Summary counts
+    const counts = { backlog: 0, 'ready-for-dev': 0, 'in-progress': 0, review: 0, done: 0, cancelled: 0, failed: 0 };
+    for (const t of tasks) {
+      const s = STATUS_MAP[t.status] || 'backlog';
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    yaml += `summary:\n`;
+    yaml += `  total: ${tasks.length}\n`;
+    for (const [k, v] of Object.entries(counts)) {
+      if (v > 0) yaml += `  ${k}: ${v}\n`;
+    }
+    yaml += `\n`;
+
+    // Development status — chains as epics
+    yaml += `development_status:\n`;
+    
+    for (const [chainId, chainTasks] of chains) {
+      yaml += `\n  # Chain: ${chainId}\n`;
+      const chainDone = chainTasks.every(t => ['done', 'archived', 'done_review'].includes(t.status));
+      const chainStarted = chainTasks.some(t => !['backlog', 'todo', 'bmad_workflow'].includes(t.status));
+      yaml += `  ${chainId}: ${chainDone ? 'done' : chainStarted ? 'in-progress' : 'backlog'}\n`;
+      for (const t of chainTasks) {
+        const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+        const wfType = wfMatch ? wfMatch[1] : 'task';
+        yaml += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+      }
+    }
+
+    if (standalone.length) {
+      yaml += `\n  # Standalone tasks\n`;
+      for (const t of standalone) {
+        const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+        const wfType = wfMatch ? wfMatch[1] : 'task';
+        yaml += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+      }
+    }
+
+    fs.writeFileSync(statusPath, yaml, 'utf8');
+    log.info(`[bmad-sprint] Updated sprint-status.yaml for ${path.basename(workdir)} (${tasks.length} tasks)`);
+  } catch (e) {
+    log.warn(`[bmad-sprint] Failed to update sprint status: ${e.message}`);
+  }
+}
+
 // ─── Active task registry ─────────────────────────────────────────────────
 // Keeps running Claude subprocesses alive when the browser tab closes/reloads.
 // Key: localSessionId, Value: { proxy, abortController, cleanupTimer }
@@ -948,12 +1229,26 @@ async function startTask(task) {
       }
     })();
     // For BMAD workflow tasks, create output directory and use workflow-specific prompt
+    // Also generate story file for implementation/QA workflows
+    let storyPath = null;
+    const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev',
+      'code-review', 'adversarial-review', 'e2e-tests', 'edge-case-review', 'correct-course'];
     if (task._bmadWorkflow) {
       const wf = task._bmadWorkflow;
       if (wf.outputDir) {
         const outDir = path.join(task.workdir || WORKDIR, wf.outputDir);
         fs.mkdirSync(outDir, { recursive: true });
       }
+      // Generate story file for dev/QA workflows
+      if (STORY_WORKFLOWS.includes(task._bmadWorkflowType)) {
+        try {
+          storyPath = generateStoryFile(task);
+        } catch (e) {
+          log.warn(`[bmad-story] Failed to generate story: ${e.message}`);
+        }
+      }
+      // Update sprint-status.yaml
+      try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
     }
     // Build prompt
     let parts;
@@ -962,6 +1257,10 @@ async function startTask(task) {
       const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
       parts = [wfPrompt];
       if (task.description?.trim()) parts.push(`\n---\nTask Description:\n${task.description.trim()}`);
+      // Inject story file reference for dev/QA workflows
+      if (storyPath) {
+        parts.push(`\n---\nSTORY FILE: ${storyPath}\nRead this story file for acceptance criteria and task checklist. During implementation:\n- Check off completed subtasks in the story file\n- Update the "Change Log" section with what you changed\n- Update the "File List" section with all files created/modified\n- On completion, update "Completion Notes List" with a summary\nThe story file is your structured tracking document for this task.`);
+      }
     } else {
       parts = [task.title];
       if (task.description?.trim()) parts.push(task.description.trim());
@@ -1199,6 +1498,9 @@ async function startTask(task) {
             .run(task.id);
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
           log.info(`[taskWorker] task ${task.id}: done_review (pending user review)`);
+          // 📝 Update story file and sprint status
+          try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
+          try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
           // Notify Telegram about completed task
@@ -1281,6 +1583,8 @@ async function startTask(task) {
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
+          try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
+          try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
           // Notify source chat about the failed task
           if (task.source_session_id) {
             const _ctx = getNotificationContext(task.source_session_id);
