@@ -3627,7 +3627,6 @@ app.get('/api/tasks', (req, res) => {
       out.last_activity = last?.created_at || t.updated_at;
       out.started_at = first?.created_at || t.updated_at;
     }
-    }
     return out;
   });
   res.json(result);
