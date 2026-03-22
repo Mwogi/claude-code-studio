@@ -49,7 +49,7 @@ const BMAD_PHASE_MODEL_MAP = {
   'bmad_prd': 'opus',
   'bmad_architecture': 'opus',
   'bmad_implementation': 'sonnet',
-  'bmad_qa': 'sonnet',
+  'bmad_qa': 'opus',
 };
 
 const BMAD_WORKFLOWS = {
@@ -2336,7 +2336,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing. The QA task will use Playwright MCP (tools prefixed with mcp__playwright__) to verify your changes. Read docs/testing-info.md for test credentials and dev server info. If this IS a QA task, you MUST use Playwright extensively: navigate to pages, interact with features, take screenshots, check console errors, and fix any issues found.`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. At the end, create a chained dev/fix task (quick-dev) with all findings for the engineer to fix`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
@@ -2348,10 +2348,14 @@ const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are runnin
 
 QA REQUIREMENT: Every implementation/dev task (quick-dev, dev-story, quick-spec with code changes) MUST have a separate QA task chained after it. When you complete an implementation task:
 1. Create a NEW task via the API (POST /api/tasks) with title "QA: [original task title]"
-2. Set it as the next task in the chain (same chain_id, sort_order = current + 1) OR use the "after" field pointing to the current task ID
-3. The QA task description MUST include: what to test, expected behavior, test steps, and the requirement to use Playwright browser testing
-4. Playwright browser testing is MANDATORY for all QA tasks — navigate to the page, interact with the feature, take screenshots, verify no errors in console
-5. The QA task should fix any issues found, not just report them`;
+2. Set the workflow to a QA workflow: notes should be "[bmad-workflow:adversarial-review]" or "[bmad-workflow:code-review]"
+3. Set it as the next task in the chain (same chain_id, sort_order = current + 1) OR use the "after" field pointing to the current task ID
+4. The QA task description MUST include: what to test, expected behavior, test steps, files changed, and the requirement to use Playwright browser testing
+5. QA tasks produce a REPORT ONLY — they do NOT fix code. They document all findings (bugs, regressions, issues) in a structured report
+6. After the QA task, chain a SEPARATE fix/dev task (quick-dev) that addresses the QA findings
+7. Flow: Dev Task → QA Task (report) → Fix Task (implement fixes) → QA Task (verify fixes)
+8. Playwright browser testing is MANDATORY for QA tasks — login, navigate, interact, screenshot, verify console
+9. QA tasks run on Opus model for thorough independent review (different model than dev tasks)`;
 
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
