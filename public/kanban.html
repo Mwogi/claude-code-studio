@@ -3089,7 +3089,7 @@ async function openShareModal(filePath) {
 async function createShare(filePath) {
   const expiresIn = $i('shareExpiry')?.value || '';
   try {
-    const r = await apiFetch('/api/docs/share', { method:'POST', body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const r = await apiFetch('/api/docs/share', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
     const d = await r.json();
     if (d.error) { toast('Error: ' + d.error, true); return; }
     _docsShares = _docsShares.filter(s => s.file_path !== filePath);
@@ -3103,7 +3103,7 @@ async function createShare(filePath) {
 async function updateShare(filePath) {
   const expiresIn = $i('shareExpiry')?.value || '';
   try {
-    const r = await apiFetch('/api/docs/share', { method:'POST', body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const r = await apiFetch('/api/docs/share', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
     const d = await r.json();
     if (d.error) { toast('Error: ' + d.error, true); return; }
     _docsShares = _docsShares.filter(s => s.file_path !== filePath);
