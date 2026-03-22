@@ -1920,10 +1920,10 @@ function makeCard(tk){
   // Activity badge for running tasks
   // Use server-provided last_activity; fall back to activityCache to preserve timestamps across re-renders
   let activityBadge='';
-  const _actTs = tk.last_activity || (isTaskActive(tk.status) ? activityCache.get(tk.id) : null);
+  const _actTs = tk.last_activity || activityCache.get(tk.id) || (isTaskActive(tk.status) ? tk.updated_at : null);
   if(isTaskActive(tk.status) && _actTs){
-    // Update cache with latest known value (server wins if available)
-    if(tk.last_activity) { activityCache.set(tk.id, tk.last_activity); persistActivityCache(); }
+    // Update cache with server value (server wins)
+    activityCache.set(tk.id, tk.last_activity || _actTs); persistActivityCache();
     const ago=Date.now()-new Date(_actTs.endsWith('Z')?_actTs:_actTs+'Z').getTime();
     const secs=Math.floor(ago/1000);
     const mins=Math.floor(ago/60000);
