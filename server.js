@@ -1754,6 +1754,53 @@ function autoModeProcess() {
 setInterval(autoModeProcess, 15000);
 
 // ── Auto-archive: done_review → done (after 24h) and done → archived (after 48h) ──
+// Also cleans up task screenshots on archive and purges old screenshots (>48h)
+function cleanupTaskScreenshots(workdir, taskId) {
+  try {
+    const screenshotDir = path.join(workdir, 'test-screenshots');
+    if (!fs.existsSync(screenshotDir)) return;
+    const prefix = `task-${taskId}-`;
+    const files = fs.readdirSync(screenshotDir);
+    let deleted = 0;
+    for (const f of files) {
+      if (f.startsWith(prefix)) {
+        fs.unlinkSync(path.join(screenshotDir, f));
+        deleted++;
+      }
+    }
+    if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task ${taskId}`);
+  } catch (e) {
+    log.warn('[screenshot-cleanup] error', { error: e.message });
+  }
+}
+
+function purgeOldScreenshots() {
+  try {
+    // Find all project workdirs that have test-screenshots
+    const workdirs = db.prepare(`SELECT DISTINCT workdir FROM tasks WHERE workdir IS NOT NULL`).all();
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    let totalDeleted = 0;
+    for (const { workdir } of workdirs) {
+      const screenshotDir = path.join(workdir, 'test-screenshots');
+      if (!fs.existsSync(screenshotDir)) continue;
+      const files = fs.readdirSync(screenshotDir);
+      for (const f of files) {
+        const fp = path.join(screenshotDir, f);
+        try {
+          const stat = fs.statSync(fp);
+          if (stat.isFile() && stat.mtimeMs < cutoff) {
+            fs.unlinkSync(fp);
+            totalDeleted++;
+          }
+        } catch (e) { /* skip */ }
+      }
+    }
+    if (totalDeleted > 0) log.info(`[screenshot-cleanup] Purged ${totalDeleted} screenshots older than 48h`);
+  } catch (e) {
+    log.warn('[screenshot-cleanup] purge error', { error: e.message });
+  }
+}
+
 function autoArchiveProcess() {
   try {
     // Move done_review tasks older than 24h to done (user didn't review in time)
@@ -1766,16 +1813,23 @@ function autoArchiveProcess() {
       log.info(`[autoArchive] Auto-approved ${reviewedCount.changes} done_review task(s) → done`);
       wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
     }
-    // Move done tasks older than 48h to archived
-    const archivedCount = db.prepare(`
-      UPDATE tasks SET status='archived', updated_at=datetime('now')
+    // Move done tasks older than 48h to archived + clean up their screenshots
+    const tasksToArchive = db.prepare(`
+      SELECT id, workdir FROM tasks
       WHERE status='done'
         AND updated_at < datetime('now', '-48 hours')
-    `).run();
-    if (archivedCount.changes > 0) {
-      log.info(`[autoArchive] Archived ${archivedCount.changes} done task(s) → archived`);
+    `).all();
+    if (tasksToArchive.length > 0) {
+      const archiveStmt = db.prepare(`UPDATE tasks SET status='archived', updated_at=datetime('now') WHERE id=?`);
+      for (const t of tasksToArchive) {
+        archiveStmt.run(t.id);
+        cleanupTaskScreenshots(t.workdir, t.id);
+      }
+      log.info(`[autoArchive] Archived ${tasksToArchive.length} done task(s) → archived + cleaned screenshots`);
       wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
     }
+    // Purge any screenshots older than 48h (catches orphans not linked to tasks)
+    purgeOldScreenshots();
   } catch (e) {
     log.warn('[autoArchive] error', { error: e.message });
   }
@@ -2348,7 +2402,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. At the end, create a chained dev/fix task (quick-dev) with all findings for the engineer to fix`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. At the end, create a chained dev/fix task (quick-dev) with all findings for the engineer to fix\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
@@ -3633,6 +3687,38 @@ app.get('/api/tasks', (req, res) => {
   res.json(result);
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
+
+// Screenshots for a specific task
+app.get('/api/tasks/:id/screenshots', requireAuth, (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const screenshotDir = path.join(task.workdir, 'test-screenshots');
+  if (!fs.existsSync(screenshotDir)) return res.json([]);
+  const prefix = `task-${task.id}-`;
+  try {
+    const files = fs.readdirSync(screenshotDir)
+      .filter(f => f.startsWith(prefix) && /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
+      .sort()
+      .map(f => {
+        const stat = fs.statSync(path.join(screenshotDir, f));
+        return { name: f, size: stat.size, created: stat.mtimeMs, url: `/api/tasks/${task.id}/screenshot/${encodeURIComponent(f)}` };
+      });
+    res.json(files);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// Serve a specific screenshot file for a task
+app.get('/api/tasks/:id/screenshot/:file', requireAuth, (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).send('Not found');
+  const fp = path.join(task.workdir, 'test-screenshots', decodeURIComponent(req.params.file));
+  // Security: ensure file is within the screenshots dir
+  if (!fp.startsWith(path.join(task.workdir, 'test-screenshots'))) return res.status(403).send('Forbidden');
+  if (!fs.existsSync(fp)) return res.status(404).send('Not found');
+  res.sendFile(fp);
+});
 // Returns session IDs that currently have in_progress tasks — used by client to show spinners on all tabs
 app.get('/api/tasks/running-sessions', (req, res) => {
   const rows = db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all();
