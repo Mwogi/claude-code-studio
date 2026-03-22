@@ -3613,8 +3613,9 @@ app.get('/api/tasks', (req, res) => {
   let rows = stmts.getTasks.all({ w: workdir || null });
   // Optional status filter for external API clients
   if (statusFilter) rows = rows.filter(t => t.status === statusFilter);
-  // Add last_activity for running tasks (latest message timestamp)
+  // Add last_activity and started_at for running tasks
   const lastActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at DESC LIMIT 1`);
+  const firstActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at ASC LIMIT 1`);
   const result = rows.map(t => {
     const out = {
       ...t,
@@ -3622,7 +3623,10 @@ app.get('/api/tasks', (req, res) => {
     };
     if (t.session_id && ['in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','done_review','awaiting_input'].includes(t.status)) {
       const last = lastActivityStmt.get(t.session_id);
+      const first = firstActivityStmt.get(t.session_id);
       out.last_activity = last?.created_at || t.updated_at;
+      out.started_at = first?.created_at || t.updated_at;
+    }
     }
     return out;
   });
