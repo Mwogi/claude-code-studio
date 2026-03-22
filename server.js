@@ -3689,7 +3689,7 @@ app.get('/api/tasks', (req, res) => {
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
 
 // Screenshots for a specific task
-app.get('/api/tasks/:id/screenshots', requireAuth, (req, res) => {
+app.get('/api/tasks/:id/screenshots', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
   const screenshotDir = path.join(task.workdir, 'test-screenshots');
@@ -3710,7 +3710,7 @@ app.get('/api/tasks/:id/screenshots', requireAuth, (req, res) => {
 });
 
 // Serve a specific screenshot file for a task
-app.get('/api/tasks/:id/screenshot/:file', requireAuth, (req, res) => {
+app.get('/api/tasks/:id/screenshot/:file', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).send('Not found');
   const fp = path.join(task.workdir, 'test-screenshots', decodeURIComponent(req.params.file));
