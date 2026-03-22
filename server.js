@@ -1525,6 +1525,31 @@ async function startTask(task) {
         const MAX_CHAIN_RETRIES = 2;
 
         if (isSuccess) {
+          // 🛡️ SAFEGUARD: Detect timeout masquerading as success
+          // If the agent exhausted all auto-continues, check if it actually completed
+          const tail2k = (fullText || '').slice(-2000);
+          const hasCompletionMarker = 
+            tail2k.includes('✅ Done') || tail2k.includes('✅ done') ||
+            tail2k.includes('--- \n✅') || tail2k.includes('---\n✅') ||
+            tail2k.includes('VERIFICATION') || tail2k.includes('verification') ||
+            tail2k.includes('All acceptance criteria') || tail2k.includes('all acceptance criteria') ||
+            tail2k.includes('Task complete') || tail2k.includes('task complete') ||
+            tail2k.includes('Implementation complete') || tail2k.includes('implementation complete') ||
+            tail2k.includes('Successfully') || tail2k.includes('successfully completed') ||
+            /Done\s*[—–-]/.test(tail2k);
+          const hitContinueLimit = taskContinueCount >= MAX_AUTO_CONTINUES;
+          
+          if (hitContinueLimit && !hasCompletionMarker) {
+            // Agent timed out without completing — mark as failed, not done
+            log.warn(`[taskWorker] task ${task.id}: agent exhausted ${MAX_AUTO_CONTINUES} auto-continues without completion marker — marking as failed`);
+            db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='timeout_incomplete', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(task.id);
+            try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
+            try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
+            wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+            const projName = getProjectName(task.workdir);
+            openclawNotify.taskFailed(task, projName, 'Timed out — exhausted auto-continues without completing');
+          } else {
           // Check if this is an interactive/planning task that needs user input
           // Check if Claude is asking a question at the END of its response (last 300 chars)
           const tail = (fullText || '').slice(-300);
@@ -1623,6 +1648,7 @@ async function startTask(task) {
           }
           
           } // end else (non-interactive success)
+          } // end else (not timed out)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
