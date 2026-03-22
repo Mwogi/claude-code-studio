@@ -2411,6 +2411,7 @@ const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are runnin
 - If an adversarial review or QA step finds issues, FIX the real issues automatically — do not present them as options.
 - Never output menus like [W] Walk through / [F] Fix / [S] Skip. Just fix.
 - End with a clear summary of what was done, what was fixed, and any caveats.
+- NEVER git add or commit screenshots, test images, or any files from test-screenshots/. They are gitignored.
 
 QA REQUIREMENT: Every implementation/dev task (quick-dev, dev-story, quick-spec with code changes) MUST have a separate QA task chained after it. When you complete an implementation task:
 1. Create a NEW task via the API (POST /api/tasks) with title "QA: [original task title]"

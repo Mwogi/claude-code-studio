@@ -66,3 +66,11 @@ tasks/
 
 # Generated HTML exports
 README_RU.html
+
+# Screenshots — never commit
+test-screenshots/
+**/test-screenshots/
+**/screenshot*.png
+**/screenshot*.jpg
+**/screenshot*.jpeg
+
