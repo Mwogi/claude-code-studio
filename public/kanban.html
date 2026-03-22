@@ -3129,11 +3129,23 @@ async function revokeShare(token, filePath) {
 function copyShareUrl() {
   const inp = $i('shareUrlInput');
   if (!inp) return;
-  inp.select();
-  navigator.clipboard.writeText(inp.value).then(() => toast('URL copied!')).catch(() => {
-    document.execCommand('copy');
-    toast('URL copied!');
-  });
+  const url = inp.value;
+  // Try modern clipboard API first (requires HTTPS)
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => toast('URL copied!')).catch(() => fallbackCopy(url));
+  } else {
+    fallbackCopy(url);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); toast('URL copied!'); } catch (e) { toast('Copy failed — select URL manually', true); }
+  document.body.removeChild(ta);
 }
 
 async function loadDoc(filePath, el) {
