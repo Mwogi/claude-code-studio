@@ -2344,7 +2344,14 @@ const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are runnin
 - If you encounter an error, debug and resolve it yourself. Try alternative approaches. Only give up after 3 attempts.
 - If an adversarial review or QA step finds issues, FIX the real issues automatically — do not present them as options.
 - Never output menus like [W] Walk through / [F] Fix / [S] Skip. Just fix.
-- End with a clear summary of what was done, what was fixed, and any caveats.`;
+- End with a clear summary of what was done, what was fixed, and any caveats.
+
+QA REQUIREMENT: Every implementation/dev task (quick-dev, dev-story, quick-spec with code changes) MUST have a separate QA task chained after it. When you complete an implementation task:
+1. Create a NEW task via the API (POST /api/tasks) with title "QA: [original task title]"
+2. Set it as the next task in the chain (same chain_id, sort_order = current + 1) OR use the "after" field pointing to the current task ID
+3. The QA task description MUST include: what to test, expected behavior, test steps, and the requirement to use Playwright browser testing
+4. Playwright browser testing is MANDATORY for all QA tasks — navigate to the page, interact with the feature, take screenshots, verify no errors in console
+5. The QA task should fix any issues found, not just report them`;
 
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
