@@ -141,8 +141,8 @@ const BMAD_WORKFLOWS = {
     label: '📐 Sprint Planning → sprint-status.yaml',
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
-    model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nGenerate sprint-status.yaml and save to ${workdir}/_bmad-output/implementation-artifacts/sprint-status.yaml`
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture from ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nGenerate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N}'`
   },
   'quick-spec': {
     label: '⚡ Quick Spec',
@@ -222,7 +222,7 @@ const BMAD_WORKFLOWS = {
     agent: 'product-manager',
     skills: ['bmad-master'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a new story file using the template. Save to the appropriate epic directory.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nAfter creating the story, update the task in Kanban to use dev-story workflow:\ncurl -b /tmp/ccs.cookie -X PATCH "http://localhost:3000/api/tasks/TASK_ID" -H "Content-Type: application/json" -d '{"notes":"[bmad-workflow:dev-story]","status":"bmad_workflow"}'\n\nThis ensures the next step in the chain picks up dev-story (implementation) with the story file you created.`
   },
   'dev-story': {
     label: '💻 Dev Story (Implement)',
@@ -230,7 +230,7 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-master'],
     model: 'sonnet',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story definition of done checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the story, update tasks/subtasks, file list, and dev agent record per the checklist.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story workflow and checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
   },
   'retrospective': {
     label: '🔮 Retrospective',
@@ -1016,13 +1016,19 @@ function updateStoryOnCompletion(task, status, completionText) {
 
 /**
  * Generate/update sprint-status.yaml for a project workdir.
- * Reads all tasks for that workdir and produces a structured YAML status file.
+ * 
+ * TWO MODES:
+ * A) Full pipeline (epics.md exists): Sprint-planning workflow generates the authoritative
+ *    sprint-status.yaml. We only UPDATE task statuses within it, never overwrite the structure.
+ * B) Quick-dev (no epics.md): Auto-generate from DB tasks (lightweight path).
  */
 function updateSprintStatus(workdir) {
   if (!workdir) return;
   const outputDir = path.join(workdir, '_bmad-output');
   fs.mkdirSync(outputDir, { recursive: true });
   const statusPath = path.join(outputDir, 'sprint-status.yaml');
+  const epicsPath = path.join(workdir, '_bmad-output', 'planning-artifacts', 'epics.md');
+  const hasEpics = fs.existsSync(epicsPath);
 
   try {
     const tasks = db.prepare(`
@@ -1052,6 +1058,62 @@ function updateSprintStatus(workdir) {
       'failed': 'failed',
     };
 
+    // PATH A: Full pipeline — update statuses in existing BMAD sprint-status.yaml
+    if (hasEpics && fs.existsSync(statusPath)) {
+      let content = fs.readFileSync(statusPath, 'utf8');
+      let updated = false;
+      
+      for (const t of tasks) {
+        const bmadStatus = STATUS_MAP[t.status] || 'backlog';
+        const taskSlug = `${t.task_number || t.id}-${slugify(t.title)}`;
+        
+        // Try to find and update this task's status line in the YAML
+        // Match pattern: "  slug: old-status" or "  slug: old-status  # comment"
+        const regex = new RegExp(`^(\\s+${taskSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)\\S+(.*)$`, 'm');
+        if (regex.test(content)) {
+          content = content.replace(regex, `$1${bmadStatus}$2`);
+          updated = true;
+        }
+      }
+      
+      // Append any tasks not found in the existing YAML
+      const missingTasks = tasks.filter(t => {
+        const taskSlug = `${t.task_number || t.id}-${slugify(t.title)}`;
+        return !content.includes(taskSlug);
+      });
+      
+      if (missingTasks.length) {
+        content += `\n  # New tasks (added by Claude Studio)\n`;
+        for (const t of missingTasks) {
+          const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+          const wfType = wfMatch ? wfMatch[1] : 'task';
+          content += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+        }
+        updated = true;
+      }
+      
+      // Update summary counts
+      const counts = { backlog: 0, 'ready-for-dev': 0, 'in-progress': 0, review: 0, done: 0, cancelled: 0, failed: 0 };
+      for (const t of tasks) {
+        const s = STATUS_MAP[t.status] || 'backlog';
+        counts[s] = (counts[s] || 0) + 1;
+      }
+      // Replace or add summary block
+      const summaryBlock = `summary:\n  total: ${tasks.length}\n${Object.entries(counts).filter(([,v])=>v>0).map(([k,v])=>`  ${k}: ${v}`).join('\n')}`;
+      if (content.includes('summary:')) {
+        content = content.replace(/summary:\n(?:\s+\w[\w-]*:\s*\d+\n?)*/m, summaryBlock + '\n');
+      }
+      
+      if (updated) {
+        // Update the generated timestamp
+        content = content.replace(/^# Generated: .+$/m, `# Generated: ${new Date().toISOString()}`);
+        fs.writeFileSync(statusPath, content, 'utf8');
+        log.info(`[bmad-sprint] Updated sprint-status.yaml (full pipeline mode) for ${path.basename(workdir)}`);
+      }
+      return;
+    }
+
+    // PATH B: Quick-dev — auto-generate from DB tasks
     // Group by chain
     const chains = new Map();
     const standalone = [];
@@ -1067,7 +1129,8 @@ function updateSprintStatus(workdir) {
     let yaml = `# Sprint Status\n`;
     yaml += `# Generated: ${new Date().toISOString()}\n`;
     yaml += `# Project: ${path.basename(workdir)}\n`;
-    yaml += `# Tracking: Claude Code Studio\n\n`;
+    yaml += `# Tracking: Claude Code Studio\n`;
+    yaml += `# Mode: auto-generated (no epics.md found)\n\n`;
 
     // Summary counts
     const counts = { backlog: 0, 'ready-for-dev': 0, 'in-progress': 0, review: 0, done: 0, cancelled: 0, failed: 0 };
@@ -1210,7 +1273,7 @@ async function startTask(task) {
           'product-brief-preview': 'bmad_brainstorm',
           'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
           'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
-          'sprint-planning': 'bmad_implementation', 'create-story': 'bmad_implementation',
+          'sprint-planning': 'bmad_architecture', 'create-story': 'bmad_implementation',
           'dev-story': 'bmad_implementation', 'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
           'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
           'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
