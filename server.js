@@ -2342,10 +2342,13 @@ function autoCreateQATask(task, fullText) {
   // Don't create QA for a QA task (prevent infinite loop)
   if (task.title.startsWith('QA:') || task.title.startsWith('🧪')) return;
   
-  // Don't create QA for fix tasks (prevents QA→Fix→QA→Fix loop)
-  // Fix tasks already address QA findings — no need to re-QA them individually.
-  // The original story's next QA pass will catch any remaining issues.
-  if (task.title.startsWith('Fix:') || task.title.startsWith('Fix ')) return;
+  // Depth limit: Fix tasks get ONE QA pass max. Check task lineage via description.
+  // Fix tasks (depth=1) get QA. QA on fix tasks (depth=2) does NOT spawn more fixes.
+  const isFixTask = task.title.startsWith('Fix:') || task.title.startsWith('Fix ');
+  const qaDepth = isFixTask ? 2 : 1;
+  
+  // Depth 2 = this is already a fix-of-a-fix scenario. Stop here.
+  if (qaDepth > 1) return;
   
   const workdir = task.workdir || WORKDIR;
   const qaId = genId();
@@ -2364,6 +2367,7 @@ function autoCreateQATask(task, fullText) {
   const qaDesc = `## QA Report Task — DO NOT MODIFY CODE
 
 **Review task #${task.task_number}: ${task.title}**
+**QA Depth: ${qaDepth}/1** (max depth reached = no further QA cycles)
 
 ### What to verify
 Read the story file for acceptance criteria: \`${storyFile}\`
@@ -2386,9 +2390,34 @@ Produce \`docs/qa-report-task-${task.task_number}.md\` with:
 - Console errors captured
 - Severity ratings (P0-P3) for any failures
 
-### If P0/P1 issues found
-DO NOT create fix tasks yourself. Document all findings in the QA report file.
-A human will review and decide which issues to fix.`;
+### Creating fix tasks (STRICT RULES)
+If you find P0 or P1 failures, you MUST create ONE consolidated fix task.
+Rules for the fix task:
+1. **ONE task only** — consolidate all findings into a single fix task
+2. **Atomic scope** — only fix what this QA found, nothing else
+3. **Exact file paths + line numbers** for every issue
+4. **Before/after code snippets** showing exactly what to change
+5. **Verification command** for each fix (e.g. grep, curl, test command)
+6. **Done criteria checklist** — each item must be independently verifiable
+7. Title format: "Fix: [parent story title] — [issue summary]"
+
+Create the fix task using:
+\`\`\`
+curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d @- <<'TASK_JSON'
+{
+  "title": "Fix: [story title] — [1-line summary of all issues]",
+  "description": "## Fix Task (from QA report docs/qa-report-task-${task.task_number}.md)\\n\\n### SCOPE LOCK\\nYou MUST only modify the files listed below. Any change outside this scope = failure.\\n\\n### Issues to fix\\n#### Issue 1: [title]\\n- File: [exact path]\\n- Line: [number]\\n- Current: \`[code snippet]\`\\n- Expected: \`[code snippet]\`\\n- Verify: \`[command that proves fix works]\`\\n\\n#### Issue 2: ...\\n\\n### Done Checklist (ALL must pass)\\n- [ ] Issue 1 fixed — verify with: [command]\\n- [ ] Issue 2 fixed — verify with: [command]\\n- [ ] No files modified outside scope\\n- [ ] \`git diff --stat\` shows only expected files\\n- [ ] App builds without errors: [build command]\\n- [ ] No console errors on affected pages\\n\\n### MANDATORY COMPLETION GATE\\nBefore marking done, run EVERY verify command above. If ANY fails, fix it. Do not skip.",
+  "workdir": "${workdir}",
+  "status": "bmad_workflow",
+  "notes": "[bmad-workflow:quick-dev]",
+  "model": "sonnet",
+  "max_turns": 60,
+  "chain_id": "${task.chain_id || ''}"
+}
+TASK_JSON
+\`\`\`
+
+**CRITICAL: Do NOT create more than ONE fix task. Do NOT create fix tasks for P2/P3 issues.**`;
 
   stmts.createTask.run(
     qaId, qaTitle, qaDesc, '[bmad-workflow:adversarial-review]', 'bmad_workflow', 
@@ -3056,7 +3085,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. DO NOT create fix tasks. Your job is to REPORT only. A human will review findings and decide what to fix.\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
