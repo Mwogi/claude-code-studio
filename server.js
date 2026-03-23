@@ -4361,9 +4361,15 @@ app.post('/api/tasks', (req, res) => {
   
   const id = genId();
   const taskNum = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
+  
+  // Auto-correct status: if task has a BMAD workflow tag, it should be in bmad_workflow queue
+  if (notes && /\[bmad-workflow:[\w-]+\]/.test(notes) && (!status || status === 'backlog' || status === 'todo')) {
+    status = 'bmad_workflow';
+  }
+  
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum);
   const task = stmts.getTask.get(id);
-  if (status === 'todo') setImmediate(processQueue);
+  if (['todo', 'bmad_workflow'].includes(status)) setImmediate(processQueue);
   res.json(task);
 });
 
