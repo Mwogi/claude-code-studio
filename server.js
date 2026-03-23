@@ -1083,7 +1083,7 @@ function updateSprintStatus(workdir) {
       });
       
       if (missingTasks.length) {
-        content += `\n  # New tasks (added by Claude Studio)\n`;
+        content += `\n`;
         for (const t of missingTasks) {
           const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
           const wfType = wfMatch ? wfMatch[1] : 'task';
@@ -1614,6 +1614,8 @@ async function startTask(task) {
           // 📝 Update story file and sprint status
           try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
           try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+          // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
+          try { autoActivateNextEpic(task); } catch (e) { log.warn(`[auto-epic] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
           // Notify Telegram about completed task
@@ -2264,6 +2266,65 @@ function purgeOldScreenshots() {
   } catch (e) {
     log.warn('[screenshot-cleanup] purge error', { error: e.message });
   }
+}
+
+/**
+ * Auto-activate next epic: when all tasks in a chain (epic) are done/done_review/archived,
+ * find the next epic chain for the same workdir and activate its first task.
+ * 
+ * Epic chains follow a naming convention: epic-N-slug
+ * This enables sequential epic execution without manual intervention.
+ */
+function autoActivateNextEpic(task) {
+  if (!task.chain_id || !task.workdir) return;
+  
+  // Check if all tasks in this chain are complete
+  const chainTasks = db.prepare(`SELECT id, status, chain_id FROM tasks WHERE chain_id=? AND workdir=?`).all(task.chain_id, task.workdir);
+  const allDone = chainTasks.every(t => ['done', 'done_review', 'archived', 'cancelled'].includes(t.status));
+  if (!allDone) return;
+  
+  log.info(`[auto-epic] Chain "${task.chain_id}" is fully complete (${chainTasks.length} tasks)`);
+  
+  // Find all epic chains for this workdir
+  const allChains = db.prepare(`
+    SELECT DISTINCT chain_id FROM tasks 
+    WHERE workdir=? AND chain_id LIKE 'epic-%' 
+    ORDER BY chain_id ASC
+  `).all(task.workdir);
+  
+  const currentIdx = allChains.findIndex(c => c.chain_id === task.chain_id);
+  if (currentIdx < 0 || currentIdx >= allChains.length - 1) return; // no next epic
+  
+  const nextChainId = allChains[currentIdx + 1].chain_id;
+  
+  // Check if next epic tasks are in done_review (created by sprint-planning but not yet activated)
+  const nextTasks = db.prepare(`
+    SELECT id, status, task_number, title FROM tasks 
+    WHERE chain_id=? AND workdir=? AND status='done_review'
+    ORDER BY sort_order ASC, task_number ASC
+  `).all(nextChainId, task.workdir);
+  
+  if (!nextTasks.length) {
+    log.info(`[auto-epic] Next chain "${nextChainId}" has no done_review tasks to activate`);
+    return;
+  }
+  
+  // Activate all tasks in the next epic (set to bmad_workflow)
+  const activate = db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`);
+  for (const t of nextTasks) {
+    activate.run(t.id);
+    log.info(`[auto-epic] Activated #${t.task_number} "${t.title.substring(0, 50)}" in chain "${nextChainId}"`);
+  }
+  
+  log.info(`[auto-epic] Activated ${nextTasks.length} tasks in next epic: ${nextChainId}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  
+  // Notify
+  const projName = getProjectName(task.workdir);
+  openclawNotify.sendNotification(`🚀 [${projName}] Epic "${task.chain_id}" complete! Auto-started next epic "${nextChainId}" (${nextTasks.length} stories)`);
+  
+  // Trigger queue processing
+  setTimeout(processQueue, 3000);
 }
 
 function autoArchiveProcess() {
