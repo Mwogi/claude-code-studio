@@ -1614,6 +1614,8 @@ async function startTask(task) {
           // 📝 Update story file and sprint status
           try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
           try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+          // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
+          try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
           // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
           try { autoActivateNextEpic(task); } catch (e) { log.warn(`[auto-epic] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
@@ -2275,6 +2277,83 @@ function purgeOldScreenshots() {
  * Epic chains follow a naming convention: epic-N-slug
  * This enables sequential epic execution without manual intervention.
  */
+/**
+ * Auto-create a QA task after dev/implementation tasks complete.
+ * Server-enforced — does not rely on the agent to create QA tasks.
+ * 
+ * QA tasks:
+ * - Run on Opus model (independent reviewer)
+ * - Use adversarial-review workflow
+ * - Produce a report only (no code changes)
+ * - Reference the dev task's story file and output
+ * - If issues found, chain a fix task after
+ */
+const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev']);
+
+function autoCreateQATask(task, fullText) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfType = wfMatch ? wfMatch[1] : '';
+  
+  if (!DEV_WORKFLOWS_NEEDING_QA.has(wfType)) return;
+  
+  // Don't create QA for a QA task (prevent infinite loop)
+  if (task.title.startsWith('QA:') || task.title.startsWith('🧪')) return;
+  
+  const workdir = task.workdir || WORKDIR;
+  const qaId = genId();
+  const taskNum = stmts.nextTaskNumber.get(workdir).next_num;
+  
+  // Extract what was changed from the output
+  const tail = (fullText || '').slice(-3000);
+  const filesChanged = tail.match(/files?\s*(?:changed|modified|created|updated)[:\s]*([^\n]+)/gi) || [];
+  const fileList = filesChanged.join('\n') || '(check git diff for changes)';
+  
+  // Find the story file for context
+  const slug = slugify(task.title);
+  const storyFile = `_bmad-output/implementation-artifacts/story-${task.task_number || 0}-${slug}.md`;
+  
+  const qaTitle = `QA: ${task.title.substring(0, 80)}`;
+  const qaDesc = `## QA Report Task — DO NOT MODIFY CODE
+
+**Review task #${task.task_number}: ${task.title}**
+
+### What to verify
+Read the story file for acceptance criteria: \`${storyFile}\`
+Run Playwright browser tests to verify each acceptance criterion.
+
+### Files changed
+${fileList}
+
+### Test steps
+1. Login to the app (see docs/testing-info.md for credentials)
+2. Navigate to the relevant pages
+3. Test each acceptance criterion from the story file
+4. Check for regressions in related functionality
+5. Verify no console errors
+
+### Deliverable
+Produce \`docs/qa-report-task-${task.task_number}.md\` with:
+- Each AC: PASS/FAIL with evidence
+- Screenshots referenced (use task-prefixed naming)
+- Console errors captured
+- Severity ratings (P0-P3) for any failures
+
+### If issues found
+Create a chained fix task (quick-dev) with all findings.`;
+
+  stmts.createTask.run(
+    qaId, qaTitle, qaDesc, '[bmad-workflow:adversarial-review]', 'bmad_workflow', 
+    (task.sort_order || 0) + 1,
+    null, workdir, 'opus',
+    'auto', 'single', 80,
+    null, null, task.chain_id || null, null,
+    null, null, null, taskNum
+  );
+  
+  log.info(`[auto-qa] Created QA task #${taskNum} "${qaTitle}" for dev task #${task.task_number}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
 function autoActivateNextEpic(task) {
   if (!task.chain_id || !task.workdir) return;
   
