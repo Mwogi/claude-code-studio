@@ -1,12 +1,14 @@
 # Sprint Status
-# Generated: 2026-03-23T17:04:20.269Z
+# Generated: 2026-03-23T17:07:46.362Z
 # Project: claude-code-studio
 # Tracking: Claude Code Studio
 # Mode: auto-generated (no epics.md found)
 
 summary:
-  total: 13
-  review: 3
+  total: 16
+  ready-for-dev: 1
+  in-progress: 1
+  review: 4
   done: 10
 
 development_status:
@@ -28,6 +30,9 @@ development_status:
   11-feature-shareable-read-only-document-links-via-web-url: review  # [quick-dev] Feature: Shareable read-only document links via web URL
   12-daily-bmad-sync-check-for-new-agents-workflows-features: review  # [quick-dev] 🔄 Daily BMAD Sync — Check for new agents, workflows & featu
   13-daily-bmad-sync-check-for-new-agents-workflows-features: review  # [quick-dev] 🔄 Daily BMAD Sync — Check for new agents, workflows & featu
+  15-daily-bmad-sync-check-for-new-agents-workflows-features: ready-for-dev  # [quick-dev] 🔄 Daily BMAD Sync — Check for new agents, workflows & featu
+  14-qa-daily-bmad-sync-check-for-new-agents-workflows-features: review  # [adversarial-review] QA: 🔄 Daily BMAD Sync — Check for new agents, workflows & f
+  16-fix-missing-testing-info-md-bmad-sync-hardening: in-progress  # [quick-dev] Fix: Missing testing-info.md + BMAD sync hardening
   1-fix-activity-timers-reset-to-zero-when-new-task-is-added: done  # [quick-dev] Fix: Activity timers reset to zero when new task is added
   3-add-archive-column-auto-move-done-48h-and-done-for-review-co: done  # [quick-dev] Add Archive column (auto-move done >48h) and Done for Review
   2-fix-activity-timers-reset-to-zero-when-new-task-is-added: done  # [quick-dev] Fix: Activity timers reset to zero when new task is added
