@@ -1351,6 +1351,15 @@ async function startTask(task) {
       // Update sprint-status.yaml
       try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
     }
+    // Capture pre-task dirty state for commit-scope isolation (fallback when File List is empty)
+    try {
+      const _preDirtyRaw = execSync('git status --porcelain', { cwd: task.workdir || WORKDIR, timeout: 5000 }).toString();
+      task._preTaskDirtyFiles = new Set(
+        _preDirtyRaw.split('\n').filter(l => l.trim()).map(l => l.slice(3).trim())
+      );
+    } catch (_preErr) {
+      task._preTaskDirtyFiles = null;
+    }
     // Build prompt
     let parts;
     if (task._bmadWorkflow) {
@@ -1699,7 +1708,7 @@ async function startTask(task) {
           }
           openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
           
-          // Auto-commit for implementation tasks
+          // Auto-commit for implementation tasks (scope-aware: stages only story File List files)
           const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec']);
           const _wfType = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]);
           const _hasBmadPhase = (task.notes || '').match(/\[bmad-phase:(implementation|qa)\]/);
@@ -1707,12 +1716,72 @@ async function startTask(task) {
             const cwd = task.workdir || WORKDIR;
             try {
               const { execSync: _exec } = require('child_process');
-              const hasChanges = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
-              if (hasChanges) {
-                _exec('git add -A', { cwd, timeout: 10000 });
-                const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
-                _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
-                log.info(`[taskWorker] auto-committed for task ${task.id} in ${cwd}`);
+              const _dirtyOutput = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+              if (_dirtyOutput) {
+                let _commitDone = false;
+
+                // Primary: stage only files declared in the story File List
+                if (storyPath) {
+                  try {
+                    const _storyContent = fs.readFileSync(storyPath, 'utf8');
+                    const _fileList = extractFileListFromStory(_storyContent, cwd);
+                    if (_fileList && _fileList.length > 0) {
+                      // Always include sprint-status.yaml and the story file itself
+                      const _sprintStatus = path.join(cwd, '_bmad-output', 'sprint-status.yaml');
+                      const _allFiles = [...new Set([..._fileList, storyPath, _sprintStatus])];
+                      for (const absFile of _allFiles) {
+                        try {
+                          const relFile = path.relative(cwd, absFile);
+                          if (relFile.startsWith('..')) continue; // skip files outside repo (e.g. bench paths)
+                          _exec(`git add -- ${JSON.stringify(relFile)}`, { cwd, timeout: 5000 });
+                        } catch (_fe) { /* file may not exist or untracked, skip */ }
+                      }
+                      const _staged = _exec('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                      if (_staged) {
+                        const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                        _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                        log.info(`[taskWorker] auto-committed ${_staged.split('\n').length} task-scoped files for task ${task.id} (File List)`);
+                      } else {
+                        log.info(`[taskWorker] auto-commit: File List files not dirty for task ${task.id}, skipping`);
+                      }
+                      _commitDone = true; // File List was used — don't fall through to git add -A
+                    }
+                  } catch (_parseErr) {
+                    log.warn(`[taskWorker] auto-commit File List parse error for task ${task.id}: ${_parseErr.message}`);
+                  }
+                }
+
+                // Fallback: exclude files that were already dirty before this task started
+                if (!_commitDone && task._preTaskDirtyFiles) {
+                  const _newDirtyFiles = _dirtyOutput.split('\n')
+                    .filter(l => l.trim())
+                    .map(l => l.slice(3).trim())
+                    .filter(f => !task._preTaskDirtyFiles.has(f));
+                  if (_newDirtyFiles.length > 0) {
+                    for (const f of _newDirtyFiles) {
+                      try { _exec(`git add -- ${JSON.stringify(f)}`, { cwd, timeout: 5000 }); } catch (_fe) {}
+                    }
+                    const _staged2 = _exec('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                    if (_staged2) {
+                      const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                      _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                      log.info(`[taskWorker] auto-committed ${_staged2.split('\n').length} task-scoped files for task ${task.id} (pre-task baseline)`);
+                    } else {
+                      log.info(`[taskWorker] auto-commit: nothing new to stage for task ${task.id}`);
+                    }
+                  } else {
+                    log.info(`[taskWorker] auto-commit: no new dirty files since task start for task ${task.id}`);
+                  }
+                  _commitDone = true;
+                }
+
+                // Last resort: commit all dirty files (no story file, no pre-task baseline)
+                if (!_commitDone) {
+                  _exec('git add -A', { cwd, timeout: 10000 });
+                  const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                  _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                  log.info(`[taskWorker] auto-committed all dirty files for task ${task.id} in ${cwd} (last resort)`);
+                }
               }
             } catch (e) {
               log.warn(`[taskWorker] auto-commit failed for task ${task.id}: ${e.message}`);
@@ -2369,16 +2438,35 @@ function autoCreateQATask(task, fullText) {
 **Review task #${task.task_number}: ${task.title}**
 **QA Depth: ${qaDepth}/1** (max depth reached = no further QA cycles)
 
+### MANDATORY: Use Playwright MCP for ALL browser testing
+You have access to Playwright MCP tools. You MUST use them. The tools are prefixed with \`mcp__playwright__\`.
+
+**Available Playwright MCP tools (use these exact names):**
+- \`mcp__playwright__browser_navigate\` — navigate to a URL
+- \`mcp__playwright__browser_click\` — click an element
+- \`mcp__playwright__browser_type\` — type into an input
+- \`mcp__playwright__browser_screenshot\` — take a screenshot
+- \`mcp__playwright__browser_snapshot\` — get accessibility snapshot of page
+- \`mcp__playwright__browser_wait\` — wait for element/time
+
+**If you skip Playwright testing, the task will be considered FAILED.**
+
+Start by navigating to the app: \`mcp__playwright__browser_navigate\` with url \`http://localhost:8069\`
+Then login with credentials from docs/testing-info.md (or use: Administrator / admin)
+
 ### What to verify
 Read the story file for acceptance criteria: \`${storyFile}\`
-Run Playwright browser tests to verify each acceptance criterion.
 
 ### Files changed
 ${fileList}
 
 ### Test steps
-1. Login to the app (see docs/testing-info.md for credentials)
-2. Navigate to the relevant pages
+1. Use \`mcp__playwright__browser_navigate\` to go to http://localhost:8069
+2. Login using Playwright tools (navigate to login, type credentials, click login)
+3. Navigate to the relevant pages for this feature
+4. Test each acceptance criterion using Playwright interactions
+5. Take screenshots: \`mcp__playwright__browser_screenshot\`
+6. Check console for errors
 3. Test each acceptance criterion from the story file
 4. Check for regressions in related functionality
 5. Verify no console errors
@@ -3085,7 +3173,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code.\n\nQA TASK RULES: If this IS a QA task, you MUST use Playwright MCP tools (they are available to you):\n\n**MANDATORY Playwright MCP tools — use these exact tool names:**\n- mcp__playwright__browser_navigate — navigate to URL\n- mcp__playwright__browser_click — click elements\n- mcp__playwright__browser_type — type into inputs\n- mcp__playwright__browser_screenshot — capture screenshots\n- mcp__playwright__browser_snapshot — get page accessibility tree\n- mcp__playwright__browser_wait — wait for elements\n\n**First step in every QA task:** Call mcp__playwright__browser_navigate with url http://localhost:8069\n\nQA RULES:\n1. Use Playwright MCP tools for EVERY test step — do NOT skip browser testing\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\n**IF YOU DO NOT CALL mcp__playwright__browser_navigate AT LEAST ONCE, THE QA TASK IS FAILED.**\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
