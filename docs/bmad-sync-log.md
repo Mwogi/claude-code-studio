@@ -4,6 +4,57 @@ Daily automated sync log tracking BMAD METHOD repository updates.
 
 ---
 
+## 2026-03-23T17:00:00Z
+
+**Version checked:** v6.2.0 (latest: v6.2.0 — no upgrade needed for claude-code-studio)
+**Latest release date:** 2026-03-15
+
+### Recent Commits (last 24h — since 2026-03-22)
+
+| SHA | Date | Message |
+|-----|------|---------|
+| 48152507 | 2026-03-23 | fix(quick-dev): remove redundant H1 title from spec template |
+| b3cf3381 | 2026-03-23 | refactor(quick-dev): rename tech-spec prefix to spec |
+| fc2b253a | 2026-03-23 | fix(quick-dev): preserve tracking identifiers in spec slug derivation |
+| ac5cb9de | 2026-03-23 | refactor(quick-dev): replace unconditional artifact scan with intent cascade |
+| 980d2904 | 2026-03-22 | fix(quick-dev): add self-check gate for task completion tracking |
+| 76fb7e06 | 2026-03-22 | docs(zh-cn): refine established project guides |
+| ad2eb0e1 | 2026-03-22 | docs(zh-cn): refine install and non-interactive guides |
+| 7e97b7e7 | 2026-03-22 | fix(docs): correct skill names in getting-started tutorials |
+| ba2a5cc6 | 2026-03-22 | docs(zh-cn): align getting-started tutorial workflows |
+| 347f459d | 2026-03-22 | docs(zh-cn): refine entry copy and navigation |
+
+### Analysis
+
+**Breaking changes:** None. All commits are internal quick-dev workflow fixes/refactors and zh-cn documentation updates.
+
+**New agents/workflows:** None detected.
+
+**Impact to server.js integration:** None — all changes are internal to `bmad-quick-dev` skill workflow files (spec template, step files). No new BMAD_WORKFLOWS entries or WORKFLOW_TO_PHASE mappings required.
+
+**Notable changes in quick-dev skill:**
+- `tech-spec` mode renamed to `spec` internally in workflow files
+- Added self-check gate at task completion
+- Replaced unconditional artifact scan with intent cascade
+- Spec template H1 title removed (reduces redundancy)
+
+### Changes Implemented
+
+1. **No server.js changes required** — no new agents or workflows
+2. **Project BMAD installations updated** — 5 projects upgraded from v6.0.4 → v6.2.0:
+   - `/home/ubuntu/frappe-bench/apps/golf_casino` ✅ v6.2.0
+   - `/home/ubuntu/flutter` ✅ v6.2.0
+   - `/home/ubuntu/frappe-bench/apps/hmis_frontend` ✅ v6.2.0
+   - `/home/ubuntu/frappe-bench/apps/hmis_setup` ✅ v6.2.0
+   - `/home/ubuntu/.openclaw/workspace/vue-apps/hmis-lite` ✅ v6.2.0
+
+### NOT Implemented (manual review recommended)
+
+- zh-cn documentation updates — docs-only, no action needed
+- quick-dev spec template changes — installed via `npx bmad-method install --action update -y`; will be picked up on next agent invocation
+
+---
+
 ## 2026-03-22T19:48:58Z
 
 **Version checked:** v6.2.0 (latest: v6.2.0 — no upgrade needed)
