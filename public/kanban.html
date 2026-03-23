@@ -1843,7 +1843,7 @@ function renderBoard(){
     if(lastWasBmad&&!isBmad){
       const div=document.createElement('div');div.className='board-divider';board.appendChild(div);
     }
-    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
+    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>(a.task_number||0)-(b.task_number||0));
     board.appendChild(makeColumn(col,colTasks));
     lastWasBmad=isBmad;
   }
