@@ -268,6 +268,13 @@ const BMAD_WORKFLOWS = {
     model: 'opus',
     prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/skills/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
   },
+  'playwright-qa': {
+    label: '🎭 Playwright QA (Browser Testing)',
+    agent: 'qa',
+    skills: [],
+    model: 'opus',
+    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application using Playwright MCP browser tools.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST use Playwright MCP tools for browser testing. These tools are available to you RIGHT NOW:\n\n- mcp__playwright__browser_navigate — navigate to a URL\n- mcp__playwright__browser_click — click an element  \n- mcp__playwright__browser_type — type into an input\n- mcp__playwright__browser_screenshot — take a screenshot\n- mcp__playwright__browser_snapshot — get page accessibility tree\n- mcp__playwright__browser_wait — wait for elements\n\n## YOUR FIRST ACTION MUST BE:\nCall mcp__playwright__browser_navigate with url "http://localhost:8069"\n\nDo this RIGHT NOW before reading any files. If it fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with Administrator / admin (or check docs/testing-info.md).\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
+  },
   'edge-case-review': {
     label: '🔬 Edge Case Hunter',
     agent: 'master',
@@ -1318,7 +1325,7 @@ async function startTask(task) {
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
           'distillator': 'bmad_implementation', 'advanced-elicitation': 'bmad_brainstorm',
-          'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+          'adversarial-review': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
           'editorial-prose': 'bmad_qa', 'editorial-structure': 'bmad_qa', 'index-docs': 'bmad_implementation',
           'write-document': 'bmad_implementation', 'validate-doc': 'bmad_qa', 'mermaid-generate': 'bmad_implementation',
           'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
@@ -1333,7 +1340,7 @@ async function startTask(task) {
     // Also generate story file for implementation/QA workflows
     let storyPath = null;
     const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev',
-      'code-review', 'adversarial-review', 'e2e-tests', 'edge-case-review', 'correct-course'];
+      'code-review', 'adversarial-review', 'playwright-qa', 'e2e-tests', 'edge-case-review', 'correct-course'];
     if (task._bmadWorkflow) {
       const wf = task._bmadWorkflow;
       if (wf.outputDir) {
@@ -2508,7 +2515,7 @@ TASK_JSON
 **CRITICAL: Do NOT create more than ONE fix task. Do NOT create fix tasks for P2/P3 issues.**`;
 
   stmts.createTask.run(
-    qaId, qaTitle, qaDesc, '[bmad-workflow:adversarial-review]', 'bmad_workflow', 
+    qaId, qaTitle, qaDesc, '[bmad-workflow:playwright-qa]', 'bmad_workflow', 
     (task.sort_order || 0) + 1,
     null, workdir, 'opus',
     'auto', 'single', 80,
