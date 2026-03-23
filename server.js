@@ -1459,6 +1459,11 @@ async function startTask(task) {
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
+      // Pass MCP servers so tasks have access to Playwright, GitHub, etc.
+      const _mcpConfig = loadMergedConfig();
+      if (_mcpConfig.mcpServers && Object.keys(_mcpConfig.mcpServers).length > 0) {
+        _sendOpts.mcpServers = _mcpConfig.mcpServers;
+      }
       const stream = cli.send(_sendOpts);
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
@@ -2338,8 +2343,11 @@ Produce \`docs/qa-report-task-${task.task_number}.md\` with:
 - Console errors captured
 - Severity ratings (P0-P3) for any failures
 
-### If issues found
-Create a chained fix task (quick-dev) with all findings.`;
+### If P0/P1 issues found
+Create a fix task using this exact command:
+\`\`\`
+curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"Fix: [issue summary]","description":"[paste QA findings]","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:quick-dev]","chain_id":"${task.chain_id || ''}","sort_order":999}'
+\`\`\``;
 
   stmts.createTask.run(
     qaId, qaTitle, qaDesc, '[bmad-workflow:adversarial-review]', 'bmad_workflow', 
@@ -3007,7 +3015,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. At the end, create a chained dev/fix task (quick-dev) with all findings for the engineer to fix\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code and creating a chained QA task that will handle all browser testing.\n\nQA TASK RULES: If this IS a QA task, you MUST:\n1. Use Playwright MCP (tools prefixed with mcp__playwright__) extensively\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. If you find P0 or P1 issues, create a chained fix task using this exact curl command:\n   curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"Fix: [describe issue]","description":"[QA findings with steps]","workdir":"[SAME WORKDIR]","status":"bmad_workflow","notes":"[bmad-workflow:quick-dev]","chain_id":"[SAME CHAIN ID]","sort_order":999}'\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: \`task-mn21abc-01-login-page.png\`, \`task-mn21abc-02-procedure-list.png\`. This allows screenshots to be traced back to specific tasks.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
