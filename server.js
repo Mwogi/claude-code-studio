@@ -2573,7 +2573,7 @@ function autoActivateNextEpic(task) {
   
   // Notify
   const projName = getProjectName(task.workdir);
-  openclawNotify.sendNotification(`🚀 [${projName}] Epic "${task.chain_id}" complete! Auto-started next epic "${nextChainId}" (${nextTasks.length} stories)`);
+  openclawNotify.sendNotification(`🚀 [${projName}] Epic "${task.chain_id}" complete! Auto-started next epic "${nextChainId}" (${nextTasks.length} stories)`, projName, task.workdir);
   
   // Trigger queue processing
   setTimeout(processQueue, 3000);
