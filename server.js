@@ -375,6 +375,13 @@ const PORT = process.env.PORT || 3000;
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'config.json');
+const CONFIG_DEFAULT_PATH = path.join(APP_DIR, 'config.default.json');
+
+// Auto-create config.json from config.default.json on first run
+if (!fs.existsSync(CONFIG_PATH) && fs.existsSync(CONFIG_DEFAULT_PATH)) {
+  fs.copyFileSync(CONFIG_DEFAULT_PATH, CONFIG_PATH);
+  console.log('[init] Created config.json from config.default.json — edit to add API keys');
+}
 
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
