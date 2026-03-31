@@ -1592,7 +1592,29 @@ async function startTask(task) {
         const isRateLimited = hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many'));
         const MAX_CHAIN_RETRIES = 2;
 
-        if (isSuccess) {
+        // 🛡️ PRE-CHECK: Detect completed work regardless of process exit status
+        // Claude may hit max_turns or timeout AFTER completing all work.
+        // Check output for completion markers before deciding success/failure.
+        const _tail3k = (fullText || '').slice(-3000);
+        const _hasCompletionEvidence = 
+          _tail3k.includes('✅ Done') || _tail3k.includes('✅ done') ||
+          _tail3k.includes('VERIFICATION') || _tail3k.includes('verification') ||
+          _tail3k.includes('All acceptance criteria') || _tail3k.includes('all acceptance criteria') ||
+          _tail3k.includes('Task complete') || _tail3k.includes('task complete') ||
+          _tail3k.includes('Implementation complete') || _tail3k.includes('implementation complete') ||
+          _tail3k.includes('Successfully implemented') || _tail3k.includes('successfully completed') ||
+          _tail3k.includes('All requirements verified') || _tail3k.includes('all requirements verified') ||
+          _tail3k.includes('Build passed') || _tail3k.includes('build passed') ||
+          /Done\s*[—–-]/.test(_tail3k) ||
+          (/verified|confirmed|passing/i.test(_tail3k) && /commit|committed/i.test(_tail3k));
+
+        // Override isSuccess if output proves completion
+        const effectiveSuccess = isSuccess || _hasCompletionEvidence;
+        if (!isSuccess && _hasCompletionEvidence) {
+          log.warn(`[taskWorker] task ${task.id}: process exit was not success (subtype: ${lastTaskResult?.subtype}) but output contains completion markers — treating as success`);
+        }
+
+        if (effectiveSuccess) {
           // 🛡️ SAFEGUARD: Detect timeout masquerading as success
           // If the agent exhausted all auto-continues, check if it actually completed
           const tail2k = (fullText || '').slice(-2000);
