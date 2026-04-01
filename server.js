@@ -4728,6 +4728,31 @@ app.put('/api/tasks/:id', (req, res) => {
   const updated = stmts.getTask.get(req.params.id);
   // Trigger queue whenever status is todo (covers "Run now" on scheduled tasks too)
   if (status === 'todo') setImmediate(processQueue);
+
+  // ── Screenshot cleanup on status transitions (PUT — used by Kanban drag) ──
+  if (status !== task.status && ['done', 'archived'].includes(status)) {
+    const wd = workdir || WORKDIR;
+    try {
+      cleanupTaskScreenshots(wd, req.params.id);
+      if (task.task_number) {
+        const screenshotDir = path.join(wd, 'test-screenshots');
+        if (fs.existsSync(screenshotDir)) {
+          const prefix = `task-${task.task_number}-`;
+          let deleted = 0;
+          for (const f of fs.readdirSync(screenshotDir)) {
+            if (f.startsWith(prefix)) {
+              fs.unlinkSync(path.join(screenshotDir, f));
+              deleted++;
+            }
+          }
+          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${status}`);
+        }
+      }
+    } catch (e) {
+      log.warn('[screenshot-cleanup] PUT transition cleanup error', { error: e.message });
+    }
+  }
+
   res.json(updated);
 });
 app.delete('/api/tasks/:id', (req, res) => {
