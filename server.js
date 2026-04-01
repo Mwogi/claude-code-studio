@@ -2613,13 +2613,31 @@ function autoActivateNextEpic(task) {
 function autoArchiveProcess() {
   try {
     // Move done_review tasks older than 24h to done (user didn't review in time)
-    const reviewedCount = db.prepare(`
-      UPDATE tasks SET status='done', updated_at=datetime('now')
+    // Also clean up their screenshots at this transition
+    const tasksToApprove = db.prepare(`
+      SELECT id, workdir, task_number FROM tasks
       WHERE status='done_review'
         AND updated_at < datetime('now', '-24 hours')
-    `).run();
-    if (reviewedCount.changes > 0) {
-      log.info(`[autoArchive] Auto-approved ${reviewedCount.changes} done_review task(s) → done`);
+    `).all();
+    if (tasksToApprove.length > 0) {
+      const approveStmt = db.prepare(`UPDATE tasks SET status='done', updated_at=datetime('now') WHERE id=?`);
+      for (const t of tasksToApprove) {
+        approveStmt.run(t.id);
+        cleanupTaskScreenshots(t.workdir, t.id);
+        // Also clean by task_number
+        if (t.task_number) {
+          try {
+            const screenshotDir = path.join(t.workdir, 'test-screenshots');
+            if (fs.existsSync(screenshotDir)) {
+              const prefix = `task-${t.task_number}-`;
+              for (const f of fs.readdirSync(screenshotDir)) {
+                if (f.startsWith(prefix)) fs.unlinkSync(path.join(screenshotDir, f));
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+      }
+      log.info(`[autoArchive] Auto-approved ${tasksToApprove.length} done_review task(s) → done + cleaned screenshots`);
       wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
     }
     // Move done tasks older than 48h to archived + clean up their screenshots
@@ -4780,6 +4798,34 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
       }
     }
   }
+  // ── Screenshot cleanup on status transitions ──
+  // Clean up task screenshots when moving to done or archived (manual transitions)
+  if (updates.status && ['done', 'archived'].includes(updates.status) && !['done', 'archived'].includes(task.status)) {
+    const wd = merged.workdir || WORKDIR;
+    try {
+      // Clean by task ID
+      cleanupTaskScreenshots(wd, req.params.id);
+      // Also clean by task_number (screenshots use task-{number}-{nn}-{desc}.png naming)
+      if (task.task_number) {
+        const screenshotDir = path.join(wd, 'test-screenshots');
+        if (fs.existsSync(screenshotDir)) {
+          const prefix = `task-${task.task_number}-`;
+          const files = fs.readdirSync(screenshotDir);
+          let deleted = 0;
+          for (const f of files) {
+            if (f.startsWith(prefix)) {
+              fs.unlinkSync(path.join(screenshotDir, f));
+              deleted++;
+            }
+          }
+          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${updates.status}`);
+        }
+      }
+    } catch (e) {
+      log.warn('[screenshot-cleanup] manual transition cleanup error', { error: e.message });
+    }
+  }
+
   res.json(stmts.getTask.get(req.params.id));
 });
 
