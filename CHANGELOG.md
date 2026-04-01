@@ -1,7 +1,7 @@
 # Claude Code Studio — Tiberbu Fork Changelog
 
 > Fork: [Mwogi/claude-code-studio](https://github.com/Mwogi/claude-code-studio)
-> Upstream: [Lexus2016/claude-code-studio](https://github.com/Lexus2016/claude-code-studio)
+> Upstream: [Mwogi/claude-code-studio](https://github.com/Mwogi/claude-code-studio)
 > Branch: `feature/bmad-openclaw-integration`
 
 ## What This Fork Adds
@@ -240,4 +240,4 @@ Server.js
 
 ## License
 
-Same as upstream. See [Lexus2016/claude-code-studio](https://github.com/Lexus2016/claude-code-studio).
+Same as upstream. See [Mwogi/claude-code-studio](https://github.com/Mwogi/claude-code-studio).
