@@ -1706,6 +1706,8 @@ async function startTask(task) {
           try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
           // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
           try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
+          // 🔧 Auto-create fix tasks from QA reports (server-side, no auth needed)
+          try { autoCreateFixFromQA(task, fullText); } catch (e) { log.warn(`[auto-fix] ${e.message}`); }
           // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
           try { autoActivateNextEpic(task); } catch (e) { log.warn(`[auto-epic] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
@@ -2517,34 +2519,17 @@ Produce \`docs/qa-report-task-${task.task_number}.md\` with:
 - Console errors captured
 - Severity ratings (P0-P3) for any failures
 
-### Creating fix tasks (STRICT RULES)
-If you find P0 or P1 failures, you MUST create ONE consolidated fix task.
-Rules for the fix task:
-1. **ONE task only** — consolidate all findings into a single fix task
-2. **Atomic scope** — only fix what this QA found, nothing else
-3. **Exact file paths + line numbers** for every issue
-4. **Before/after code snippets** showing exactly what to change
-5. **Verification command** for each fix (e.g. grep, curl, test command)
-6. **Done criteria checklist** — each item must be independently verifiable
-7. Title format: "Fix: [parent story title] — [issue summary]"
+### Creating fix tasks (HANDLED AUTOMATICALLY BY SERVER)
+If you find P0 or P1 failures, clearly document them in your QA report with:
+1. **Severity level** (P0/P1) clearly labeled in headings
+2. **Exact file paths + line numbers** for every issue
+3. **Before/after code snippets** showing exactly what to change
+4. **Verification command** for each fix
 
-Create the fix task using:
-\`\`\`
-curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d @- <<'TASK_JSON'
-{
-  "title": "Fix: [story title] — [1-line summary of all issues]",
-  "description": "## Fix Task (from QA report docs/qa-report-task-${task.task_number}.md)\\n\\n### SCOPE LOCK\\nYou MUST only modify the files listed below. Any change outside this scope = failure.\\n\\n### Issues to fix\\n#### Issue 1: [title]\\n- File: [exact path]\\n- Line: [number]\\n- Current: \`[code snippet]\`\\n- Expected: \`[code snippet]\`\\n- Verify: \`[command that proves fix works]\`\\n\\n#### Issue 2: ...\\n\\n### Done Checklist (ALL must pass)\\n- [ ] Issue 1 fixed — verify with: [command]\\n- [ ] Issue 2 fixed — verify with: [command]\\n- [ ] No files modified outside scope\\n- [ ] \`git diff --stat\` shows only expected files\\n- [ ] App builds without errors: [build command]\\n- [ ] No console errors on affected pages\\n\\n### MANDATORY COMPLETION GATE\\nBefore marking done, run EVERY verify command above. If ANY fails, fix it. Do not skip.",
-  "workdir": "${workdir}",
-  "status": "bmad_workflow",
-  "notes": "[bmad-workflow:quick-dev]",
-  "model": "sonnet",
-  "max_turns": 60,
-  "chain_id": "${task.chain_id || ''}"
-}
-TASK_JSON
-\`\`\`
+The server will automatically create a fix task from your QA report when P0/P1 issues are detected.
+You do NOT need to create fix tasks via curl anymore — just write a thorough QA report.
 
-**CRITICAL: Do NOT create more than ONE fix task. Do NOT create fix tasks for P2/P3 issues.**`;
+**CRITICAL: Clearly label P0/P1 issues in your report. Do NOT mark ALL PASS if there are P0/P1 issues.**`;
 
   stmts.createTask.run(
     qaId, qaTitle, qaDesc, '[bmad-workflow:playwright-qa]', 'bmad_workflow', 
@@ -2556,6 +2541,106 @@ TASK_JSON
   );
   
   log.info(`[auto-qa] Created QA task #${taskNum} "${qaTitle}" for dev task #${task.task_number}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
+/**
+ * Auto-create fix tasks from QA task output (server-side).
+ * When a QA task completes and its output contains P0/P1 findings,
+ * parse the output and create a fix task. This replaces the unreliable
+ * curl-from-agent approach that fails due to auth cookie expiry.
+ */
+function autoCreateFixFromQA(task, fullText) {
+  // Only process QA tasks
+  if (!task.title.startsWith('QA:') && !task.title.startsWith('🧪')) return;
+  
+  // Don't create fixes for QA-on-fix tasks (depth limit)
+  const parentTitle = task.title.replace(/^QA:\s*/, '').replace(/^🧪\s*/, '');
+  if (parentTitle.startsWith('Fix:') || parentTitle.startsWith('Fix ')) return;
+  
+  const output = fullText || '';
+  
+  // Detect P0/P1 issues in the output
+  const hasP0 = /\bP0\b/i.test(output);
+  const hasP1 = /\bP1\b/i.test(output);
+  const hasFail = /\bFAIL\b/i.test(output) && !/\bALL PASS\b/i.test(output);
+  const hasBlocker = /\bblocker\b/i.test(output);
+  const hasFixNeeded = /fix\s*(task\s*)?(?:needed|required|created|specified)/i.test(output);
+  const noFixNeeded = /no\s*fix\s*(?:task\s*)?needed/i.test(output);
+  const allPass = /ALL\s*(?:PASS|REQUIREMENTS?\s*VERIFIED)/i.test(output);
+  
+  // If all pass or explicitly no fix needed, skip
+  if (allPass && !hasP0 && !hasP1) return;
+  if (noFixNeeded && !hasP0) return;
+  if (!hasP0 && !hasP1 && !hasFail && !hasBlocker && !hasFixNeeded) return;
+  
+  const workdir = task.workdir || WORKDIR;
+  
+  // Try to read the QA report file for detailed fix info
+  let qaReportContent = '';
+  try {
+    const qaReportPath = require('path').join(workdir, `docs/qa-report-task-${task.task_number}.md`);
+    if (require('fs').existsSync(qaReportPath)) {
+      qaReportContent = require('fs').readFileSync(qaReportPath, 'utf8').substring(0, 8000);
+    }
+  } catch {}
+  
+  // Also try parent task number format
+  if (!qaReportContent) {
+    const parentNum = parentTitle.match(/#(\d+)/)?.[1];
+    if (parentNum) {
+      try {
+        const altPath = require('path').join(workdir, `docs/qa-report-task-${parentNum}.md`);
+        if (require('fs').existsSync(altPath)) {
+          qaReportContent = require('fs').readFileSync(altPath, 'utf8').substring(0, 8000);
+        }
+      } catch {}
+    }
+  }
+  
+  // Extract the fix description from QA output
+  // Look for sections about what needs fixing
+  const fixSections = output.match(/(?:### (?:Fix|Issues?|P0|P1|Blockers?|What Failed).*?)(?=###|\n## |$)/gis) || [];
+  const fixContext = fixSections.join('\n\n').substring(0, 4000) || 
+    output.substring(Math.max(0, output.length - 3000));
+  
+  const fixId = genId();
+  const fixTaskNum = stmts.nextTaskNumber.get(workdir).next_num;
+  
+  const fixTitle = `Fix: ${parentTitle.substring(0, 70)} — issues from QA`;
+  const fixDesc = `## Auto-generated Fix Task (from QA task #${task.task_number})
+
+### Source
+QA Report: \`docs/qa-report-task-${task.task_number}.md\`
+Read the QA report FIRST for full context on what failed and needs fixing.
+
+### QA Findings Summary
+${qaReportContent ? qaReportContent.substring(0, 4000) : fixContext}
+
+### Instructions
+1. Read the QA report at \`docs/qa-report-task-${task.task_number}.md\`
+2. Fix ALL P0 and P1 issues identified
+3. Verify each fix with the verification commands from the report
+4. Ensure the build still passes
+5. Do NOT start a Vite dev server
+
+### Done Checklist
+- [ ] All P0 issues fixed
+- [ ] All P1 issues fixed
+- [ ] App builds without errors
+- [ ] No console errors on affected pages
+- [ ] git diff shows only expected files`;
+
+  stmts.createTask.run(
+    fixId, fixTitle, fixDesc, '[bmad-workflow:quick-dev]', 'bmad_workflow',
+    (task.sort_order || 0) + 1,
+    null, workdir, 'sonnet',
+    'auto', 'single', 60,
+    null, null, task.chain_id || null, null,
+    null, null, null, fixTaskNum
+  );
+  
+  log.info(`[auto-fix] Created fix task #${fixTaskNum} "${fixTitle}" from QA task #${task.task_number}`);
   wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
 }
 
