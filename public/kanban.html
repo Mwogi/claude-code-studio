@@ -1711,12 +1711,12 @@ function renderProjDropdownList(filter = '') {
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>
     `;
-  }).join('') + `
+  }).join('') + (window._userRole === 'admin' ? `
     <div class="proj-dd-divider"></div>
     <div class="proj-dd-item proj-dd-add" onclick="showAddProjectForm()">
       <div class="proj-dd-item-name">➕ Add Project</div>
     </div>
-  `;
+  ` : '');
 }
 
 function filterProjDropdown(value) {
