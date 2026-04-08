@@ -1518,7 +1518,7 @@ const TR = {
     'card.sched_tip':'Ожидает запуска:','modal.sched_wait':'Ожидает запуска:','locale':'ru-RU',
   },
 };
-const lang = localStorage.getItem('lang') || 'uk';
+const lang = localStorage.getItem('lang') || 'en';
 function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
 document.title = t('hdr.title') + ' — Claude Code Studio';

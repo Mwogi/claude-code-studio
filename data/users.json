@@ -1,1 +1,16 @@
-{"users":[]}
+{
+  "users": [
+    {
+      "id": "user-11840cb2",
+      "username": "ckiprotich",
+      "displayName": "Cyrus Kiprotich",
+      "passwordHash": "$2a$12$q3rMG/8o4Ewo6HE5YHbQ2.TvOgSCejB72wphxiiXcobB.8xEovN7.",
+      "projects": [
+        "proj-mmnp9duzq6pne5",
+        "proj-mn4bqan3s71a32"
+      ],
+      "createdAt": "2026-04-08T08:13:39.698Z",
+      "updatedAt": "2026-04-08T08:13:39.698Z"
+    }
+  ]
+}

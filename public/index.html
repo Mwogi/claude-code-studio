@@ -6306,7 +6306,7 @@ async function loadHist() {
       d.setAttribute('role', 'button');
       d.setAttribute('tabindex', '0');
       if (!histSelectMode) d.setAttribute('draggable', 'true');
-      const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
+      const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'en', { day: 'numeric', month: 'short' });
       d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
       if (histSelectMode) {
         d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
@@ -6806,7 +6806,7 @@ function selectAllHist() {
 async function delSelectedHist() {
   const ids = [...histSelected];
   if (ids.length === 0) return;
-  const lang = localStorage.getItem('lang') || 'uk';
+  const lang = localStorage.getItem('lang') || 'en';
   let confirmMsg;
   if (lang === 'en') confirmMsg = `Delete ${ids.length} chat${ids.length === 1 ? '' : 's'}?`;
   else if (lang === 'ru') confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
@@ -7475,7 +7475,7 @@ function toggleAutoSkills() {
 function renderSkills() {
   const el = $i('skillsList'); el.innerHTML = '';
   let c = 0;
-  const lang = localStorage.getItem('lang') || 'uk';
+  const lang = localStorage.getItem('lang') || 'en';
 
   // Group skills by category
   const grouped = {};
