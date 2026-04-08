@@ -1328,6 +1328,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
     </div>
   </div>
   <div class="hdr-btns">
+    <span id="userInfoBadge" style="font-size:12px;color:var(--muted);margin-right:6px"></span>
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
@@ -2711,6 +2712,23 @@ document.addEventListener('keydown',e=>{
 });
 
 (async()=>{
+  // Load user info for header badge
+  try {
+    const authR = await fetch('/api/auth/status');
+    const authD = await authR.json();
+    if (authD.loggedIn) {
+      const badge = document.getElementById('userInfoBadge');
+      const name = authD.displayName || authD.username || 'Admin';
+      const isAdmin = authD.role === 'admin';
+      badge.innerHTML = `👤 ${name}` + (isAdmin ? ' <a href="/users" style="color:var(--accent);font-size:11px;margin-left:4px">Users</a>' : '');
+      // Hide project management for non-admin
+      if (!isAdmin) {
+        window._userRole = 'user';
+      } else {
+        window._userRole = 'admin';
+      }
+    }
+  } catch {}
   // Update project search placeholder with translation
   const searchInput = $i('projDdSearch');
   if (searchInput) searchInput.placeholder = t('proj.search');

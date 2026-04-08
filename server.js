@@ -4540,7 +4540,20 @@ app.get('/api/auth/status', (req,res) => {
   const token = req.cookies?.token || req.headers['x-auth-token'];
   const loggedIn = setupDone && auth.validateToken(token);
   const ad = auth.loadAuth();
-  res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null });
+  const tokenInfo = loggedIn ? auth.getTokenInfo(token) : null;
+  const result = { setupDone, loggedIn };
+  if (loggedIn && tokenInfo) {
+    result.role = tokenInfo.role;
+    result.username = tokenInfo.username;
+    if (tokenInfo.role === 'admin') {
+      result.displayName = ad?.displayName || 'Admin';
+    } else {
+      const user = auth.getUserById(tokenInfo.userId);
+      result.displayName = user?.displayName || tokenInfo.username;
+      result.projects = user?.projects || [];
+    }
+  }
+  res.json(result);
 });
 
 app.post('/api/auth/setup', authLimiter, async (req,res) => {
@@ -4554,9 +4567,12 @@ app.post('/api/auth/setup', authLimiter, async (req,res) => {
 
 app.post('/api/auth/login', authLimiter, async (req,res) => {
   try {
-    const token = await auth.login(req.body.password);
+    const { password, username } = req.body;
+    const token = await auth.login(password, username || undefined);
     res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
-    res.json({ ok:true, displayName:auth.loadAuth()?.displayName });
+    const tokenInfo = auth.getTokenInfo(token);
+    const displayName = tokenInfo?.role === 'admin' ? auth.loadAuth()?.displayName : (auth.getUserById(tokenInfo?.userId)?.displayName || tokenInfo?.username);
+    res.json({ ok:true, displayName, role: tokenInfo?.role, username: tokenInfo?.username });
   } catch(e) { res.status(401).json({ error:e.message }); }
 });
 
@@ -4574,6 +4590,39 @@ app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); 
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
 app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','schedule.html')));
+app.get('/users', (_,res) => res.sendFile(path.join(__dirname,'public','users.html')));
+
+// ─── Admin-only middleware ────────────────────────────────────────────────────
+function requireAdmin(req, res, next) {
+  if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+// ─── User Management (admin only) ────────────────────────────────────────────
+app.get('/api/users', requireAdmin, (req, res) => {
+  res.json(auth.listUsers());
+});
+
+app.post('/api/users', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const user = await auth.createUser(req.body);
+    res.json({ ok: true, user });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.put('/api/users/:id', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const user = await auth.updateUser(req.params.id, req.body);
+    res.json({ ok: true, user });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/users/:id', requireAdmin, (req, res) => {
+  try {
+    auth.deleteUser(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
@@ -4582,6 +4631,17 @@ app.get('/api/tasks', (req, res) => {
   let rows = stmts.getTasks.all({ w: workdir || null });
   // Optional status filter for external API clients
   if (statusFilter) rows = rows.filter(t => t.status === statusFilter);
+  // Non-admin users: filter tasks to only show those in assigned projects
+  if (req.userRole !== 'admin') {
+    const user = auth.getUserById(req.userId);
+    const assignedProjects = user?.projects || [];
+    const projectWorkdirs = new Set();
+    const allProjects = loadProjects();
+    for (const p of allProjects) {
+      if (assignedProjects.includes(p.id)) projectWorkdirs.add(p.workdir);
+    }
+    rows = rows.filter(t => t.workdir && projectWorkdirs.has(t.workdir));
+  }
   // Add last_activity and started_at for running tasks
   const lastActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at DESC LIMIT 1`);
   const firstActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at ASC LIMIT 1`);
@@ -6093,9 +6153,18 @@ app.get('/api/project-files/read', (req, res) => {
 });
 
 // Projects CRUD
-app.get('/api/projects', (_,res) => res.json(loadProjects()));
+app.get('/api/projects', (req,res) => {
+  let projects = loadProjects();
+  // Non-admin users only see assigned projects
+  if (req.userRole !== 'admin') {
+    const user = auth.getUserById(req.userId);
+    const assignedIds = new Set(user?.projects || []);
+    projects = projects.filter(p => assignedIds.has(p.id));
+  }
+  res.json(projects);
+});
 
-app.post('/api/projects', (req,res) => {
+app.post('/api/projects', requireAdmin, (req,res) => {
   const { name, workdir, gitInit, isRemote=false, remoteHostId='', remoteWorkdir='', sshKeyPath='', port=22 } = req.body;
   if (!name || !workdir) return res.status(400).json({ error:'name and workdir required' });
   try {
@@ -6138,7 +6207,7 @@ app.post('/api/projects', (req,res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-app.post('/api/projects/reorder', (req, res) => {
+app.post('/api/projects/reorder', requireAdmin, (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
   const all = loadProjects();
@@ -6149,7 +6218,7 @@ app.post('/api/projects/reorder', (req, res) => {
   saveProjects(ordered);
   res.json({ ok: true });
 });
-app.patch('/api/projects/:id', (req,res) => {
+app.patch('/api/projects/:id', requireAdmin, (req,res) => {
   const { name, autoMode } = req.body;
   const projects = loadProjects();
   const p = projects.find(p => p.id === req.params.id);
@@ -6172,7 +6241,7 @@ app.patch('/api/projects/:id', (req,res) => {
   res.json({ ok:true, autoMode: !!p.autoMode });
 });
 
-app.delete('/api/projects/:id', (req,res) => {
+app.delete('/api/projects/:id', requireAdmin, (req,res) => {
   saveProjects(loadProjects().filter(p => p.id !== req.params.id));
   res.json({ ok:true });
 });
