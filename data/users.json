@@ -11,6 +11,18 @@
       ],
       "createdAt": "2026-04-08T08:13:39.698Z",
       "updatedAt": "2026-04-08T08:13:39.698Z"
+    },
+    {
+      "id": "user-e3c06e28",
+      "username": "dnamakoto",
+      "displayName": "Duncan Namakoto",
+      "passwordHash": "$2a$12$DRJMvlrNG8zw011IjbI1LOJDdlX/aAaPiSAiTD5XGRRfechk4/xYu",
+      "projects": [
+        "proj-mmnp9duzq6pne5",
+        "proj-mn4bqan3s71a32"
+      ],
+      "createdAt": "2026-04-08T08:26:02.003Z",
+      "updatedAt": "2026-04-08T08:26:02.003Z"
     }
   ]
 }
