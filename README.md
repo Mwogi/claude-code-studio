@@ -303,14 +303,14 @@ This is infrastructure you own. MIT licensed, no strings.
 - [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (requires a Claude Pro or Max subscription)
 
 ```bash
-npx github:Lexus2016/claude-code-studio
+npx github:Mwogi/claude-code-studio
 ```
 
 Open `http://localhost:3000`, set your password on first launch, start chatting.
 
 **To update:**
 ```bash
-npx github:Lexus2016/claude-code-studio@latest
+npx github:Mwogi/claude-code-studio@latest
 ```
 
 ---
@@ -319,19 +319,19 @@ npx github:Lexus2016/claude-code-studio@latest
 
 **Install globally** — run `claude-code-studio` from anywhere:
 ```bash
-npm install -g github:Lexus2016/claude-code-studio
+npm install -g github:Mwogi/claude-code-studio
 ```
 
 **Clone the repo** — for developers who want to dig in:
 ```bash
-git clone https://github.com/Lexus2016/claude-code-studio.git
+git clone https://github.com/Mwogi/claude-code-studio.git
 cd claude-code-studio
 npm install && node server.js
 ```
 
 **Docker:**
 ```bash
-git clone https://github.com/Lexus2016/claude-code-studio.git
+git clone https://github.com/Mwogi/claude-code-studio.git
 cd claude-code-studio
 cp .env.example .env
 docker compose up -d --build
@@ -350,7 +350,7 @@ Use **[Claude Flow](https://github.com/Lexus2016/claude-flow)** — a companion 
 npx github:Lexus2016/claude-flow
 
 # 2. Launch Studio as usual
-npx github:Lexus2016/claude-code-studio
+npx github:Mwogi/claude-code-studio
 ```
 
 After setup, Claude Code CLI will use your OpenRouter API key and the model you selected. Studio inherits these settings automatically — no additional configuration needed.

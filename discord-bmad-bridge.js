@@ -124,9 +124,29 @@ function parseCommand(text) {
   // bmad status
   if (/^status$/i.test(rest)) return { action: 'status' };
   
-  // bmad reply <task-id> <message>
+  // bmad then <workflow> "<project>" [description] — chain after the last created/completed task
+  const thenMatch = rest.match(/^then\s+([\w-]+)\s+"([^"]+)"(?:\s+(.+))?$/i);
+  if (thenMatch) {
+    return { action: 'start', workflow: thenMatch[1], project: thenMatch[2], description: thenMatch[3] || '', chainAfterLast: true };
+  }
+  const thenDash = rest.match(/^then\s+([\w-]+)\s+(.+?)\s+-\s+(.+)$/i);
+  if (thenDash) {
+    return { action: 'start', workflow: thenDash[1], project: thenDash[2], description: thenDash[3], chainAfterLast: true };
+  }
+  
+  // bmad reply <task-id> <message>  OR  bmad reply <message> (auto-find awaiting task)
   const replyMatch = rest.match(/^reply\s+(\S+)\s+(.+)/i);
-  if (replyMatch) return { action: 'reply', taskId: replyMatch[1], message: replyMatch[2] };
+  if (replyMatch) {
+    // If first word looks like a task ID (alphanumeric 8+ chars), use it; otherwise treat entire thing as message
+    if (/^[a-z0-9]{8,}$/i.test(replyMatch[1])) {
+      return { action: 'reply', taskId: replyMatch[1], message: replyMatch[2] };
+    }
+    // No task ID — auto-find awaiting task
+    return { action: 'reply', taskId: null, message: rest.replace(/^reply\s+/i, '') };
+  }
+  // Simple "reply" with just a message
+  const simpleReply = rest.match(/^reply$/i);
+  if (simpleReply) return { action: 'help' };
   
   // bmad <workflow> "<project>" [description]
   // Or: bmad <workflow> <project> [description]
@@ -181,7 +201,7 @@ async function findProject(name, apiBase = STUDIO_URL, cookie = null) {
 /**
  * Create a task via the Claude Studio API
  */
-async function createTask(workflow, projectWorkdir, title, description, cookie) {
+async function createTask(workflow, projectWorkdir, title, description, cookie, opts = {}) {
   const http = require('http');
   const body = JSON.stringify({
     title,
@@ -191,7 +211,10 @@ async function createTask(workflow, projectWorkdir, title, description, cookie) 
     workdir: projectWorkdir,
     model: 'sonnet',
     mode: 'auto',
-    max_turns: ['quick-dev', 'dev-story'].includes(workflow) ? 100 : 30
+    max_turns: ['quick-dev', 'dev-story'].includes(workflow) ? 100 : 30,
+    ...(opts.after ? { after: opts.after } : {}),
+    ...(opts.chain_id ? { chain_id: opts.chain_id } : {}),
+    ...(opts.sort_order != null ? { sort_order: opts.sort_order } : {})
   });
   
   return new Promise((resolve, reject) => {
@@ -209,6 +232,57 @@ async function createTask(workflow, projectWorkdir, title, description, cookie) 
     req.on('error', reject);
     req.write(body);
     req.end();
+  });
+}
+
+/**
+ * Find the most recently created task (for chaining)
+ */
+async function findLastTask(cookie, workdir) {
+  const http = require('http');
+  return new Promise((resolve, reject) => {
+    const opts = { hostname: '127.0.0.1', port: 3000, path: '/api/tasks', headers: {} };
+    if (cookie) opts.headers.Cookie = cookie;
+    http.get(opts, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const tasks = JSON.parse(data);
+          if (!Array.isArray(tasks)) { resolve(null); return; }
+          const filtered = tasks
+            .filter(t => !['cancelled'].includes(t.status) && (!workdir || t.workdir === workdir))
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          resolve(filtered[0] || null);
+        } catch { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+/**
+ * Find the most recent awaiting_input task
+ */
+async function findAwaitingTask(cookie) {
+  const http = require('http');
+  return new Promise((resolve, reject) => {
+    const opts = { hostname: '127.0.0.1', port: 3000, path: '/api/tasks', headers: {} };
+    if (cookie) opts.headers.Cookie = cookie;
+    http.get(opts, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const tasks = JSON.parse(data);
+          if (!Array.isArray(tasks)) { resolve(null); return; }
+          // Find most recent awaiting_input task
+          const awaiting = tasks
+            .filter(t => t.status === 'awaiting_input')
+            .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+          resolve(awaiting[0] || null);
+        } catch { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
   });
 }
 
@@ -276,6 +350,8 @@ module.exports = {
   findProject,
   createTask,
   replyToTask,
+  findAwaitingTask,
+  findLastTask,
   getTaskStatus,
   activeThreadTasks,
   DISCORD_CHANNEL

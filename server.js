@@ -49,7 +49,7 @@ const BMAD_PHASE_MODEL_MAP = {
   'bmad_prd': 'opus',
   'bmad_architecture': 'opus',
   'bmad_implementation': 'sonnet',
-  'bmad_qa': 'sonnet',
+  'bmad_qa': 'opus',
 };
 
 const BMAD_WORKFLOWS = {
@@ -66,6 +66,34 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-brainstorming'],
     model: 'opus',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the research workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/research/\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain research, market research, and technical research. Save findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
+  },
+  'domain-research': {
+    label: '🌐 Domain Research',
+    agent: 'analyst',
+    skills: ['bmad-domain-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-domain-research skill from ${workdir}/_bmad/core/skills/bmad-domain-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research.md`
+  },
+  'market-research': {
+    label: '📊 Market Research',
+    agent: 'analyst',
+    skills: ['bmad-market-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-market-research skill from ${workdir}/_bmad/core/skills/bmad-market-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research.md`
+  },
+  'technical-research': {
+    label: '🔭 Technical Research',
+    agent: 'analyst',
+    skills: ['bmad-technical-research'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-technical-research skill from ${workdir}/_bmad/core/skills/bmad-technical-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research.md`
+  },
+  'product-brief-preview': {
+    label: '📄 Product Brief (Preview)',
+    agent: 'analyst',
+    skills: ['bmad-product-brief-preview'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-product-brief-preview skill from ${workdir}/.claude/skills/bmad-product-brief-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate or update the product brief through guided discovery. Save output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
   },
   planning: {
     label: '📋 Planning → PRD',
@@ -113,8 +141,10 @@ const BMAD_WORKFLOWS = {
     label: '📐 Sprint Planning → sprint-status.yaml',
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
-    model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\n\nGenerate sprint-status.yaml and save to ${workdir}/_bmad-output/implementation-artifacts/sprint-status.yaml`
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture from ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
+
+Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N}'`
   },
   'quick-spec': {
     label: '⚡ Quick Spec',
@@ -130,6 +160,22 @@ const BMAD_WORKFLOWS = {
     model: 'sonnet',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
+  },
+  'quick-dev-new-preview': {
+    label: '🚀 Quick Dev (New Preview)',
+    agent: 'developer',
+    skills: ['bmad-quick-dev-new-preview'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read the bmad-quick-dev-new-preview skill from ${workdir}/.claude/skills/bmad-quick-dev-new-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the user request using the new preview quick-dev workflow. Read the task description for the requirement.`
+  },
+  'quick-flow-solo-dev': {
+    label: '🎯 Quick Flow Solo Dev',
+    agent: 'developer',
+    skills: ['bmad-quick-flow-solo-dev'],
+    model: 'sonnet',
+    maxTurns: 100,
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/quick-flow-solo-dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
   },
   'generate-context': {
     label: '📑 Generate Project Context',
@@ -178,7 +224,7 @@ const BMAD_WORKFLOWS = {
     agent: 'product-manager',
     skills: ['bmad-master'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a new story file using the template. Save to the appropriate epic directory.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nAfter creating the story, update the task in Kanban to use dev-story workflow:\ncurl -b /tmp/ccs.cookie -X PATCH "http://localhost:3000/api/tasks/TASK_ID" -H "Content-Type: application/json" -d '{"notes":"[bmad-workflow:dev-story]","status":"bmad_workflow"}'\n\nThis ensures the next step in the chain picks up dev-story (implementation) with the story file you created.`
   },
   'dev-story': {
     label: '💻 Dev Story (Implement)',
@@ -186,7 +232,7 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-master'],
     model: 'sonnet',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story definition of done checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the story, update tasks/subtasks, file list, and dev agent record per the checklist.`
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story workflow and checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
   },
   'retrospective': {
     label: '🔮 Retrospective',
@@ -201,6 +247,99 @@ const BMAD_WORKFLOWS = {
     skills: ['bmad-master'],
     model: 'sonnet',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-status/\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
+  },
+  // ── Core Tools ──
+  'distillator': {
+    label: '🗜️ Distillator (Compress Document)',
+    agent: 'master',
+    skills: ['bmad-distillator'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-distillator skill from ${workdir}/_bmad/core/skills/bmad-distillator/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCompress the document(s) described in the task into a lossless, LLM-optimized distillate. Save output to ${workdir}/_bmad-output/planning-artifacts/`
+  },
+  'advanced-elicitation': {
+    label: '🧠 Advanced Elicitation (Refine Content)',
+    agent: 'master',
+    skills: ['bmad-advanced-elicitation'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/_bmad/core/skills/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
+  },
+  'adversarial-review': {
+    label: '😈 Adversarial Review (Find Problems)',
+    agent: 'master',
+    skills: ['bmad-review-adversarial-general'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/skills/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
+  },
+  'playwright-qa': {
+    label: '🎭 Playwright QA (Browser Testing)',
+    agent: 'qa',
+    skills: [],
+    model: 'opus',
+    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application using Playwright MCP browser tools.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST use Playwright MCP tools for browser testing. These tools are available to you RIGHT NOW:\n\n- mcp__playwright__browser_navigate — navigate to a URL\n- mcp__playwright__browser_click — click an element  \n- mcp__playwright__browser_type — type into an input\n- mcp__playwright__browser_screenshot — take a screenshot\n- mcp__playwright__browser_snapshot — get page accessibility tree\n- mcp__playwright__browser_wait — wait for elements\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Call mcp__playwright__browser_navigate with the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
+  },
+  'edge-case-review': {
+    label: '🔬 Edge Case Hunter',
+    agent: 'master',
+    skills: ['bmad-review-edge-case-hunter'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/_bmad/core/skills/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
+  },
+  'editorial-prose': {
+    label: '✍️ Editorial Review — Prose',
+    agent: 'master',
+    skills: ['bmad-editorial-review-prose'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
+  },
+  'editorial-structure': {
+    label: '🏗️ Editorial Review — Structure',
+    agent: 'master',
+    skills: ['bmad-editorial-review-structure'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
+  },
+  'index-docs': {
+    label: '📇 Index Documents',
+    agent: 'master',
+    skills: ['bmad-index-docs'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/_bmad/core/skills/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
+  },
+  // ── Technical Writer Agent Workflows ──
+  'write-document': {
+    label: '📝 Write Document (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWrite the document described in the task. Follow the tech writer agent's WD trigger workflow. Save output to ${workdir}/docs/`
+  },
+  'validate-doc': {
+    label: '✅ Validate Document (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the document described in the task using the tech writer VD trigger. Check for completeness, accuracy, and consistency.`
+  },
+  'mermaid-generate': {
+    label: '🧜 Generate Mermaid Diagram',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate a Mermaid diagram as described in the task using the tech writer MG trigger. Output valid Mermaid syntax.`
+  },
+  'explain-concept': {
+    label: '💡 Explain Concept (Tech Writer)',
+    agent: 'tech-writer',
+    skills: ['bmad-master'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nExplain the concept described in the task using the tech writer EC trigger. Make it clear and accessible.`
+  },
+  'bmad-help': {
+    label: '❓ BMAD Help (What\'s Next?)',
+    agent: 'master',
+    skills: ['bmad-help'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/_bmad/core/skills/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
   }
 };
 
@@ -238,6 +377,13 @@ const PORT = process.env.PORT || 3000;
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'config.json');
+const CONFIG_DEFAULT_PATH = path.join(APP_DIR, 'config.default.json');
+
+// Auto-create config.json from config.default.json on first run
+if (!fs.existsSync(CONFIG_PATH) && fs.existsSync(CONFIG_DEFAULT_PATH)) {
+  fs.copyFileSync(CONFIG_DEFAULT_PATH, CONFIG_PATH);
+  console.log('[init] Created config.json from config.default.json — edit to add API keys');
+}
 
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
@@ -548,6 +694,18 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`)
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_workdir TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'web'`); } catch(e) {}
+// Shared docs: public read-only document links
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shared_docs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT,
+    created_by TEXT DEFAULT 'user'
+  );
+  CREATE INDEX IF NOT EXISTS idx_shared_docs_project ON shared_docs(project_id);
+`);
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -640,15 +798,16 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,task_number) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
   updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
+  nextTaskNumber: db.prepare(`SELECT COALESCE(MAX(task_number), 0) + 1 as next_num FROM tasks WHERE workdir=?`),
   // processQueue hot-path — prepared once, reused every 60 s
-  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE (status='todo' OR (status='bmad_workflow' AND notes LIKE '%[bmad-workflow:%')) AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
+  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE ((status='todo' OR status='bmad_workflow') AND notes LIKE '%[bmad-workflow:%') AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')`),
   getTasksByChain:   db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC`),
   // startTask hot-path
@@ -688,6 +847,388 @@ const stmts = {
 for (const [name, stmt] of Object.entries(stmts)) wrapStmt(stmt, name);
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// ─── BMAD Story & Sprint Status Integration ──────────────────────────────
+// Generates story files for dev tasks and maintains sprint-status.yaml per project.
+// Story files provide structured acceptance criteria, task tracking, and dev records.
+// Sprint-status.yaml provides a single source of truth for all task statuses.
+
+const STORY_TEMPLATE = `# Story: {{title}}
+
+Status: {{status}}
+Task ID: {{task_id}}
+Task Number: #{{task_number}}
+Workflow: {{workflow}}
+Model: {{model}}
+Created: {{created_at}}
+
+## Description
+
+{{description}}
+
+## Acceptance Criteria
+
+{{acceptance_criteria}}
+
+## Tasks / Subtasks
+
+{{subtasks}}
+
+## Dev Notes
+
+{{dev_notes}}
+
+### References
+
+- Task source: Claude Code Studio task #{{task_number}}
+
+## Dev Agent Record
+
+### Agent Model Used
+
+{{model}}
+
+### Completion Notes List
+
+_(Updated by agent on completion)_
+
+### Change Log
+
+_(Updated by agent during implementation)_
+
+### File List
+
+_(Updated by agent — list all files created or modified)_
+`;
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
+}
+
+/**
+ * Extract acceptance criteria from task description.
+ * Looks for numbered lists, checkbox lists, or "acceptance criteria" sections.
+ */
+function extractAcceptanceCriteria(description) {
+  if (!description) return '- [ ] Implementation matches task description\n- [ ] No regressions introduced\n- [ ] Code compiles/builds without errors';
+  
+  // Look for explicit AC section
+  const acMatch = description.match(/(?:acceptance criteria|requirements|expected behavior)[:\s]*\n([\s\S]*?)(?:\n##|\n---|\n\n\n|$)/i);
+  if (acMatch) {
+    const lines = acMatch[1].trim().split('\n').filter(l => l.trim());
+    return lines.map(l => {
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return cleaned ? `- [ ] ${cleaned}` : '';
+    }).filter(Boolean).join('\n') || '- [ ] Implementation matches task description';
+  }
+
+  // Look for numbered/bulleted lists
+  const listLines = description.split('\n').filter(l => /^\s*[-*\d]+[.)]\s/.test(l));
+  if (listLines.length >= 2) {
+    return listLines.map(l => {
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return `- [ ] ${cleaned}`;
+    }).join('\n');
+  }
+
+  return '- [ ] Implementation matches task description\n- [ ] No regressions introduced\n- [ ] Code compiles/builds without errors';
+}
+
+/**
+ * Extract subtasks from description (## Tasks, ## Steps, ## Fix sections)
+ */
+function extractSubtasks(description) {
+  if (!description) return '- [ ] Implement changes\n- [ ] Verify build passes';
+  
+  const taskMatch = description.match(/(?:## (?:Tasks|Steps|Fix|Implementation|Changes))[:\s]*\n([\s\S]*?)(?:\n##|$)/i);
+  if (taskMatch) {
+    const lines = taskMatch[1].trim().split('\n').filter(l => l.trim());
+    return lines.map(l => {
+      if (/^\s*[-*]\s*\[[ x]\]/.test(l)) return l; // already checkbox
+      const cleaned = l.replace(/^[\s]*[-*\d.]+[\s.)\]]*/, '').trim();
+      return cleaned ? `- [ ] ${cleaned}` : '';
+    }).filter(Boolean).join('\n') || '- [ ] Implement changes';
+  }
+
+  // Numbered steps
+  const steps = description.split('\n').filter(l => /^\s*\d+[.)]\s/.test(l));
+  if (steps.length >= 2) {
+    return steps.map(l => {
+      const cleaned = l.replace(/^\s*\d+[.)]\s*/, '').trim();
+      return `- [ ] ${cleaned}`;
+    }).join('\n');
+  }
+
+  return '- [ ] Implement changes\n- [ ] Verify build passes';
+}
+
+/**
+ * Generate a story file for a task before it starts.
+ * Returns the path to the generated story file.
+ */
+function generateStoryFile(task) {
+  const workdir = task.workdir || WORKDIR;
+  const outputDir = path.join(workdir, '_bmad-output', 'implementation-artifacts');
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const slug = slugify(task.title);
+  const storyFilename = `story-${task.task_number || 0}-${slug}.md`;
+  const storyPath = path.join(outputDir, storyFilename);
+
+  // Don't regenerate if story already exists (e.g. task retry)
+  if (fs.existsSync(storyPath)) return storyPath;
+
+  const wfType = task._bmadWorkflowType || 'quick-dev';
+  const content = STORY_TEMPLATE
+    .replace(/\{\{title\}\}/g, task.title || 'Untitled')
+    .replace(/\{\{status\}\}/g, 'in-progress')
+    .replace(/\{\{task_id\}\}/g, task.id || '')
+    .replace(/\{\{task_number\}\}/g, String(task.task_number || 0))
+    .replace(/\{\{workflow\}\}/g, wfType)
+    .replace(/\{\{model\}\}/g, task.model || 'sonnet')
+    .replace(/\{\{created_at\}\}/g, new Date().toISOString())
+    .replace(/\{\{description\}\}/g, task.description || task.title || '')
+    .replace(/\{\{acceptance_criteria\}\}/g, extractAcceptanceCriteria(task.description))
+    .replace(/\{\{subtasks\}\}/g, extractSubtasks(task.description))
+    .replace(/\{\{dev_notes\}\}/g, task.notes ? task.notes.replace(/\[bmad-workflow:[\w-]+\]/g, '').trim() : '_(none)_');
+
+  fs.writeFileSync(storyPath, content, 'utf8');
+  log.info(`[bmad-story] Generated story file: ${storyFilename}`);
+  return storyPath;
+}
+
+/**
+ * Update story file status and completion notes after task finishes.
+ */
+function updateStoryOnCompletion(task, status, completionText) {
+  const workdir = task.workdir || WORKDIR;
+  const outputDir = path.join(workdir, '_bmad-output', 'implementation-artifacts');
+  const slug = slugify(task.title);
+  const storyPath = path.join(outputDir, `story-${task.task_number || 0}-${slug}.md`);
+
+  if (!fs.existsSync(storyPath)) return;
+
+  try {
+    let content = fs.readFileSync(storyPath, 'utf8');
+    
+    // Update status
+    content = content.replace(/^Status: .+$/m, `Status: ${status}`);
+    
+    // Add completion notes
+    if (completionText) {
+      const summary = completionText.slice(-1500).trim();
+      content = content.replace(
+        '_(Updated by agent on completion)_',
+        `**Completed:** ${new Date().toISOString()}\n\n${summary}`
+      );
+    }
+
+    fs.writeFileSync(storyPath, content, 'utf8');
+    log.info(`[bmad-story] Updated story status → ${status}: story-${task.task_number}-${slug}.md`);
+  } catch (e) {
+    log.warn(`[bmad-story] Failed to update story: ${e.message}`);
+  }
+}
+
+/**
+ * Extract file paths from the story File List section.
+ * Returns an array of absolute paths, or null if section is empty/placeholder.
+ *
+ * Handles agent output formats like:
+ *   - `path/to/file.py`
+ *   - `path/to/file.py` (modified)
+ *   - path/to/file.py — description
+ *   - path/to/file.py (dev + bench)
+ */
+function extractFileListFromStory(storyContent, workdir) {
+  const fileListMatch = storyContent.match(/###\s+File List\s*\n([\s\S]*?)(?:\n###|\n##|$)/);
+  if (!fileListMatch) return null;
+
+  const section = fileListMatch[1].trim();
+  const PLACEHOLDER = '_(Updated by agent — list all files created or modified)_';
+  if (!section || section === PLACEHOLDER) return null;
+
+  const files = [];
+  for (const rawLine of section.split('\n')) {
+    // Strip leading list markers (-, *, numbers) and whitespace
+    let line = rawLine.replace(/^[\s]*[-*\d]+[.)]\s*/, '').trim();
+    // Strip backtick wrapping
+    line = line.replace(/^`+/, '').replace(/`.*$/, '').trim();
+    // Strip trailing description: everything after first space, em-dash, or parenthesis
+    line = line.replace(/[\s\u2014(].*$/, '').trim();
+    // Must look like a file path: contains a slash or a dot-extension, no remaining spaces
+    if (!line || line.startsWith('_') || line.startsWith('#') || line.startsWith('(')) continue;
+    if (!line.includes('/') && !/\.\w+$/.test(line)) continue;
+    if (/\s/.test(line)) continue;  // spaces indicate it's still a description fragment
+
+    const absPath = path.isAbsolute(line) ? line : path.join(workdir, line);
+    files.push(absPath);
+  }
+
+  return files.length > 0 ? files : null;
+}
+
+/**
+ * Generate/update sprint-status.yaml for a project workdir.
+ * 
+ * TWO MODES:
+ * A) Full pipeline (epics.md exists): Sprint-planning workflow generates the authoritative
+ *    sprint-status.yaml. We only UPDATE task statuses within it, never overwrite the structure.
+ * B) Quick-dev (no epics.md): Auto-generate from DB tasks (lightweight path).
+ */
+function updateSprintStatus(workdir) {
+  if (!workdir) return;
+  const outputDir = path.join(workdir, '_bmad-output');
+  fs.mkdirSync(outputDir, { recursive: true });
+  const statusPath = path.join(outputDir, 'sprint-status.yaml');
+  const epicsPath = path.join(workdir, '_bmad-output', 'planning-artifacts', 'epics.md');
+  const hasEpics = fs.existsSync(epicsPath);
+
+  try {
+    const tasks = db.prepare(`
+      SELECT id, title, status, notes, task_number, chain_id, sort_order, created_at, updated_at
+      FROM tasks WHERE workdir=? 
+      ORDER BY chain_id NULLS LAST, sort_order ASC, created_at ASC
+    `).all(workdir);
+
+    if (!tasks.length) return;
+
+    // Map statuses to BMAD sprint statuses
+    const STATUS_MAP = {
+      'backlog': 'backlog',
+      'todo': 'backlog',
+      'bmad_workflow': 'ready-for-dev',
+      'in_progress': 'in-progress',
+      'bmad_brainstorm': 'in-progress',
+      'bmad_prd': 'in-progress',
+      'bmad_architecture': 'in-progress',
+      'bmad_implementation': 'in-progress',
+      'bmad_qa': 'review',
+      'awaiting_input': 'in-progress',
+      'done_review': 'review',
+      'done': 'done',
+      'archived': 'done',
+      'cancelled': 'cancelled',
+      'failed': 'failed',
+    };
+
+    // PATH A: Full pipeline — update statuses in existing BMAD sprint-status.yaml
+    if (hasEpics && fs.existsSync(statusPath)) {
+      let content = fs.readFileSync(statusPath, 'utf8');
+      let updated = false;
+      
+      for (const t of tasks) {
+        const bmadStatus = STATUS_MAP[t.status] || 'backlog';
+        const taskSlug = `${t.task_number || t.id}-${slugify(t.title)}`;
+        
+        // Try to find and update this task's status line in the YAML
+        // Match pattern: "  slug: old-status" or "  slug: old-status  # comment"
+        const regex = new RegExp(`^(\\s+${taskSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)\\S+(.*)$`, 'm');
+        if (regex.test(content)) {
+          content = content.replace(regex, `$1${bmadStatus}$2`);
+          updated = true;
+        }
+      }
+      
+      // Append any tasks not found in the existing YAML
+      const missingTasks = tasks.filter(t => {
+        const taskSlug = `${t.task_number || t.id}-${slugify(t.title)}`;
+        return !content.includes(taskSlug);
+      });
+      
+      if (missingTasks.length) {
+        content += `\n`;
+        for (const t of missingTasks) {
+          const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+          const wfType = wfMatch ? wfMatch[1] : 'task';
+          content += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+        }
+        updated = true;
+      }
+      
+      // Update summary counts
+      const counts = { backlog: 0, 'ready-for-dev': 0, 'in-progress': 0, review: 0, done: 0, cancelled: 0, failed: 0 };
+      for (const t of tasks) {
+        const s = STATUS_MAP[t.status] || 'backlog';
+        counts[s] = (counts[s] || 0) + 1;
+      }
+      // Replace or add summary block
+      const summaryBlock = `summary:\n  total: ${tasks.length}\n${Object.entries(counts).filter(([,v])=>v>0).map(([k,v])=>`  ${k}: ${v}`).join('\n')}`;
+      if (content.includes('summary:')) {
+        content = content.replace(/summary:\n(?:\s+\w[\w-]*:\s*\d+\n?)*/m, summaryBlock + '\n');
+      }
+      
+      if (updated) {
+        // Update the generated timestamp
+        content = content.replace(/^# Generated: .+$/m, `# Generated: ${new Date().toISOString()}`);
+        fs.writeFileSync(statusPath, content, 'utf8');
+        log.info(`[bmad-sprint] Updated sprint-status.yaml (full pipeline mode) for ${path.basename(workdir)}`);
+      }
+      return;
+    }
+
+    // PATH B: Quick-dev — auto-generate from DB tasks
+    // Group by chain
+    const chains = new Map();
+    const standalone = [];
+    for (const t of tasks) {
+      if (t.chain_id) {
+        if (!chains.has(t.chain_id)) chains.set(t.chain_id, []);
+        chains.get(t.chain_id).push(t);
+      } else {
+        standalone.push(t);
+      }
+    }
+
+    let yaml = `# Sprint Status\n`;
+    yaml += `# Generated: ${new Date().toISOString()}\n`;
+    yaml += `# Project: ${path.basename(workdir)}\n`;
+    yaml += `# Tracking: Claude Code Studio\n`;
+    yaml += `# Mode: auto-generated (no epics.md found)\n\n`;
+
+    // Summary counts
+    const counts = { backlog: 0, 'ready-for-dev': 0, 'in-progress': 0, review: 0, done: 0, cancelled: 0, failed: 0 };
+    for (const t of tasks) {
+      const s = STATUS_MAP[t.status] || 'backlog';
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    yaml += `summary:\n`;
+    yaml += `  total: ${tasks.length}\n`;
+    for (const [k, v] of Object.entries(counts)) {
+      if (v > 0) yaml += `  ${k}: ${v}\n`;
+    }
+    yaml += `\n`;
+
+    // Development status — chains as epics
+    yaml += `development_status:\n`;
+    
+    for (const [chainId, chainTasks] of chains) {
+      yaml += `\n  # Chain: ${chainId}\n`;
+      const chainDone = chainTasks.every(t => ['done', 'archived', 'done_review'].includes(t.status));
+      const chainStarted = chainTasks.some(t => !['backlog', 'todo', 'bmad_workflow'].includes(t.status));
+      yaml += `  ${chainId}: ${chainDone ? 'done' : chainStarted ? 'in-progress' : 'backlog'}\n`;
+      for (const t of chainTasks) {
+        const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+        const wfType = wfMatch ? wfMatch[1] : 'task';
+        yaml += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+      }
+    }
+
+    if (standalone.length) {
+      yaml += `\n  # Standalone tasks\n`;
+      for (const t of standalone) {
+        const wfMatch = (t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+        const wfType = wfMatch ? wfMatch[1] : 'task';
+        yaml += `  ${t.task_number || t.id}-${slugify(t.title)}: ${STATUS_MAP[t.status] || 'backlog'}  # [${wfType}] ${t.title.substring(0, 60)}\n`;
+      }
+    }
+
+    fs.writeFileSync(statusPath, yaml, 'utf8');
+    log.info(`[bmad-sprint] Updated sprint-status.yaml for ${path.basename(workdir)} (${tasks.length} tasks)`);
+  } catch (e) {
+    log.warn(`[bmad-sprint] Failed to update sprint status: ${e.message}`);
+  }
+}
 
 // ─── Active task registry ─────────────────────────────────────────────────
 // Keeps running Claude subprocesses alive when the browser tab closes/reloads.
@@ -732,7 +1273,8 @@ function broadcastToSession(sessionId, data) {
 }
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
-const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
+const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '8', 10));
+const MAX_PER_WORKDIR = Math.max(1, parseInt(process.env.MAX_PER_WORKDIR || '5', 10));
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
@@ -777,19 +1319,62 @@ async function startTask(task) {
       if (bmadPhaseMatch) {
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(bmadPhaseMatch[1], task.id);
       } else if (task._bmadWorkflow) {
-        // BMAD upstream workflow task — keep it in bmad_workflow column while running
-        db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(task.id);
+        // Map BMAD workflow type to the appropriate phase column
+        const wfType = task._bmadWorkflowType || '';
+        const WORKFLOW_TO_PHASE = {
+          'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
+          'domain-research': 'bmad_brainstorm', 'market-research': 'bmad_brainstorm', 'technical-research': 'bmad_brainstorm',
+          'product-brief-preview': 'bmad_brainstorm',
+          'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
+          'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
+          'sprint-planning': 'bmad_architecture', 'create-story': 'bmad_implementation',
+          'dev-story': 'bmad_implementation', 'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
+          'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
+          'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
+          'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
+          'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
+          'distillator': 'bmad_implementation', 'advanced-elicitation': 'bmad_brainstorm',
+          'adversarial-review': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+          'editorial-prose': 'bmad_qa', 'editorial-structure': 'bmad_qa', 'index-docs': 'bmad_implementation',
+          'write-document': 'bmad_implementation', 'validate-doc': 'bmad_qa', 'mermaid-generate': 'bmad_implementation',
+          'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
+        };
+        const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_implementation';
+        db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
       } else {
         stmts.setTaskInProgress.run(task.id);
       }
     })();
     // For BMAD workflow tasks, create output directory and use workflow-specific prompt
+    // Also generate story file for implementation/QA workflows
+    let storyPath = null;
+    const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev',
+      'code-review', 'adversarial-review', 'playwright-qa', 'e2e-tests', 'edge-case-review', 'correct-course'];
     if (task._bmadWorkflow) {
       const wf = task._bmadWorkflow;
       if (wf.outputDir) {
         const outDir = path.join(task.workdir || WORKDIR, wf.outputDir);
         fs.mkdirSync(outDir, { recursive: true });
       }
+      // Generate story file for dev/QA workflows
+      if (STORY_WORKFLOWS.includes(task._bmadWorkflowType)) {
+        try {
+          storyPath = generateStoryFile(task);
+        } catch (e) {
+          log.warn(`[bmad-story] Failed to generate story: ${e.message}`);
+        }
+      }
+      // Update sprint-status.yaml
+      try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+    }
+    // Capture pre-task dirty state for commit-scope isolation (fallback when File List is empty)
+    try {
+      const _preDirtyRaw = execSync('git status --porcelain', { cwd: task.workdir || WORKDIR, timeout: 5000 }).toString();
+      task._preTaskDirtyFiles = new Set(
+        _preDirtyRaw.split('\n').filter(l => l.trim()).map(l => l.slice(3).trim())
+      );
+    } catch (_preErr) {
+      task._preTaskDirtyFiles = null;
     }
     // Build prompt
     let parts;
@@ -798,6 +1383,10 @@ async function startTask(task) {
       const wfPrompt = task._bmadWorkflow.prompt(task.title, task.workdir || WORKDIR);
       parts = [wfPrompt];
       if (task.description?.trim()) parts.push(`\n---\nTask Description:\n${task.description.trim()}`);
+      // Inject story file reference for dev/QA workflows
+      if (storyPath) {
+        parts.push(`\n---\nSTORY FILE: ${storyPath}\nRead this story file for acceptance criteria and task checklist. During implementation:\n- Check off completed subtasks in the story file\n- Update the "Change Log" section with what you changed\n- Update the "File List" section with all files created/modified\n- On completion, update "Completion Notes List" with a summary\nThe story file is your structured tracking document for this task.`);
+      }
     } else {
       parts = [task.title];
       if (task.description?.trim()) parts.push(task.description.trim());
@@ -933,6 +1522,11 @@ async function startTask(task) {
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
+      // Pass MCP servers so tasks have access to Playwright, GitHub, etc.
+      const _mcpConfig = loadMergedConfig();
+      if (_mcpConfig.mcpServers && Object.keys(_mcpConfig.mcpServers).length > 0) {
+        _sendOpts.mcpServers = _mcpConfig.mcpServers;
+      }
       const stream = cli.send(_sendOpts);
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
@@ -998,18 +1592,94 @@ async function startTask(task) {
         const isRateLimited = hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many'));
         const MAX_CHAIN_RETRIES = 2;
 
-        if (isSuccess) {
+        // 🛡️ PRE-CHECK: Detect completed work regardless of process exit status
+        // Claude may hit max_turns or timeout AFTER completing all work.
+        // Check output for completion markers before deciding success/failure.
+        const _tail3k = (fullText || '').slice(-3000);
+        const _hasCompletionEvidence = 
+          _tail3k.includes('✅ Done') || _tail3k.includes('✅ done') ||
+          _tail3k.includes('VERIFICATION') || _tail3k.includes('verification') ||
+          _tail3k.includes('All acceptance criteria') || _tail3k.includes('all acceptance criteria') ||
+          _tail3k.includes('Task complete') || _tail3k.includes('task complete') ||
+          _tail3k.includes('Implementation complete') || _tail3k.includes('implementation complete') ||
+          _tail3k.includes('Successfully implemented') || _tail3k.includes('successfully completed') ||
+          _tail3k.includes('All requirements verified') || _tail3k.includes('all requirements verified') ||
+          _tail3k.includes('Build passed') || _tail3k.includes('build passed') ||
+          /Done\s*[—–-]/.test(_tail3k) ||
+          (/verified|confirmed|passing/i.test(_tail3k) && /commit|committed/i.test(_tail3k));
+
+        // Override isSuccess if output proves completion
+        const effectiveSuccess = isSuccess || _hasCompletionEvidence;
+        if (!isSuccess && _hasCompletionEvidence) {
+          log.warn(`[taskWorker] task ${task.id}: process exit was not success (subtype: ${lastTaskResult?.subtype}) but output contains completion markers — treating as success`);
+        }
+
+        if (effectiveSuccess) {
+          // 🛡️ SAFEGUARD: Detect timeout masquerading as success
+          // If the agent exhausted all auto-continues, check if it actually completed
+          const tail2k = (fullText || '').slice(-2000);
+          const hasCompletionMarker = 
+            tail2k.includes('✅ Done') || tail2k.includes('✅ done') ||
+            tail2k.includes('--- \n✅') || tail2k.includes('---\n✅') ||
+            tail2k.includes('VERIFICATION') || tail2k.includes('verification') ||
+            tail2k.includes('All acceptance criteria') || tail2k.includes('all acceptance criteria') ||
+            tail2k.includes('Task complete') || tail2k.includes('task complete') ||
+            tail2k.includes('Implementation complete') || tail2k.includes('implementation complete') ||
+            tail2k.includes('Successfully') || tail2k.includes('successfully completed') ||
+            /Done\s*[—–-]/.test(tail2k);
+          const hitContinueLimit = taskContinueCount >= MAX_AUTO_CONTINUES;
+          
+          if (hitContinueLimit && !hasCompletionMarker) {
+            // Agent timed out without completing — auto-retry up to 2 times
+            const retryCount = task.task_retry_count || 0;
+            const MAX_TIMEOUT_RETRIES = 2;
+            
+            if (retryCount < MAX_TIMEOUT_RETRIES) {
+              // Re-queue with continuation context
+              log.warn(`[taskWorker] task ${task.id}: timed out without completion — re-queuing (retry ${retryCount + 1}/${MAX_TIMEOUT_RETRIES})`);
+              
+              // Save what was done so far as context for the retry
+              const progressSummary = (fullText || '').slice(-3000).trim();
+              const continuationNote = `\n\n---\nPREVIOUS ATTEMPT CONTEXT (retry ${retryCount + 1}):\nThe previous attempt ran out of turns before completing. Here is what was accomplished:\n\n${progressSummary}\n\n---\nCONTINUE FROM WHERE THE PREVIOUS ATTEMPT LEFT OFF. Do NOT restart from scratch. Complete the remaining work and save the output file.`;
+              
+              // Update task: reset to bmad_workflow, increment retry count, append continuation context
+              const updatedDesc = (task.description || '') + continuationNote;
+              db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL, failure_reason='timeout_retry_${retryCount + 1}', task_retry_count=?, description=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(retryCount + 1, updatedDesc, task.id);
+              
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              const projName = getProjectName(task.workdir);
+              openclawNotify.taskFailed(task, projName, `Timed out — auto-retrying (${retryCount + 1}/${MAX_TIMEOUT_RETRIES})`);
+              
+              // Trigger queue processing after a short delay
+              setTimeout(processQueue, 5000);
+            } else {
+              // Exhausted retries — now truly cancel
+              log.error(`[taskWorker] task ${task.id}: timed out after ${MAX_TIMEOUT_RETRIES} retries — cancelling`);
+              db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='timeout_exhausted', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(task.id);
+              try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
+              try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              const projName = getProjectName(task.workdir);
+              openclawNotify.taskFailed(task, projName, `Timed out after ${MAX_TIMEOUT_RETRIES} retries — cancelled. Manual intervention needed.`);
+            }
+          } else {
           // Check if this is an interactive/planning task that needs user input
           // Check if Claude is asking a question at the END of its response (last 300 chars)
           const tail = (fullText || '').slice(-300);
-          const isAskingQuestion = tail.includes('?') && (
+          const hasQuestionMark = tail.includes('?') || tail.includes('❓') || tail.includes('⁉');
+          const hasQuestionPattern = (
             tail.includes('Would you') || tail.includes('Do you') || tail.includes('Should I') ||
             tail.includes('What ') || tail.includes('Which ') || tail.includes('How ') ||
             tail.includes('please ') || tail.includes('let me know') || tail.includes('your thoughts') ||
             tail.includes('prefer') || tail.includes('ready to') || tail.includes('like to') ||
             tail.includes('want to') || tail.includes('option') || tail.includes('choose') ||
+            tail.includes('Waiting for input') || tail.includes('waiting for input') ||
+            tail.includes('select one') || tail.includes('your choice') ||
             /\*\*\[.\]/.test(tail)
           );
+          const isAskingQuestion = hasQuestionMark && hasQuestionPattern;
           
           if (isAskingQuestion) {
             // Claude is waiting for user input — park the task
@@ -1026,11 +1696,20 @@ async function startTask(task) {
             const projName = getProjectName(task.workdir);
             openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
           } else {
-          // ✅ Success
-          db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          // ✅ Success — AI-completed tasks go to done_review for user approval (auto-moves to done after 24h)
+          db.prepare(`UPDATE tasks SET status='done_review', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
-          log.info(`[taskWorker] task ${task.id}: done`);
+          log.info(`[taskWorker] task ${task.id}: done_review (pending user review)`);
+          // 📝 Update story file and sprint status
+          try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
+          try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+          // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
+          try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
+          // 🔧 Auto-create fix tasks from QA reports (server-side, no auth needed)
+          try { autoCreateFixFromQA(task, fullText); } catch (e) { log.warn(`[auto-fix] ${e.message}`); }
+          // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
+          try { autoActivateNextEpic(task); } catch (e) { log.warn(`[auto-epic] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
           // Notify Telegram about completed task
@@ -1038,7 +1717,7 @@ async function startTask(task) {
             telegramBot.notifyTaskComplete({
               sessionId,
               title: task.title || 'Task',
-              status: 'done',
+              status: 'done_review',
               duration: Date.now() - _taskStartedAt,
             }).catch(() => {});
           }
@@ -1069,7 +1748,7 @@ async function startTask(task) {
           }
           openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
           
-          // Auto-commit for implementation tasks
+          // Auto-commit for implementation tasks (scope-aware: stages only story File List files)
           const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec']);
           const _wfType = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]);
           const _hasBmadPhase = (task.notes || '').match(/\[bmad-phase:(implementation|qa)\]/);
@@ -1077,12 +1756,72 @@ async function startTask(task) {
             const cwd = task.workdir || WORKDIR;
             try {
               const { execSync: _exec } = require('child_process');
-              const hasChanges = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
-              if (hasChanges) {
-                _exec('git add -A', { cwd, timeout: 10000 });
-                const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
-                _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
-                log.info(`[taskWorker] auto-committed for task ${task.id} in ${cwd}`);
+              const _dirtyOutput = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+              if (_dirtyOutput) {
+                let _commitDone = false;
+
+                // Primary: stage only files declared in the story File List
+                if (storyPath) {
+                  try {
+                    const _storyContent = fs.readFileSync(storyPath, 'utf8');
+                    const _fileList = extractFileListFromStory(_storyContent, cwd);
+                    if (_fileList && _fileList.length > 0) {
+                      // Always include sprint-status.yaml and the story file itself
+                      const _sprintStatus = path.join(cwd, '_bmad-output', 'sprint-status.yaml');
+                      const _allFiles = [...new Set([..._fileList, storyPath, _sprintStatus])];
+                      for (const absFile of _allFiles) {
+                        try {
+                          const relFile = path.relative(cwd, absFile);
+                          if (relFile.startsWith('..')) continue; // skip files outside repo (e.g. bench paths)
+                          _exec(`git add -- ${JSON.stringify(relFile)}`, { cwd, timeout: 5000 });
+                        } catch (_fe) { /* file may not exist or untracked, skip */ }
+                      }
+                      const _staged = _exec('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                      if (_staged) {
+                        const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                        _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                        log.info(`[taskWorker] auto-committed ${_staged.split('\n').length} task-scoped files for task ${task.id} (File List)`);
+                      } else {
+                        log.info(`[taskWorker] auto-commit: File List files not dirty for task ${task.id}, skipping`);
+                      }
+                      _commitDone = true; // File List was used — don't fall through to git add -A
+                    }
+                  } catch (_parseErr) {
+                    log.warn(`[taskWorker] auto-commit File List parse error for task ${task.id}: ${_parseErr.message}`);
+                  }
+                }
+
+                // Fallback: exclude files that were already dirty before this task started
+                if (!_commitDone && task._preTaskDirtyFiles) {
+                  const _newDirtyFiles = _dirtyOutput.split('\n')
+                    .filter(l => l.trim())
+                    .map(l => l.slice(3).trim())
+                    .filter(f => !task._preTaskDirtyFiles.has(f));
+                  if (_newDirtyFiles.length > 0) {
+                    for (const f of _newDirtyFiles) {
+                      try { _exec(`git add -- ${JSON.stringify(f)}`, { cwd, timeout: 5000 }); } catch (_fe) {}
+                    }
+                    const _staged2 = _exec('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                    if (_staged2) {
+                      const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                      _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                      log.info(`[taskWorker] auto-committed ${_staged2.split('\n').length} task-scoped files for task ${task.id} (pre-task baseline)`);
+                    } else {
+                      log.info(`[taskWorker] auto-commit: nothing new to stage for task ${task.id}`);
+                    }
+                  } else {
+                    log.info(`[taskWorker] auto-commit: no new dirty files since task start for task ${task.id}`);
+                  }
+                  _commitDone = true;
+                }
+
+                // Last resort: commit all dirty files (no story file, no pre-task baseline)
+                if (!_commitDone) {
+                  _exec('git add -A', { cwd, timeout: 10000 });
+                  const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                  _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                  log.info(`[taskWorker] auto-committed all dirty files for task ${task.id} in ${cwd} (last resort)`);
+                }
               }
             } catch (e) {
               log.warn(`[taskWorker] auto-commit failed for task ${task.id}: ${e.message}`);
@@ -1090,11 +1829,12 @@ async function startTask(task) {
           }
           
           } // end else (non-interactive success)
+          } // end else (not timed out)
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
-          db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.warn(`[taskWorker] task ${task.id}: chain retry ${(task.task_retry_count||0)+1}/${MAX_CHAIN_RETRIES}, reason: ${reason}, backoff: ${_retryBackoffMs}ms`);
           if (task.source_session_id) {
@@ -1113,6 +1853,8 @@ async function startTask(task) {
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
+          try { updateStoryOnCompletion(task, 'failed', fullText); } catch (e) { /* ignore */ }
+          try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { /* ignore */ }
           // Notify source chat about the failed task
           if (task.source_session_id) {
             const _ctx = getNotificationContext(task.source_session_id);
@@ -1162,7 +1904,7 @@ async function startTask(task) {
       // Exception: auto-retry for chain tasks, cancel for non-chain
       const failureMsg = `${err.name}: ${err.message}`;
       if (task.chain_id && (task.task_retry_count || 0) < 2) {
-        db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
+        db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
         _retryBackoffMs = 5000;
         log.warn(`[taskWorker] task ${task.id}: exception → auto-retry`);
       } else {
@@ -1204,12 +1946,13 @@ function scheduleNextRun(task) {
     return;
   }
   const newId = genId();
+  const _tn = stmts.nextTaskNumber.get(task.workdir || '').next_num;
   stmts.createTask.run(
-    newId, task.title, task.description || '', task.notes || '', 'todo', task.sort_order || 0,
+    newId, task.title, task.description || '', task.notes || '', task.status || 'bmad_workflow', task.sort_order || 0,
     task.session_id || null, task.workdir || null, task.model || 'sonnet',
     task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
     null, null, null, null,
-    next, task.recurrence, task.recurrence_end_at || null
+    next, task.recurrence, task.recurrence_end_at || null, _tn
   );
   log.info(`[schedule] Next run queued: "${task.title}" → ${new Date(next * 1000).toISOString()}`);
 }
@@ -1398,14 +2141,15 @@ function processQueue() {
       for (let i = 0; i < subtasks.length; i++) {
         const st = subtasks[i];
         const realDeps = (st.depends || []).map(d => taskIds[d]);
-        stmts.createTask.run(
+          const _tn2 = stmts.nextTaskNumber.get(workdir || '').next_num;
+          stmts.createTask.run(
           taskIds[i], st.title.substring(0, 200), st.description.substring(0, 2000),
           `[bmad:${storyId}] [bmad-phase:${st.bmadPhase}] Chain subtask ${i+1}/${subtasks.length}`,
           'todo', st.sort,
           chainSessionId, workdir,
           st.model || task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
           null, realDeps.length ? JSON.stringify(realDeps) : null,
-          chainId, null, null, null, null
+          chainId, null, null, null, null, _tn2
         );
       }
       // Remove the original task — it's been replaced by the chain subtasks
@@ -1426,6 +2170,9 @@ function processQueue() {
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
   // Workdir-level lock: prevents parallel chain tasks from writing to the same directory concurrently
   const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
+  // Per-workdir running count (for MAX_PER_WORKDIR limit)
+  const workdirCounts = new Map();
+  inProg.forEach(t => { if (t.workdir) workdirCounts.set(t.workdir, (workdirCounts.get(t.workdir) || 0) + 1); });
   // Count independent running tasks (null session_id)
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
@@ -1460,53 +2207,71 @@ function processQueue() {
           }
           const allDone = deps.every(depId => {
             const dep = stmts.getTask.get(depId);
-            return dep && dep.status === 'done';
+            return dep && ['done', 'done_review', 'archived'].includes(dep.status);
           });
           if (!allDone) continue; // deps not ready yet
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
-    // Workdir lock: only for chain tasks sharing the SAME chain — prevents sequential chain steps
-    // from conflicting in the same directory. Different chains CAN run in parallel.
-    if (task.chain_id && task.workdir) {
-      const sameChainRunning = inProg.some(t => t.chain_id === task.chain_id && t.workdir === task.workdir)
-        || [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`);
-      if (sameChainRunning) continue;
+    // Chain sequencing: tasks in the same chain must run in sort_order.
+    // Block this task if any earlier task in the same chain is not yet done/cancelled.
+    if (task.chain_id) {
+      const chainTasks = stmts.getTasksByChain.all(task.chain_id);
+      const earlierPending = chainTasks.some(t =>
+        (t.sort_order || 0) < (task.sort_order || 0) &&
+        !['done', 'done_review', 'archived', 'cancelled'].includes(t.status)
+      );
+      if (earlierPending) continue;
+      // Also check if same-chain task was just started in this queue cycle
+      if (task.workdir && [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`)) continue;
     }
     if (task.session_id) {
-      // Shared session: one at a time per session
+      // Shared session: one at a time per session, still respects workdir limit
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
+        if (task.workdir) {
+          const wdCount = (workdirCounts.get(task.workdir) || 0);
+          if (wdCount >= MAX_PER_WORKDIR) continue;
+          workdirCounts.set(task.workdir, wdCount + 1);
+        }
+        if (indepRunning >= MAX_TASK_WORKERS) break;
+        indepRunning++;
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
         if (task.chain_id && task.workdir) startedWorkdirs.add(`${task.chain_id}:${task.workdir}`);
+        log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'}, session=${task.session_id.slice(0,8)})`);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
-      // Independent: up to MAX_TASK_WORKERS concurrent
-      if (indepRunning < MAX_TASK_WORKERS) {
-        indepRunning++;
-        if (task.workdir) startedWorkdirs.add(task.workdir);
-        startTask(task).catch(e => console.error('[taskWorker]', e));
+      // Independent: up to MAX_TASK_WORKERS concurrent globally, up to MAX_PER_WORKDIR per project
+      if (indepRunning >= MAX_TASK_WORKERS) break; // no more global slots
+      if (task.workdir) {
+        const wdCount = (workdirCounts.get(task.workdir) || 0);
+        if (wdCount >= MAX_PER_WORKDIR) continue; // skip this task, try next from different workdir
+        workdirCounts.set(task.workdir, wdCount + 1);
       }
+      indepRunning++;
+      log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'})`);
+      startTask(task).catch(e => console.error('[taskWorker]', e));
     }
   }
 }
 // Run every 15s (fast enough to pick up unblocked tasks promptly,
 // light enough to be negligible — just two SELECT queries on SQLite)
-setInterval(processQueue, 15000);
+// Delay first processQueue by 5s to let orphan recovery finish first
+setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
 
 // ── Orphaned task recovery on startup ──
 // Tasks stuck in active BMAD phases after a server restart have no Claude process.
 // Reset them to 'todo' so processQueue picks them up again.
 (function recoverOrphanedTasks() {
   const orphaned = db.prepare(`
-    SELECT id, title, status FROM tasks 
-    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','bmad_workflow')
+    SELECT id, title, status, session_id FROM tasks 
+    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
     AND status != 'awaiting_input'
   `).all();
   if (orphaned.length) {
-    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
-    const reset = db.prepare(`UPDATE tasks SET status='todo' WHERE id=?`);
+    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to bmad_workflow`);
+    const reset = db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL WHERE id=?`);
     for (const t of orphaned) {
       reset.run(t.id);
       log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
@@ -1517,7 +2282,7 @@ setInterval(processQueue, 15000);
 })();
 
 // ── Auto Mode: automatically move backlog → todo for auto-enabled projects ──
-const AUTO_MODE_CONCURRENCY = 3; // max concurrent chains per project (was 5, reduced to prevent OOM on <64GB instances)
+const AUTO_MODE_CONCURRENCY = 5; // max concurrent chains per project
 
 function autoModeProcess() {
   const projects = loadProjects();
@@ -1544,7 +2309,7 @@ function autoModeProcess() {
         AND chain_id NOT IN (
           SELECT DISTINCT chain_id FROM tasks
           WHERE workdir=? AND chain_id IS NOT NULL
-            AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','cancelled')
+            AND status IN ('in_progress','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','done_review','archived','cancelled')
         )
     `).get(workdir, workdir);
 
@@ -1573,16 +2338,16 @@ function autoModeProcess() {
     if (!backlogTasks.length) {
       // Check if ALL tasks are done — auto mode complete
       const remaining = db.prepare(`
-        SELECT COUNT(*) as cnt FROM tasks 
-        WHERE workdir=? AND status NOT IN ('done','cancelled')
+        SELECT COUNT(*) as cnt FROM tasks
+        WHERE workdir=? AND status NOT IN ('done','done_review','archived','cancelled')
       `).get(workdir);
-      
+
       if (remaining.cnt === 0) {
         // All done! Disable auto mode
         proj.autoMode = false;
         delete proj.autoModeStartedAt;
         saveProjects(projects);
-        const doneCount = db.prepare(`SELECT COUNT(*) as cnt FROM tasks WHERE workdir=? AND status='done'`).get(workdir);
+        const doneCount = db.prepare(`SELECT COUNT(*) as cnt FROM tasks WHERE workdir=? AND status IN ('done','done_review','archived')`).get(workdir);
         openclawNotify.notify(`🎉 **Auto Mode Complete**: ${proj.name}\n✅ All ${doneCount.cnt} tasks finished!`);
         log.info(`[AutoMode] ALL DONE for project "${proj.name}" — disabling auto mode`);
       }
@@ -1591,7 +2356,7 @@ function autoModeProcess() {
     
     // Move backlog tasks to todo (which triggers BMAD chain expansion in processQueue)
     for (const task of backlogTasks) {
-      db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`).run(task.id);
+      db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(task.id);
       log.info(`[AutoMode] Moved to todo: "${task.title}" (${task.id})`);
     }
     
@@ -1609,6 +2374,382 @@ function autoModeProcess() {
 // Run auto mode check every 15 seconds (same cadence as processQueue)
 setInterval(autoModeProcess, 15000);
 
+// ── Auto-archive: done_review → done (after 24h) and done → archived (after 48h) ──
+// Also cleans up task screenshots on archive and purges old screenshots (>48h)
+function cleanupTaskScreenshots(workdir, taskId) {
+  try {
+    const screenshotDir = path.join(workdir, 'test-screenshots');
+    if (!fs.existsSync(screenshotDir)) return;
+    const prefix = `task-${taskId}-`;
+    const files = fs.readdirSync(screenshotDir);
+    let deleted = 0;
+    for (const f of files) {
+      if (f.startsWith(prefix)) {
+        fs.unlinkSync(path.join(screenshotDir, f));
+        deleted++;
+      }
+    }
+    if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task ${taskId}`);
+  } catch (e) {
+    log.warn('[screenshot-cleanup] error', { error: e.message });
+  }
+}
+
+function purgeOldScreenshots() {
+  try {
+    // Find all project workdirs that have test-screenshots
+    const workdirs = db.prepare(`SELECT DISTINCT workdir FROM tasks WHERE workdir IS NOT NULL`).all();
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    let totalDeleted = 0;
+    for (const { workdir } of workdirs) {
+      const screenshotDir = path.join(workdir, 'test-screenshots');
+      if (!fs.existsSync(screenshotDir)) continue;
+      const files = fs.readdirSync(screenshotDir);
+      for (const f of files) {
+        const fp = path.join(screenshotDir, f);
+        try {
+          const stat = fs.statSync(fp);
+          if (stat.isFile() && stat.mtimeMs < cutoff) {
+            fs.unlinkSync(fp);
+            totalDeleted++;
+          }
+        } catch (e) { /* skip */ }
+      }
+    }
+    if (totalDeleted > 0) log.info(`[screenshot-cleanup] Purged ${totalDeleted} screenshots older than 48h`);
+  } catch (e) {
+    log.warn('[screenshot-cleanup] purge error', { error: e.message });
+  }
+}
+
+/**
+ * Auto-activate next epic: when all tasks in a chain (epic) are done/done_review/archived,
+ * find the next epic chain for the same workdir and activate its first task.
+ * 
+ * Epic chains follow a naming convention: epic-N-slug
+ * This enables sequential epic execution without manual intervention.
+ */
+/**
+ * Auto-create a QA task after dev/implementation tasks complete.
+ * Server-enforced — does not rely on the agent to create QA tasks.
+ * 
+ * QA tasks:
+ * - Run on Opus model (independent reviewer)
+ * - Use adversarial-review workflow
+ * - Produce a report only (no code changes)
+ * - Reference the dev task's story file and output
+ * - If issues found, chain a fix task after
+ */
+const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev']);
+
+function autoCreateQATask(task, fullText) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfType = wfMatch ? wfMatch[1] : '';
+  
+  if (!DEV_WORKFLOWS_NEEDING_QA.has(wfType)) return;
+  
+  // Don't create QA for a QA task (prevent infinite loop)
+  if (task.title.startsWith('QA:') || task.title.startsWith('🧪')) return;
+  
+  // Depth limit: Fix tasks get ONE QA pass max. Check task lineage via description.
+  // Fix tasks (depth=1) get QA. QA on fix tasks (depth=2) does NOT spawn more fixes.
+  const isFixTask = task.title.startsWith('Fix:') || task.title.startsWith('Fix ');
+  const qaDepth = isFixTask ? 2 : 1;
+  
+  // Depth 2 = this is already a fix-of-a-fix scenario. Stop here.
+  if (qaDepth > 1) return;
+  
+  const workdir = task.workdir || WORKDIR;
+  const qaId = genId();
+  const taskNum = stmts.nextTaskNumber.get(workdir).next_num;
+  
+  // Extract what was changed from the output
+  const tail = (fullText || '').slice(-3000);
+  const filesChanged = tail.match(/files?\s*(?:changed|modified|created|updated)[:\s]*([^\n]+)/gi) || [];
+  const fileList = filesChanged.join('\n') || '(check git diff for changes)';
+  
+  // Find the story file for context
+  const slug = slugify(task.title);
+  const storyFile = `_bmad-output/implementation-artifacts/story-${task.task_number || 0}-${slug}.md`;
+  
+  const qaTitle = `QA: ${task.title.substring(0, 80)}`;
+  const qaDesc = `## QA Report Task — DO NOT MODIFY CODE
+
+**Review task #${task.task_number}: ${task.title}**
+**QA Depth: ${qaDepth}/1** (max depth reached = no further QA cycles)
+
+### MANDATORY: Use Playwright MCP for ALL browser testing
+You have access to Playwright MCP tools. You MUST use them. The tools are prefixed with \`mcp__playwright__\`.
+
+**Available Playwright MCP tools (use these exact names):**
+- \`mcp__playwright__browser_navigate\` — navigate to a URL
+- \`mcp__playwright__browser_click\` — click an element
+- \`mcp__playwright__browser_type\` — type into an input
+- \`mcp__playwright__browser_screenshot\` — take a screenshot
+- \`mcp__playwright__browser_snapshot\` — get accessibility snapshot of page
+- \`mcp__playwright__browser_wait\` — wait for element/time
+
+**If you skip Playwright testing, the task will be considered FAILED.**
+
+Start by reading docs/testing-info.md for the correct URL and credentials, then navigate: \`mcp__playwright__browser_navigate\` with the URL from that file
+Then login with credentials from docs/testing-info.md (or use: Administrator / admin)
+
+### What to verify
+Read the story file for acceptance criteria: \`${storyFile}\`
+
+### Files changed
+${fileList}
+
+### Test steps
+1. Read docs/testing-info.md for the correct test URL and credentials
+1. Use \`mcp__playwright__browser_navigate\` to go to the URL from testing-info.md
+2. Login using Playwright tools (navigate to login, type credentials, click login)
+3. Navigate to the relevant pages for this feature
+4. Test each acceptance criterion using Playwright interactions
+5. Take screenshots: \`mcp__playwright__browser_screenshot\`
+6. Check console for errors
+3. Test each acceptance criterion from the story file
+4. Check for regressions in related functionality
+5. Verify no console errors
+
+### Deliverable
+Produce \`docs/qa-report-task-${task.task_number}.md\` with:
+- Each AC: PASS/FAIL with evidence
+- Screenshots referenced (use task-prefixed naming)
+- Console errors captured
+- Severity ratings (P0-P3) for any failures
+
+### Creating fix tasks (HANDLED AUTOMATICALLY BY SERVER)
+If you find P0 or P1 failures, clearly document them in your QA report with:
+1. **Severity level** (P0/P1) clearly labeled in headings
+2. **Exact file paths + line numbers** for every issue
+3. **Before/after code snippets** showing exactly what to change
+4. **Verification command** for each fix
+
+The server will automatically create a fix task from your QA report when P0/P1 issues are detected.
+You do NOT need to create fix tasks via curl anymore — just write a thorough QA report.
+
+**CRITICAL: Clearly label P0/P1 issues in your report. Do NOT mark ALL PASS if there are P0/P1 issues.**`;
+
+  stmts.createTask.run(
+    qaId, qaTitle, qaDesc, '[bmad-workflow:playwright-qa]', 'bmad_workflow', 
+    (task.sort_order || 0) + 1,
+    null, workdir, 'opus',
+    'auto', 'single', 80,
+    null, null, task.chain_id || null, null,
+    null, null, null, taskNum
+  );
+  
+  log.info(`[auto-qa] Created QA task #${taskNum} "${qaTitle}" for dev task #${task.task_number}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
+/**
+ * Auto-create fix tasks from QA task output (server-side).
+ * When a QA task completes and its output contains P0/P1 findings,
+ * parse the output and create a fix task. This replaces the unreliable
+ * curl-from-agent approach that fails due to auth cookie expiry.
+ */
+function autoCreateFixFromQA(task, fullText) {
+  // Only process QA tasks
+  if (!task.title.startsWith('QA:') && !task.title.startsWith('🧪')) return;
+  
+  // Don't create fixes for QA-on-fix tasks (depth limit)
+  const parentTitle = task.title.replace(/^QA:\s*/, '').replace(/^🧪\s*/, '');
+  if (parentTitle.startsWith('Fix:') || parentTitle.startsWith('Fix ')) return;
+  
+  const output = fullText || '';
+  
+  // Detect P0/P1 issues in the output
+  const hasP0 = /\bP0\b/i.test(output);
+  const hasP1 = /\bP1\b/i.test(output);
+  const hasFail = /\bFAIL\b/i.test(output) && !/\bALL PASS\b/i.test(output);
+  const hasBlocker = /\bblocker\b/i.test(output);
+  const hasFixNeeded = /fix\s*(task\s*)?(?:needed|required|created|specified)/i.test(output);
+  const noFixNeeded = /no\s*fix\s*(?:task\s*)?needed/i.test(output);
+  const allPass = /ALL\s*(?:PASS|REQUIREMENTS?\s*VERIFIED)/i.test(output);
+  
+  // If all pass or explicitly no fix needed, skip
+  if (allPass && !hasP0 && !hasP1) return;
+  if (noFixNeeded && !hasP0) return;
+  if (!hasP0 && !hasP1 && !hasFail && !hasBlocker && !hasFixNeeded) return;
+  
+  const workdir = task.workdir || WORKDIR;
+  
+  // Try to read the QA report file for detailed fix info
+  let qaReportContent = '';
+  try {
+    const qaReportPath = require('path').join(workdir, `docs/qa-report-task-${task.task_number}.md`);
+    if (require('fs').existsSync(qaReportPath)) {
+      qaReportContent = require('fs').readFileSync(qaReportPath, 'utf8').substring(0, 8000);
+    }
+  } catch {}
+  
+  // Also try parent task number format
+  if (!qaReportContent) {
+    const parentNum = parentTitle.match(/#(\d+)/)?.[1];
+    if (parentNum) {
+      try {
+        const altPath = require('path').join(workdir, `docs/qa-report-task-${parentNum}.md`);
+        if (require('fs').existsSync(altPath)) {
+          qaReportContent = require('fs').readFileSync(altPath, 'utf8').substring(0, 8000);
+        }
+      } catch {}
+    }
+  }
+  
+  // Extract the fix description from QA output
+  // Look for sections about what needs fixing
+  const fixSections = output.match(/(?:### (?:Fix|Issues?|P0|P1|Blockers?|What Failed).*?)(?=###|\n## |$)/gis) || [];
+  const fixContext = fixSections.join('\n\n').substring(0, 4000) || 
+    output.substring(Math.max(0, output.length - 3000));
+  
+  const fixId = genId();
+  const fixTaskNum = stmts.nextTaskNumber.get(workdir).next_num;
+  
+  const fixTitle = `Fix: ${parentTitle.substring(0, 70)} — issues from QA`;
+  const fixDesc = `## Auto-generated Fix Task (from QA task #${task.task_number})
+
+### Source
+QA Report: \`docs/qa-report-task-${task.task_number}.md\`
+Read the QA report FIRST for full context on what failed and needs fixing.
+
+### QA Findings Summary
+${qaReportContent ? qaReportContent.substring(0, 4000) : fixContext}
+
+### Instructions
+1. Read the QA report at \`docs/qa-report-task-${task.task_number}.md\`
+2. Fix ALL P0 and P1 issues identified
+3. Verify each fix with the verification commands from the report
+4. Ensure the build still passes
+5. Do NOT start a Vite dev server
+
+### Done Checklist
+- [ ] All P0 issues fixed
+- [ ] All P1 issues fixed
+- [ ] App builds without errors
+- [ ] No console errors on affected pages
+- [ ] git diff shows only expected files`;
+
+  stmts.createTask.run(
+    fixId, fixTitle, fixDesc, '[bmad-workflow:quick-dev]', 'bmad_workflow',
+    (task.sort_order || 0) + 1,
+    null, workdir, 'sonnet',
+    'auto', 'single', 60,
+    null, null, task.chain_id || null, null,
+    null, null, null, fixTaskNum
+  );
+  
+  log.info(`[auto-fix] Created fix task #${fixTaskNum} "${fixTitle}" from QA task #${task.task_number}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
+function autoActivateNextEpic(task) {
+  if (!task.chain_id || !task.workdir) return;
+  
+  // Check if all tasks in this chain are complete
+  const chainTasks = db.prepare(`SELECT id, status, chain_id FROM tasks WHERE chain_id=? AND workdir=?`).all(task.chain_id, task.workdir);
+  const allDone = chainTasks.every(t => ['done', 'done_review', 'archived', 'cancelled'].includes(t.status));
+  if (!allDone) return;
+  
+  log.info(`[auto-epic] Chain "${task.chain_id}" is fully complete (${chainTasks.length} tasks)`);
+  
+  // Find all epic chains for this workdir
+  const allChains = db.prepare(`
+    SELECT DISTINCT chain_id FROM tasks 
+    WHERE workdir=? AND chain_id LIKE 'epic-%' 
+    ORDER BY chain_id ASC
+  `).all(task.workdir);
+  
+  const currentIdx = allChains.findIndex(c => c.chain_id === task.chain_id);
+  if (currentIdx < 0 || currentIdx >= allChains.length - 1) return; // no next epic
+  
+  const nextChainId = allChains[currentIdx + 1].chain_id;
+  
+  // Check if next epic tasks are in done_review (created by sprint-planning but not yet activated)
+  const nextTasks = db.prepare(`
+    SELECT id, status, task_number, title FROM tasks 
+    WHERE chain_id=? AND workdir=? AND status='done_review'
+    ORDER BY sort_order ASC, task_number ASC
+  `).all(nextChainId, task.workdir);
+  
+  if (!nextTasks.length) {
+    log.info(`[auto-epic] Next chain "${nextChainId}" has no done_review tasks to activate`);
+    return;
+  }
+  
+  // Activate all tasks in the next epic (set to bmad_workflow)
+  const activate = db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`);
+  for (const t of nextTasks) {
+    activate.run(t.id);
+    log.info(`[auto-epic] Activated #${t.task_number} "${t.title.substring(0, 50)}" in chain "${nextChainId}"`);
+  }
+  
+  log.info(`[auto-epic] Activated ${nextTasks.length} tasks in next epic: ${nextChainId}`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  
+  // Notify
+  const projName = getProjectName(task.workdir);
+  openclawNotify.sendNotification(`🚀 [${projName}] Epic "${task.chain_id}" complete! Auto-started next epic "${nextChainId}" (${nextTasks.length} stories)`, projName, task.workdir);
+  
+  // Trigger queue processing
+  setTimeout(processQueue, 3000);
+}
+
+function autoArchiveProcess() {
+  try {
+    // Move done_review tasks older than 24h to done (user didn't review in time)
+    // Also clean up their screenshots at this transition
+    const tasksToApprove = db.prepare(`
+      SELECT id, workdir, task_number FROM tasks
+      WHERE status='done_review'
+        AND updated_at < datetime('now', '-24 hours')
+    `).all();
+    if (tasksToApprove.length > 0) {
+      const approveStmt = db.prepare(`UPDATE tasks SET status='done', updated_at=datetime('now') WHERE id=?`);
+      for (const t of tasksToApprove) {
+        approveStmt.run(t.id);
+        cleanupTaskScreenshots(t.workdir, t.id);
+        // Also clean by task_number
+        if (t.task_number) {
+          try {
+            const screenshotDir = path.join(t.workdir, 'test-screenshots');
+            if (fs.existsSync(screenshotDir)) {
+              const prefix = `task-${t.task_number}-`;
+              for (const f of fs.readdirSync(screenshotDir)) {
+                if (f.startsWith(prefix)) fs.unlinkSync(path.join(screenshotDir, f));
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+      }
+      log.info(`[autoArchive] Auto-approved ${tasksToApprove.length} done_review task(s) → done + cleaned screenshots`);
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    }
+    // Move done tasks older than 48h to archived + clean up their screenshots
+    const tasksToArchive = db.prepare(`
+      SELECT id, workdir FROM tasks
+      WHERE status='done'
+        AND updated_at < datetime('now', '-48 hours')
+    `).all();
+    if (tasksToArchive.length > 0) {
+      const archiveStmt = db.prepare(`UPDATE tasks SET status='archived', updated_at=datetime('now') WHERE id=?`);
+      for (const t of tasksToArchive) {
+        archiveStmt.run(t.id);
+        cleanupTaskScreenshots(t.workdir, t.id);
+      }
+      log.info(`[autoArchive] Archived ${tasksToArchive.length} done task(s) → archived + cleaned screenshots`);
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    }
+    // Purge any screenshots older than 48h (catches orphans not linked to tasks)
+    purgeOldScreenshots();
+  } catch (e) {
+    log.warn('[autoArchive] error', { error: e.message });
+  }
+}
+// Run every 5 minutes
+setInterval(autoArchiveProcess, 5 * 60 * 1000);
+
 // ── Periodic Progress Summary via OpenClaw (every 2 hours) ──
 setInterval(() => {
   try {
@@ -1624,13 +2765,13 @@ setInterval(() => {
       const projName = require('path').basename(projPath);
       const backlog = tasks.filter(t => t.status === 'backlog').length;
       const todo = tasks.filter(t => t.status === 'todo').length;
-      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'cancelled').length;
-      const done = tasks.filter(t => t.status === 'done').length;
+      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'done_review' && t.status !== 'archived' && t.status !== 'cancelled').length;
+      const done = tasks.filter(t => ['done','done_review','archived'].includes(t.status)).length;
       const total = tasks.filter(t => t.status !== 'cancelled').length;
       // Recently completed (last 2 hours)
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
       const recentlyCompleted = tasks
-        .filter(t => t.status === 'done' && t.updated_at > twoHoursAgo)
+        .filter(t => ['done','done_review'].includes(t.status) && t.updated_at > twoHoursAgo)
         .map(t => t.title);
       if (active > 0 || recentlyCompleted.length > 0) {
         openclawNotify.progressSummary(projName, { backlog, todo, active, done, total, recentlyCompleted });
@@ -1662,7 +2803,7 @@ setTimeout(() => {
       const assistantMsg = db.prepare(
         `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
       ).get(task.session_id);
-      if (assistantMsg) newStatus = 'done'; // completed before/during restart
+      if (assistantMsg) newStatus = 'done_review'; // completed before/during restart — needs user review
     }
     db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
       .run(newStatus, task.id);
@@ -2174,6 +3315,28 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code.\n\nQA TASK RULES: If this IS a QA task, you MUST use Playwright MCP tools (they are available to you):\n\n**MANDATORY Playwright MCP tools — use these exact tool names:**\n- mcp__playwright__browser_navigate — navigate to URL\n- mcp__playwright__browser_click — click elements\n- mcp__playwright__browser_type — type into inputs\n- mcp__playwright__browser_screenshot — capture screenshots\n- mcp__playwright__browser_snapshot — get page accessibility tree\n- mcp__playwright__browser_wait — wait for elements\n\n**First step in every QA task:** Read docs/testing-info.md to get the correct test URL and credentials. Then call mcp__playwright__browser_navigate with that URL. NEVER assume or hardcode a URL\n\nQA RULES:\n1. Use Playwright MCP tools for EVERY test step — do NOT skip browser testing\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\n**IF YOU DO NOT CALL mcp__playwright__browser_navigate AT LEAST ONCE, THE QA TASK IS FAILED.**\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label.`;
+
+const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
+- If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
+- If you find additional issues during implementation, FIX THEM if they're related to the task scope. Log what you found and fixed.
+- If you encounter an error, debug and resolve it yourself. Try alternative approaches. Only give up after 3 attempts.
+- If an adversarial review or QA step finds issues, FIX the real issues automatically — do not present them as options.
+- Never output menus like [W] Walk through / [F] Fix / [S] Skip. Just fix.
+- End with a clear summary of what was done, what was fixed, and any caveats.
+- NEVER git add or commit screenshots, test images, or any files from test-screenshots/. They are gitignored.
+
+QA REQUIREMENT: Every implementation/dev task (quick-dev, dev-story, quick-spec with code changes) MUST have a separate QA task chained after it. When you complete an implementation task:
+1. Create a NEW task via the API (POST /api/tasks) with title "QA: [original task title]"
+2. Set the workflow to a QA workflow: notes should be "[bmad-workflow:adversarial-review]" or "[bmad-workflow:code-review]"
+3. Set it as the next task in the chain (same chain_id, sort_order = current + 1) OR use the "after" field pointing to the current task ID
+4. The QA task description MUST include: what to test, expected behavior, test steps, files changed, and the requirement to use Playwright browser testing
+5. QA tasks produce a REPORT ONLY — they do NOT fix code. They document all findings (bugs, regressions, issues) in a structured report
+6. After the QA task, chain a SEPARATE fix/dev task (quick-dev) that addresses the QA findings
+7. Flow: Dev Task → QA Task (report) → Fix Task (implement fixes) → QA Task (verify fixes)
+8. Playwright browser testing is MANDATORY for QA tasks — login, navigate, interact, screenshot, verify console
+9. QA tasks run on Opus model for thorough independent review (different model than dev tasks)`;
+
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
@@ -2200,10 +3363,23 @@ Re-read the task and list every requirement explicitly (numbered).
 For each requirement: run a command or inspect output that PROVES it is satisfied.
 Do NOT skip — execute actual commands and show the output.
 
-### Step 3 — Fix & Re-verify
+### Step 3 — Browser Testing (REQUIRED for UI/frontend tasks)
+If this task involves ANY frontend/UI changes:
+1. Read docs/testing-info.md for credentials and test URL
+2. Use the **Playwright MCP server** (mcp__playwright__*) to test in a real browser:
+   - Navigate to the dev server URL
+   - Log in with the credentials from testing-info.md
+   - Navigate to the relevant page/feature
+   - Take screenshots to verify the UI looks correct
+   - Test interactive features (click buttons, fill forms, etc.)
+   - Check the browser console for errors
+3. If Playwright MCP is not available, use curl to test API endpoints at minimum
+4. NO frontend task is complete until verified working in a real browser
+
+### Step 4 — Fix & Re-verify
 If any check fails: fix it immediately, then re-run the exact check to confirm it passes.
 
-### Step 4 — Self-Audit
+### Step 5 — Self-Audit
 Ask: "If a senior engineer reviews this right now, would they approve without any changes?"
 If the answer is no — fix the issues first.
 
@@ -2212,6 +3388,7 @@ If the answer is no — fix the issues first.
 VERIFICATION:
 ✅ [requirement 1]: [command / output as proof]
 ✅ [requirement 2]: [command / output as proof]
+🌐 [browser test]: [screenshot or description of what was verified in browser]
 ❌ [requirement N]: ISSUE FOUND → FIXED: [what was done] → ✅ confirmed
 FINAL: ✅ All requirements verified [/ ⚠️ N issues found and fixed]
 \`\`\``;
@@ -2245,6 +3422,8 @@ function buildSystemPrompt(skillIds, config) {
   prompt += ASK_USER_INSTRUCTION;
   prompt += NOTIFY_USER_INSTRUCTION;
   prompt += SET_UI_STATE_INSTRUCTION;
+  prompt += BROWSER_TESTING_INSTRUCTION;
+  prompt += AUTONOMOUS_INSTRUCTION;
   prompt += STATUS_LINE_INSTRUCTION;
   prompt += TOOL_CALL_INSTRUCTION;
 
@@ -2659,7 +3838,7 @@ async function runPartyMode(p) {
   const agentPerspectives = [];
   for (const agent of PARTY_AGENTS) {
     ws.send(JSON.stringify({ type:'agent_status', agent: agent.id, status:`${agent.emoji} ${agent.name} reviewing...`, ...(tabId ? { tabId } : {}) }));
-    const agentSkillPrompt = config.skills[agent.id] ? buildSystemPrompt([agent.id], config) : `You are ${agent.name}. Be concise.`;
+    const agentSkillPrompt = config.skills[agent.id] ? buildSystemPrompt([agent.id], config) : `You are ${agent.name}. Be concise.${AUTONOMOUS_INSTRUCTION}`;
     const agentPrompt = `As ${agent.name}, review this task in 2-3 sentences from your specialist perspective. Focus on your key concern, approach, or recommendation.\n\nTASK: ${prompt}`;
     let agentText = '';
     await new Promise(res => {
@@ -2715,7 +3894,7 @@ async function runPartyMode(p) {
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       const _bmadSkillId = BMAD_ROLE_TO_SKILL[agent.role?.toLowerCase()];
-      let agentSp = _bmadSkillId && config.skills[_bmadSkillId] ? buildSystemPrompt([_bmadSkillId], config) : `You are ${agent.role}. Complete your assigned task thoroughly.`;
+      let agentSp = _bmadSkillId && config.skills[_bmadSkillId] ? buildSystemPrompt([_bmadSkillId], config) : `You are ${agent.role}. Complete your assigned task thoroughly.${AUTONOMOUS_INSTRUCTION}`;
       let agentText = '';
       await new Promise(res => {
         let _s = false; const _r = () => { if (!_s) { _s = true; res(); } };
@@ -2828,7 +4007,7 @@ async function runMultiAgent(p) {
           }
         } catch {}
       }
-      if (!agentSp) agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
+      if (!agentSp) agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.${AUTONOMOUS_INSTRUCTION}`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
       let agentText = '';
 
@@ -3039,6 +4218,216 @@ app.post('/api/internal/set-ui-state', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Public shared document page — NO AUTH ───────────────────────────────────
+// Must be registered BEFORE auth middleware so it's accessible without login.
+app.get('/shared/:token', (req, res) => {
+  const { token } = req.params;
+  if (!/^[a-f0-9]{32}$/i.test(token)) {
+    return res.status(404).send(sharedDoc404());
+  }
+  const now = new Date().toISOString();
+  const share = db.prepare(`SELECT * FROM shared_docs WHERE id=? AND (expires_at IS NULL OR expires_at > ?)`).get(token, now);
+  if (!share) return res.status(404).send(sharedDoc404());
+  const filePath = path.resolve(share.project_id || '', share.file_path);
+  if (!fs.existsSync(filePath)) return res.status(404).send(sharedDoc404());
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const name = path.basename(filePath);
+    const stat = fs.statSync(filePath);
+    const modified = stat.mtime;
+    const projectName = path.basename(share.project_id || '');
+    let content = '';
+    let isText = true;
+    if (['.png','.jpg','.jpeg','.gif','.svg','.webp','.bmp'].includes(ext)) {
+      isText = false;
+      const buf = fs.readFileSync(filePath);
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp', '.bmp':'image/bmp' }[ext] || 'image/octet-stream';
+      content = `<img src="data:${mime};base64,${buf.toString('base64')}" alt="${escHtml(name)}" style="max-width:100%;border-radius:8px">`;
+    } else if (['.pdf','.doc','.docx','.xls','.xlsx'].includes(ext)) {
+      isText = false;
+      content = `<div style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:16px">📄</div><div style="font-size:18px;font-weight:600;margin-bottom:8px">${escHtml(name)}</div><p style="color:#94a3b8">Binary file — download not available on shared view.</p></div>`;
+    } else {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      if (ext === '.md') {
+        content = `<div class="md-rendered">${sharedRenderMarkdown(raw)}</div>`;
+      } else if (ext === '.yaml' || ext === '.yml') {
+        content = `<pre class="code-block language-yaml">${escHtml(raw)}</pre>`;
+      } else if (ext === '.json') {
+        let pretty = raw;
+        try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch {}
+        content = `<pre class="code-block language-json">${escHtml(pretty)}</pre>`;
+      } else {
+        content = `<pre class="code-block">${escHtml(raw)}</pre>`;
+      }
+    }
+    const modStr = modified.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    const expiryStr = share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString('en-US')}` : '';
+    const sharedAtStr = new Date(share.created_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    res.send(sharedDocPage({ name, projectName, modStr, expiryStr, content, token, sharedAtStr }));
+  } catch (e) {
+    res.status(500).send(sharedDoc404('Error loading document'));
+  }
+});
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function sharedRenderMarkdown(md) {
+  let html = escHtml(md);
+  // Fenced code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const cls = lang ? ` class="language-${lang}"` : '';
+    return `<pre class="code-block"><code${cls}>${code}</code></pre>`;
+  });
+  // Inline code
+  html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
+  // Headers
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold/italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // HR
+  html = html.replace(/^---$/gm, '<hr>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?=<li>)|$)/g, '$1$2');
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Tables
+  html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+    const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // Paragraphs
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  html = html.replace(/([^>])\n([^<])/g, '$1<br>$2');
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  return html;
+}
+
+function sharedDocPage({ name, projectName, modStr, expiryStr, content, token, sharedAtStr }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(name)} — Claude Code Studio</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--s1:#1a1d27;--s2:#21263a;--s3:#2a2f45;
+  --fg:#e2e8f0;--fg2:#94a3b8;--border:#2d3748;
+  --accent:#6366f1;--green:#22c55e;--red:#ef4444;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','Fira Code','Consolas',monospace;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+header{background:var(--s1);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10}
+.header-left{display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:8px;color:var(--fg2);font-size:13px}
+.brand-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.doc-title{font-size:18px;font-weight:700;color:var(--fg)}
+.doc-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.meta-chip{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--fg2);background:var(--s2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)}
+main{flex:1;max-width:860px;width:100%;margin:0 auto;padding:32px 24px}
+footer{background:var(--s1);border-top:1px solid var(--border);padding:16px 24px;text-align:center;font-size:12px;color:var(--fg2)}
+footer a{color:var(--fg2)}footer a:hover{color:var(--accent)}
+/* Markdown rendered */
+.md-rendered h1,.md-rendered h2,.md-rendered h3,.md-rendered h4{color:var(--fg);font-weight:700;margin:1.5em 0 .6em}
+.md-rendered h1{font-size:1.9em;border-bottom:1px solid var(--border);padding-bottom:.4em}
+.md-rendered h2{font-size:1.45em;border-bottom:1px solid var(--border);padding-bottom:.3em}
+.md-rendered h3{font-size:1.2em}
+.md-rendered p{margin:.8em 0;color:var(--fg)}
+.md-rendered ul,.md-rendered ol{margin:.8em 0 .8em 1.6em}
+.md-rendered li{margin:.3em 0}
+.md-rendered blockquote{border-left:3px solid var(--accent);margin:1em 0;padding:.5em 1em;background:var(--s2);border-radius:0 6px 6px 0;color:var(--fg2)}
+.md-rendered hr{border:none;border-top:1px solid var(--border);margin:1.5em 0}
+.md-rendered strong{color:var(--fg);font-weight:600}
+.md-rendered em{font-style:italic}
+.md-rendered a{color:var(--accent)}
+.md-rendered table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px}
+.md-rendered th{background:var(--s3);color:var(--fg);text-align:left;padding:8px 12px;border:1px solid var(--border);font-weight:600}
+.md-rendered td{padding:7px 12px;border:1px solid var(--border);color:var(--fg)}
+.md-rendered tr:nth-child(even) td{background:var(--s2)}
+/* Code */
+.code-block{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;color:#e2e8f0;white-space:pre}
+.md-rendered pre.code-block{margin:1em 0}
+.inline-code{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:0.9em;color:#fbbf24}
+@media(max-width:600px){
+  header{padding:12px 16px}
+  .doc-title{font-size:15px}
+  main{padding:20px 16px}
+  .doc-meta{gap:8px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="brand"><div class="brand-dot"></div>Claude Code Studio</div>
+    <div class="doc-title">📄 ${escHtml(name)}</div>
+  </div>
+  <div class="doc-meta">
+    ${projectName ? `<span class="meta-chip">📁 ${escHtml(projectName)}</span>` : ''}
+    <span class="meta-chip">🗓 ${escHtml(modStr)}</span>
+    ${expiryStr ? `<span class="meta-chip">⏳ ${escHtml(expiryStr)}</span>` : ''}
+    <span class="meta-chip" style="color:#94a3b8">🔒 Read-only</span>
+  </div>
+</header>
+<main>
+${content}
+</main>
+<footer>
+  Shared via <a href="/" target="_blank">Claude Code Studio</a> &nbsp;·&nbsp; Read-only view${sharedAtStr ? ` &nbsp;·&nbsp; Shared ${escHtml(sharedAtStr)}` : ''}
+</footer>
+</body>
+</html>`;
+}
+
+function sharedDoc404(msg) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Document Not Found — Claude Code Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e2e8f0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.box{max-width:420px;padding:40px 32px}
+.icon{font-size:64px;margin-bottom:20px}
+h1{font-size:24px;font-weight:700;margin-bottom:8px}
+p{color:#94a3b8;font-size:15px;margin-bottom:24px}
+a{color:#6366f1;text-decoration:none;font-size:14px}a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">🔗</div>
+  <h1>${msg || 'Document Not Found'}</h1>
+  <p>This share link is invalid, has expired, or the document was revoked.</p>
+  <a href="/">← Back to Claude Code Studio</a>
+</div>
+</body>
+</html>`;
+}
+
 app.use(auth.authMiddleware);
 
 // Prevent browser caching for all API responses.
@@ -3049,6 +4438,10 @@ app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
+
+// Kanban as default landing — must be before static middleware (which serves index.html for /)
+app.get('/', (req,res,next) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','kanban.html')); });
+app.get('/chat', (_,res) => res.sendFile(path.join(__dirname,'public','index.html')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -3147,7 +4540,20 @@ app.get('/api/auth/status', (req,res) => {
   const token = req.cookies?.token || req.headers['x-auth-token'];
   const loggedIn = setupDone && auth.validateToken(token);
   const ad = auth.loadAuth();
-  res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null });
+  const tokenInfo = loggedIn ? auth.getTokenInfo(token) : null;
+  const result = { setupDone, loggedIn };
+  if (loggedIn && tokenInfo) {
+    result.role = tokenInfo.role;
+    result.username = tokenInfo.username;
+    if (tokenInfo.role === 'admin') {
+      result.displayName = ad?.displayName || 'Admin';
+    } else {
+      const user = auth.getUserById(tokenInfo.userId);
+      result.displayName = user?.displayName || tokenInfo.username;
+      result.projects = user?.projects || [];
+    }
+  }
+  res.json(result);
 });
 
 app.post('/api/auth/setup', authLimiter, async (req,res) => {
@@ -3161,9 +4567,12 @@ app.post('/api/auth/setup', authLimiter, async (req,res) => {
 
 app.post('/api/auth/login', authLimiter, async (req,res) => {
   try {
-    const token = await auth.login(req.body.password);
+    const { password, username } = req.body;
+    const token = await auth.login(password, username || undefined);
     res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
-    res.json({ ok:true, displayName:auth.loadAuth()?.displayName });
+    const tokenInfo = auth.getTokenInfo(token);
+    const displayName = tokenInfo?.role === 'admin' ? auth.loadAuth()?.displayName : (auth.getUserById(tokenInfo?.userId)?.displayName || tokenInfo?.username);
+    res.json({ ok:true, displayName, role: tokenInfo?.role, username: tokenInfo?.username });
   } catch(e) { res.status(401).json({ error:e.message }); }
 });
 
@@ -3181,6 +4590,39 @@ app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); 
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
 app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','schedule.html')));
+app.get('/users', (_,res) => res.sendFile(path.join(__dirname,'public','users.html')));
+
+// ─── Admin-only middleware ────────────────────────────────────────────────────
+function requireAdmin(req, res, next) {
+  if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+// ─── User Management (admin only) ────────────────────────────────────────────
+app.get('/api/users', requireAdmin, (req, res) => {
+  res.json(auth.listUsers());
+});
+
+app.post('/api/users', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const user = await auth.createUser(req.body);
+    res.json({ ok: true, user });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.put('/api/users/:id', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const user = await auth.updateUser(req.params.id, req.body);
+    res.json({ ok: true, user });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/users/:id', requireAdmin, (req, res) => {
+  try {
+    auth.deleteUser(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
@@ -3189,27 +4631,105 @@ app.get('/api/tasks', (req, res) => {
   let rows = stmts.getTasks.all({ w: workdir || null });
   // Optional status filter for external API clients
   if (statusFilter) rows = rows.filter(t => t.status === statusFilter);
-  const result = rows.map(t => ({
-    ...t,
-    is_active: t.session_id ? activeTasks.has(t.session_id) : false,
-  }));
+  // Non-admin users: filter tasks to only show those in assigned projects
+  if (req.userRole !== 'admin') {
+    const user = auth.getUserById(req.userId);
+    const assignedProjects = user?.projects || [];
+    const projectWorkdirs = new Set();
+    const allProjects = loadProjects();
+    for (const p of allProjects) {
+      if (assignedProjects.includes(p.id)) projectWorkdirs.add(p.workdir);
+    }
+    rows = rows.filter(t => t.workdir && projectWorkdirs.has(t.workdir));
+  }
+  // Add last_activity and started_at for running tasks
+  const lastActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at DESC LIMIT 1`);
+  const firstActivityStmt = db.prepare(`SELECT created_at FROM messages WHERE session_id=? ORDER BY created_at ASC LIMIT 1`);
+  const result = rows.map(t => {
+    const out = {
+      ...t,
+      is_active: t.session_id ? activeTasks.has(t.session_id) : false,
+    };
+    if (t.session_id && ['in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','done','done_review','awaiting_input'].includes(t.status)) {
+      const last = lastActivityStmt.get(t.session_id);
+      const first = firstActivityStmt.get(t.session_id);
+      out.last_activity = last?.created_at || t.updated_at;
+      out.started_at = first?.created_at || t.updated_at;
+    }
+    return out;
+  });
   res.json(result);
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
+
+// Screenshots for a specific task
+app.get('/api/tasks/:id/screenshots', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const screenshotDir = path.join(task.workdir, 'test-screenshots');
+  if (!fs.existsSync(screenshotDir)) return res.json([]);
+  const prefix = `task-${task.id}-`;
+  try {
+    const files = fs.readdirSync(screenshotDir)
+      .filter(f => f.startsWith(prefix) && /\.(png|jpg|jpeg|gif|webp)$/i.test(f))
+      .sort()
+      .map(f => {
+        const stat = fs.statSync(path.join(screenshotDir, f));
+        return { name: f, size: stat.size, created: stat.mtimeMs, url: `/api/tasks/${task.id}/screenshot/${encodeURIComponent(f)}` };
+      });
+    res.json(files);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// Serve a specific screenshot file for a task
+app.get('/api/tasks/:id/screenshot/:file', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).send('Not found');
+  const fp = path.join(task.workdir, 'test-screenshots', decodeURIComponent(req.params.file));
+  // Security: ensure file is within the screenshots dir
+  if (!fp.startsWith(path.join(task.workdir, 'test-screenshots'))) return res.status(403).send('Forbidden');
+  if (!fs.existsSync(fp)) return res.status(404).send('Not found');
+  res.sendFile(fp);
+});
 // Returns session IDs that currently have in_progress tasks — used by client to show spinners on all tabs
 app.get('/api/tasks/running-sessions', (req, res) => {
   const rows = db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all();
   res.json(rows.map(r => r.session_id));
 });
 app.post('/api/tasks', (req, res) => {
-  const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
+  let { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null,
+          after=null } = req.body;
+  
+  // Auto-chaining: if 'after' is a task ID, inherit or create chain_id and set sort_order
+  if (after) {
+    const depTask = stmts.getTask.get(after);
+    if (depTask) {
+      chain_id = depTask.chain_id || `chain-${after}`;
+      sort_order = (depTask.sort_order || 0) + 1;
+      workdir = workdir || depTask.workdir;
+      // If the dependency task didn't have a chain_id, assign one retroactively
+      if (!depTask.chain_id) {
+        db.prepare(`UPDATE tasks SET chain_id=? WHERE id=?`).run(chain_id, after);
+      }
+    }
+  }
+  
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null);
+  const taskNum = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
+  
+  // Auto-correct status: if task has a BMAD workflow tag, it should be in bmad_workflow queue
+  if (notes && /\[bmad-workflow:[\w-]+\]/.test(notes) && (!status || status === 'backlog' || status === 'todo')) {
+    status = 'bmad_workflow';
+  }
+  
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum);
   const task = stmts.getTask.get(id);
-  if (status === 'todo') setImmediate(processQueue);
+  if (['todo', 'bmad_workflow'].includes(status)) setImmediate(processQueue);
   res.json(task);
 });
 
@@ -3248,11 +4768,17 @@ app.post('/api/bmad/command', (req, res) => {
         : `${parsed.workflow} — ${proj.name}`;
       
       try {
-        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie);
+        const opts = {};
+        if (parsed.chainAfterLast) {
+          const lastTask = await bmadBridge.findLastTask(cookie, proj.workdir);
+          if (lastTask) opts.after = lastTask.id;
+        }
+        const task = await bmadBridge.createTask(parsed.workflow, proj.workdir, title, parsed.description, cookie, opts);
         if (task.error) return res.json({ error: task.error });
+        const chainNote = task.chain_id ? `\n🔗 Chained after: \`${opts.after?.slice(0,8) || '—'}\`` : '';
         res.json({ 
           ok: true, 
-          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\``,
+          text: `🚀 **Task Created:** ${title}\n🔮 Workflow: \`${parsed.workflow}\`\n📁 Project: ${proj.name}\n🆔 \`${task.id}\`${chainNote}`,
           taskId: task.id 
         });
       } catch (e) {
@@ -3264,9 +4790,24 @@ app.post('/api/bmad/command', (req, res) => {
   
   if (parsed.action === 'reply') {
     const cookie = req.headers.cookie || '';
-    bmadBridge.replyToTask(parsed.taskId, parsed.message, cookie)
-      .then(r => res.json({ ok: true, text: `✅ Reply sent to task \`${parsed.taskId}\`` }))
-      .catch(e => res.json({ error: e.message }));
+    (async () => {
+      try {
+        let taskId = parsed.taskId;
+        let taskTitle = '';
+        if (!taskId) {
+          // Auto-find the most recent awaiting_input task
+          const task = await bmadBridge.findAwaitingTask(cookie);
+          if (!task) return res.json({ error: 'No tasks currently awaiting input.' });
+          taskId = task.id;
+          taskTitle = task.title;
+        }
+        await bmadBridge.replyToTask(taskId, parsed.message, cookie);
+        const label = taskTitle ? `**${taskTitle}** (\`${taskId.slice(0,8)}\`)` : `\`${taskId}\``;
+        res.json({ ok: true, text: `✅ Reply sent to ${label}` });
+      } catch (e) {
+        res.json({ error: e.message });
+      }
+    })();
     return;
   }
   
@@ -3288,7 +4829,7 @@ app.post('/api/tasks/:id/reply', (req, res) => {
   } catch (e) { log.error('reply addMsg failed', e.message); }
   
   // Set task back to todo so the worker picks it up and resumes with the user's reply
-  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`)
+  db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`)
     .run(task.id);
   
   wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
@@ -3333,6 +4874,31 @@ app.put('/api/tasks/:id', (req, res) => {
   const updated = stmts.getTask.get(req.params.id);
   // Trigger queue whenever status is todo (covers "Run now" on scheduled tasks too)
   if (status === 'todo') setImmediate(processQueue);
+
+  // ── Screenshot cleanup on status transitions (PUT — used by Kanban drag) ──
+  if (status !== task.status && ['done', 'archived'].includes(status)) {
+    const wd = workdir || WORKDIR;
+    try {
+      cleanupTaskScreenshots(wd, req.params.id);
+      if (task.task_number) {
+        const screenshotDir = path.join(wd, 'test-screenshots');
+        if (fs.existsSync(screenshotDir)) {
+          const prefix = `task-${task.task_number}-`;
+          let deleted = 0;
+          for (const f of fs.readdirSync(screenshotDir)) {
+            if (f.startsWith(prefix)) {
+              fs.unlinkSync(path.join(screenshotDir, f));
+              deleted++;
+            }
+          }
+          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${status}`);
+        }
+      }
+    } catch (e) {
+      log.warn('[screenshot-cleanup] PUT transition cleanup error', { error: e.message });
+    }
+  }
+
   res.json(updated);
 });
 app.delete('/api/tasks/:id', (req, res) => {
@@ -3384,7 +4950,7 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
   if (updates.status && merged.notes) {
     const bmadMatch = (merged.notes || '').match(/\[bmad:([^\]]+)\]/);
     if (bmadMatch) {
-      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','cancelled':'backlog' };
+      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','done_review':'done','archived':'done','cancelled':'backlog' };
       const bmadStatus = REVERSE_MAP[merged.status];
       if (bmadStatus) {
         const wd = merged.workdir || WORKDIR;
@@ -3403,6 +4969,34 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
       }
     }
   }
+  // ── Screenshot cleanup on status transitions ──
+  // Clean up task screenshots when moving to done or archived (manual transitions)
+  if (updates.status && ['done', 'archived'].includes(updates.status) && !['done', 'archived'].includes(task.status)) {
+    const wd = merged.workdir || WORKDIR;
+    try {
+      // Clean by task ID
+      cleanupTaskScreenshots(wd, req.params.id);
+      // Also clean by task_number (screenshots use task-{number}-{nn}-{desc}.png naming)
+      if (task.task_number) {
+        const screenshotDir = path.join(wd, 'test-screenshots');
+        if (fs.existsSync(screenshotDir)) {
+          const prefix = `task-${task.task_number}-`;
+          const files = fs.readdirSync(screenshotDir);
+          let deleted = 0;
+          for (const f of files) {
+            if (f.startsWith(prefix)) {
+              fs.unlinkSync(path.join(screenshotDir, f));
+              deleted++;
+            }
+          }
+          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${updates.status}`);
+        }
+      }
+    } catch (e) {
+      log.warn('[screenshot-cleanup] manual transition cleanup error', { error: e.message });
+    }
+  }
+
   res.json(stmts.getTask.get(req.params.id));
 });
 
@@ -3434,7 +5028,7 @@ app.post('/api/tasks/:id/run', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   if (task.status === 'in_progress') return res.status(409).json({ error: 'Task already running' });
-  db.prepare(`UPDATE tasks SET status='todo', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
   setImmediate(processQueue);
   res.json({ ok: true, task: stmts.getTask.get(req.params.id) });
 });
@@ -3504,6 +5098,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
       const taskId = idMap[t.id];
       const realDeps = (t.depends_on || []).map(d => idMap[d]).filter(Boolean);
 
+      const _tn3 = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
       stmts.createTask.run(
         taskId,
         (t.title || t.role || 'Subtask').substring(0, 200),
@@ -3519,7 +5114,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
         source_session_id || null,
-        null, null, null  // scheduled_at, recurrence, recurrence_end_at
+        null, null, null, _tn3  // scheduled_at, recurrence, recurrence_end_at, task_number
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -3678,6 +5273,29 @@ function parseSprintStatus(filePath) {
   }
 }
 
+// POST /api/bmad/upload — upload documents into BMAD folders
+const bmadUpload = multer({ dest: path.join(os.tmpdir(), 'bmad-upload'), limits: { fileSize: 50 * 1024 * 1024 } });
+app.post('/api/bmad/upload', bmadUpload.array('files', 20), (req, res) => {
+  const { workdir, folder } = req.body;
+  if (!workdir || !folder) return res.status(400).json({ error: 'workdir and folder required' });
+  // Validate folder is within allowed BMAD paths
+  const allowedFolders = ['docs', '_bmad-output/planning-artifacts', '_bmad-output/implementation-artifacts', '_bmad'];
+  if (!allowedFolders.includes(folder)) return res.status(400).json({ error: 'Invalid target folder' });
+  const targetDir = path.join(workdir, folder);
+  try {
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    let count = 0;
+    for (const file of (req.files || [])) {
+      const dest = path.join(targetDir, file.originalname);
+      fs.renameSync(file.path, dest);
+      count++;
+    }
+    res.json({ ok: true, count, folder });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/bmad/docs?workdir=... — list BMAD output documents
 app.get('/api/bmad/docs', (req, res) => {
   const workdir = req.query.workdir || WORKDIR;
@@ -3685,64 +5303,76 @@ app.get('/api/bmad/docs', (req, res) => {
   const baseName = path.basename(workdir);
   const homeDir = os.homedir();
   const ocWorkspace = path.join(homeDir, '.openclaw', 'workspace');
-  // Scan dirs: project workdir + openclaw workspace variations
-  const scanDirs = [
-    { dir: path.join(workdir, '_bmad-output', 'planning-artifacts'), category: 'Planning' },
-    { dir: path.join(workdir, '_bmad-output', 'implementation-artifacts'), category: 'Implementation' },
-    { dir: path.join(workdir, '_bmad-output', 'analysis'), category: 'Analysis' },
-    { dir: path.join(workdir, '_bmad-output'), category: 'Output' },
-    { dir: path.join(workdir, 'docs'), category: 'Project Docs' },
-  ];
-  // Also check openclaw workspace variations
+  const ALLOWED_EXTS = new Set(['.md', '.yaml', '.yml', '.txt', '.json', '.csv', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp']);
+
+  function scanDir(dir, category) {
+    try {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const fp = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          scanDir(fp, category);
+        } else if (entry.isFile() && ALLOWED_EXTS.has(path.extname(entry.name).toLowerCase())) {
+          const stat = fs.statSync(fp);
+          docs.push({
+            name: entry.name,
+            category,
+            path: fp,
+            relativePath: path.relative(workdir, fp),
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+          });
+        }
+      }
+    } catch {}
+  }
+
+  scanDir(path.join(workdir, '_bmad-output'), 'BMAD Output');
+  scanDir(path.join(workdir, 'docs'), 'Project Docs');
+  scanDir(path.join(workdir, 'tests'), 'Tests');
+  scanDir(path.join(workdir, 'test-screenshots'), 'Screenshots');
+  scanDir(path.join(workdir, 'test-results'), 'Test Results');
+
   const variations = [baseName, baseName + '_app', baseName.replace(/-/g, '_'), baseName.replace(/_/g, '-')];
   for (const v of variations) {
     const ocDir = path.join(ocWorkspace, v, '_bmad-output');
     if (fs.existsSync(ocDir)) {
-      scanDirs.push({ dir: path.join(ocDir, 'planning-artifacts'), category: 'Planning' });
-      scanDirs.push({ dir: path.join(ocDir, 'implementation-artifacts'), category: 'Implementation' });
-      scanDirs.push({ dir: path.join(ocDir, 'analysis'), category: 'Analysis' });
-      scanDirs.push({ dir: ocDir, category: 'Output' });
-      break; // found it
+      scanDir(ocDir, 'BMAD Output');
+      break;
     }
   }
-  const seen = new Set();
-  for (const { dir, category } of scanDirs) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      for (const f of fs.readdirSync(dir)) {
-        const fp = path.join(dir, f);
-        const stat = fs.statSync(fp);
-        if (!stat.isFile()) continue;
-        if (!['.md', '.yaml', '.yml', '.txt'].includes(path.extname(f).toLowerCase())) continue;
-        if (seen.has(f)) continue; // deduplicate
-        seen.add(f);
-        docs.push({
-          name: f,
-          category,
-          path: fp,
-          relativePath: path.relative(workdir, fp),
-          size: stat.size,
-          modified: stat.mtime.toISOString(),
-        });
-      }
-    } catch {}
-  }
-  res.json({ docs, workdir });
+
+  const hasBmad = fs.existsSync(path.join(workdir, '_bmad')) || fs.existsSync(path.join(workdir, '_bmad-output')) || fs.existsSync(path.join(workdir, 'docs')) || fs.existsSync(path.join(workdir, 'tests')) || fs.existsSync(path.join(workdir, 'test-screenshots'));
+  res.json({ docs, workdir, hasBmad });
 });
+
 
 // GET /api/bmad/doc?path=... — read a single BMAD document
 app.get('/api/bmad/doc', (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: 'path required' });
-  // Security: only allow reading from _bmad-output/ or docs/ within a project
   const normalized = path.resolve(filePath);
-  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace')) {
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/') && !normalized.includes('.openclaw/workspace') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/')) {
     return res.status(403).json({ error: 'Access denied — only BMAD output files allowed' });
   }
   try {
-    const content = fs.readFileSync(normalized, 'utf-8');
     const ext = path.extname(normalized).toLowerCase();
-    res.json({ content, name: path.basename(normalized), ext, size: content.length });
+    const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico']);
+    if (IMAGE_EXTS.has(ext)) {
+      // Return image as base64 data URL
+      const buf = fs.readFileSync(normalized);
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp', '.bmp':'image/bmp', '.ico':'image/x-icon' }[ext] || 'application/octet-stream';
+      const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+      res.json({ content: dataUrl, name: path.basename(normalized), ext, size: buf.length, isImage: true });
+    } else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx'].includes(ext)) {
+      // Binary docs — return metadata only, use download endpoint
+      const stat = fs.statSync(normalized);
+      res.json({ content: null, name: path.basename(normalized), ext, size: stat.size, isBinary: true });
+    } else {
+      const content = fs.readFileSync(normalized, 'utf-8');
+      res.json({ content, name: path.basename(normalized), ext, size: content.length });
+    }
   } catch (e) {
     res.status(404).json({ error: 'File not found' });
   }
@@ -3754,7 +5384,7 @@ app.post('/api/bmad/doc', (req, res) => {
   if (!filePath || content === undefined) return res.status(400).json({ error: 'filePath and content required' });
   const normalized = path.resolve(filePath);
   // Security: only allow writing to docs/, _bmad-output/, or _bmad/ within a project
-  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/')) {
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('_bmad/') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/') && !normalized.includes('.openclaw/workspace')) {
     return res.status(403).json({ error: 'Access denied — can only write to docs/ or _bmad-output/' });
   }
   try {
@@ -3772,7 +5402,7 @@ app.delete('/api/bmad/doc', (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: 'path required' });
   const normalized = path.resolve(filePath);
-  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output')) {
+  if (!normalized.includes('/docs/') && !normalized.includes('_bmad-output') && !normalized.includes('/tests/') && !normalized.includes('/test-screenshots/') && !normalized.includes('/test-results/') && !normalized.includes('.openclaw/workspace')) {
     return res.status(403).json({ error: 'Access denied' });
   }
   try {
@@ -3781,6 +5411,65 @@ app.delete('/api/bmad/doc', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/bmad/doc/download?path=... — download a document file
+app.get('/api/bmad/doc/download', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  const normalized = path.resolve(filePath);
+  if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
+  const filename = path.basename(normalized);
+  res.download(normalized, filename);
+});
+
+// ─── Document Sharing ────────────────────────────────────────────────────────
+
+// POST /api/docs/share — create a share link for a document
+app.post('/api/docs/share', express.json(), (req, res) => {
+  const { projectId, filePath, expiresIn } = req.body;
+  if (!projectId || !filePath) return res.status(400).json({ error: 'projectId and filePath required' });
+  // Resolve file path relative to project workdir
+  const fullPath = path.resolve(projectId, filePath);
+  // Security: must be within the project workdir
+  if (!fullPath.startsWith(path.resolve(projectId))) {
+    return res.status(403).json({ error: 'Access denied — path traversal detected' });
+  }
+  if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'File not found' });
+  // Check if a share already exists for this file+project (reuse/update it)
+  const existing = db.prepare('SELECT * FROM shared_docs WHERE project_id=? AND file_path=?').get(projectId, filePath);
+  let expiresAt = null;
+  if (expiresIn) expiresAt = new Date(Date.now() + expiresIn * 3600 * 1000).toISOString();
+  if (existing) {
+    db.prepare('UPDATE shared_docs SET expires_at=? WHERE id=?').run(expiresAt, existing.id);
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return res.json({ url: `${proto}://${host}/shared/${existing.id}`, token: existing.id, expires_at: expiresAt });
+  }
+  const token = crypto.randomBytes(16).toString('hex');
+  db.prepare('INSERT INTO shared_docs (id, project_id, file_path, expires_at, created_by) VALUES (?,?,?,?,?)').run(token, projectId, filePath, expiresAt, 'user');
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  res.json({ url: `${proto}://${host}/shared/${token}`, token, expires_at: expiresAt });
+});
+
+// DELETE /api/docs/share/:token — revoke a share link
+app.delete('/api/docs/share/:token', (req, res) => {
+  const { token } = req.params;
+  const result = db.prepare('DELETE FROM shared_docs WHERE id=?').run(token);
+  if (result.changes === 0) return res.status(404).json({ error: 'Share not found' });
+  res.json({ ok: true });
+});
+
+// GET /api/docs/shares?projectId=X — list active shares for a project
+app.get('/api/docs/shares', (req, res) => {
+  const { projectId } = req.query;
+  if (!projectId) return res.status(400).json({ error: 'projectId required' });
+  const now = new Date().toISOString();
+  const shares = db.prepare(`SELECT * FROM shared_docs WHERE project_id=? AND (expires_at IS NULL OR expires_at > ?)`).all(projectId, now);
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  res.json(shares.map(s => ({ ...s, url: `${proto}://${host}/shared/${s.id}` })));
 });
 
 // GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
@@ -3840,10 +5529,11 @@ app.post('/api/bmad/sprint-sync', express.json(), (req, res) => {
         const notes = `${bmadTag} Sprint: ${parsed.meta.project}`;
         const sortOrder = epic.stories.indexOf(story);
 
+        const _tn4 = stmts.nextTaskNumber.get(workdir || '').next_num;
         stmts.createTask.run(
           id, title, description, notes,
           story.kanbanStatus, sortOrder, null, workdir,
-          null, null, null, null, null, null, null, null, null, null, null
+          null, null, null, null, null, null, null, null, null, null, null, _tn4
         );
         created.push({ id: story.id, kanbanId: id, status: story.kanbanStatus });
       }
@@ -4463,9 +6153,18 @@ app.get('/api/project-files/read', (req, res) => {
 });
 
 // Projects CRUD
-app.get('/api/projects', (_,res) => res.json(loadProjects()));
+app.get('/api/projects', (req,res) => {
+  let projects = loadProjects();
+  // Non-admin users only see assigned projects
+  if (req.userRole !== 'admin') {
+    const user = auth.getUserById(req.userId);
+    const assignedIds = new Set(user?.projects || []);
+    projects = projects.filter(p => assignedIds.has(p.id));
+  }
+  res.json(projects);
+});
 
-app.post('/api/projects', (req,res) => {
+app.post('/api/projects', requireAdmin, (req,res) => {
   const { name, workdir, gitInit, isRemote=false, remoteHostId='', remoteWorkdir='', sshKeyPath='', port=22 } = req.body;
   if (!name || !workdir) return res.status(400).json({ error:'name and workdir required' });
   try {
@@ -4498,7 +6197,7 @@ app.post('/api/projects', (req,res) => {
     // Auto-install BMAD in new local projects (background, non-blocking)
     if (!fs.existsSync(path.join(workdir, '_bmad'))) {
       const { execFile: ef } = require('child_process');
-      ef('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
+      ef('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--output-folder', '_bmad-output', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
         if (err) log.warn('BMAD auto-install failed', { workdir, error: err.message });
         else log.info('BMAD auto-installed', { workdir });
       });
@@ -4508,7 +6207,7 @@ app.post('/api/projects', (req,res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-app.post('/api/projects/reorder', (req, res) => {
+app.post('/api/projects/reorder', requireAdmin, (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
   const all = loadProjects();
@@ -4519,7 +6218,7 @@ app.post('/api/projects/reorder', (req, res) => {
   saveProjects(ordered);
   res.json({ ok: true });
 });
-app.patch('/api/projects/:id', (req,res) => {
+app.patch('/api/projects/:id', requireAdmin, (req,res) => {
   const { name, autoMode } = req.body;
   const projects = loadProjects();
   const p = projects.find(p => p.id === req.params.id);
@@ -4542,7 +6241,7 @@ app.patch('/api/projects/:id', (req,res) => {
   res.json({ ok:true, autoMode: !!p.autoMode });
 });
 
-app.delete('/api/projects/:id', (req,res) => {
+app.delete('/api/projects/:id', requireAdmin, (req,res) => {
   saveProjects(loadProjects().filter(p => p.id !== req.params.id));
   res.json({ ok:true });
 });
@@ -4630,6 +6329,19 @@ app.get('/api/browse-dirs', (req, res) => {
     if (process.platform === 'win32' && parent === null) parent = '__drives__';
     res.json({ path: dir, parent, items });
   } catch(e) { res.status(400).json({ error: e.message }); }
+});
+
+// Create a new directory (for new project creation)
+app.post('/api/create-dir', (req, res) => {
+  const { path: dirPath } = req.body;
+  if (!dirPath) return res.status(400).json({ error: 'path required' });
+  try {
+    if (fs.existsSync(dirPath)) return res.status(400).json({ error: 'Folder already exists' });
+    fs.mkdirSync(dirPath, { recursive: true });
+    res.json({ ok: true, path: dirPath });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Initialize project directory (create dir + optional git init)
@@ -5940,6 +7652,7 @@ wss.on('connection', (ws) => {
               const a = finalAgents[i];
               const taskId = idMap[a.id];
               const realDeps = (a.depends_on || []).map(d => idMap[d]).filter(Boolean);
+              const _tn5 = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
               stmts.createTask.run(
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
@@ -5948,7 +7661,7 @@ wss.on('connection', (ws) => {
                 sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
-                null, null, null  // scheduled_at, recurrence, recurrence_end_at
+                null, null, null, _tn5  // scheduled_at, recurrence, recurrence_end_at, task_number
               );
               created.push(stmts.getTask.get(taskId));
             }

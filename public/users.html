@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Management — Claude Code Studio</title>
+<style>
+:root{--bg:#0d1117;--s1:#161b22;--s2:#1c2129;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#7c6aef;--accent2:#9d8df1;--red:#f85149;--green:#3fb950}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:24px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+h1{font-size:22px}
+.back{color:var(--accent);text-decoration:none;font-size:14px}
+.back:hover{text-decoration:underline}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.btn{padding:6px 14px;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--accent);color:white}.btn-primary:hover{background:var(--accent2)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-danger{background:var(--red);color:white}.btn-danger:hover{opacity:.8}
+.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent)}.btn-outline:hover{background:var(--accent);color:white}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.field input{width:100%;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:14px;outline:none}
+.field input:focus{border-color:var(--accent)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-bg.active{display:flex}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px;max-width:90vw}
+.modal h2{font-size:18px;margin-bottom:16px}
+.projects-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.projects-grid label{display:flex;align-items:center;gap:4px;font-size:13px;background:var(--s2);padding:4px 10px;border-radius:6px;cursor:pointer}
+.projects-grid input[type=checkbox]{accent-color:var(--accent)}
+.error{color:var(--red);font-size:12px;margin-top:8px}
+.badge{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--s2);color:var(--muted)}
+.actions{display:flex;gap:6px;justify-content:flex-end;margin-top:16px}
+.empty{color:var(--muted);text-align:center;padding:40px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;background:var(--accent);color:white;margin:1px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>👥 User Management</h1>
+  <div><a href="/" class="back">← Back to Studio</a> &nbsp; <button class="btn btn-primary" onclick="showAddUser()">+ Add User</button></div>
+</div>
+<div class="card">
+  <table>
+    <thead><tr><th>Username</th><th>Display Name</th><th>Projects</th><th>Created</th><th></th></tr></thead>
+    <tbody id="userList"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="modal-bg" id="userModal">
+  <div class="modal">
+    <h2 id="modalTitle">Add User</h2>
+    <form onsubmit="return saveUser(event)">
+      <input type="hidden" id="editId">
+      <div class="field"><label>Username</label><input type="text" id="uUsername" placeholder="john-doe" required pattern="[a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]"></div>
+      <div class="field"><label>Display Name</label><input type="text" id="uDisplayName" placeholder="John Doe"></div>
+      <div class="field"><label>Password <span id="pwHint" style="color:var(--muted)">(min 8 chars)</span></label><input type="password" id="uPassword" placeholder="••••••••" minlength="8"></div>
+      <div class="field">
+        <label>Assigned Projects</label>
+        <div class="projects-grid" id="projectChecks">Loading...</div>
+      </div>
+      <div class="error" id="formError"></div>
+      <div class="actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let allProjects = [], allUsers = [];
+
+async function load() {
+  // Check if admin
+  const status = await (await fetch('/api/auth/status')).json();
+  if (!status.loggedIn) { window.location.href = '/login'; return; }
+  if (status.role !== 'admin') { document.body.innerHTML = '<div style="text-align:center;padding:80px;color:#f85149"><h2>Access Denied</h2><p>Admin access required.</p><a href="/" style="color:#7c6aef">← Back</a></div>'; return; }
+  
+  const [projects, users] = await Promise.all([
+    fetch('/api/projects').then(r => r.json()),
+    fetch('/api/users').then(r => r.json()),
+  ]);
+  allProjects = projects;
+  allUsers = users;
+  renderUsers();
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('userList');
+  if (!allUsers.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No users yet. Click "Add User" to create one.</td></tr>'; return; }
+  tbody.innerHTML = allUsers.map(u => `<tr>
+    <td><strong>${esc(u.username)}</strong></td>
+    <td>${esc(u.displayName)}</td>
+    <td>${u.projects.map(pid => { const p = allProjects.find(x => x.id === pid); return `<span class="tag">${esc(p?.name || pid)}</span>`; }).join(' ') || '<span class="badge">none</span>'}</td>
+    <td class="badge">${new Date(u.createdAt).toLocaleDateString()}</td>
+    <td style="text-align:right">
+      <button class="btn btn-outline btn-sm" onclick="editUser('${u.id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="delUser('${u.id}','${esc(u.username)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function renderProjectChecks(selected = []) {
+  const sel = new Set(selected);
+  document.getElementById('projectChecks').innerHTML = allProjects.length
+    ? allProjects.map(p => `<label><input type="checkbox" value="${p.id}" ${sel.has(p.id)?'checked':''}> ${esc(p.name)}</label>`).join('')
+    : '<span style="color:var(--muted)">No projects yet</span>';
+}
+
+function getSelectedProjects() {
+  return [...document.querySelectorAll('#projectChecks input:checked')].map(c => c.value);
+}
+
+function showAddUser() {
+  document.getElementById('modalTitle').textContent = 'Add User';
+  document.getElementById('editId').value = '';
+  document.getElementById('uUsername').value = '';
+  document.getElementById('uUsername').disabled = false;
+  document.getElementById('uDisplayName').value = '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uPassword').required = true;
+  document.getElementById('pwHint').textContent = '(min 8 chars)';
+  document.getElementById('formError').textContent = '';
+  renderProjectChecks();
+  document.getElementById('userModal').classList.add('active');
+}
+
+function editUser(id) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u) return;
+  document.getElementById('modalTitle').textContent = 'Edit User';
+  document.getElementById('editId').value = id;
+  document.getElementById('uUsername').value = u.username;
+  document.getElementById('uUsername').disabled = true;
+  document.getElementById('uDisplayName').value = u.displayName;
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uPassword').required = false;
+  document.getElementById('pwHint').textContent = '(leave blank to keep current)';
+  document.getElementById('formError').textContent = '';
+  renderProjectChecks(u.projects);
+  document.getElementById('userModal').classList.add('active');
+}
+
+function closeModal() { document.getElementById('userModal').classList.remove('active'); }
+
+async function saveUser(e) {
+  e.preventDefault();
+  const id = document.getElementById('editId').value;
+  const body = {
+    username: document.getElementById('uUsername').value.trim().toLowerCase(),
+    displayName: document.getElementById('uDisplayName').value.trim(),
+    projects: getSelectedProjects(),
+  };
+  const pw = document.getElementById('uPassword').value;
+  if (pw) body.password = pw;
+  
+  const errEl = document.getElementById('formError');
+  document.getElementById('saveBtn').disabled = true;
+  try {
+    const url = id ? `/api/users/${id}` : '/api/users';
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { closeModal(); load(); }
+    else errEl.textContent = d.error || 'Error';
+  } catch { errEl.textContent = 'Connection error'; }
+  document.getElementById('saveBtn').disabled = false;
+  return false;
+}
+
+async function delUser(id, name) {
+  if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+  await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  load();
+}
+
+load();
+</script>
+</body>
+</html>

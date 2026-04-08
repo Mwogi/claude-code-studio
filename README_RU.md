@@ -301,14 +301,14 @@ Claude может работать в трёх режимах. Выберите 
 - [Claude Code CLI](https://docs.anthropic.com/en/claude-code) установленный и залогиненный (нужна подписка Claude Pro или Max)
 
 ```bash
-npx github:Lexus2016/claude-code-studio
+npx github:Mwogi/claude-code-studio
 ```
 
 Откройте `http://localhost:3000`, установите пароль при первом запуске, начинайте.
 
 **Обновление:**
 ```bash
-npx github:Lexus2016/claude-code-studio@latest
+npx github:Mwogi/claude-code-studio@latest
 ```
 
 ---
@@ -317,19 +317,19 @@ npx github:Lexus2016/claude-code-studio@latest
 
 **Глобально** — запускайте `claude-code-studio` из любого места:
 ```bash
-npm install -g github:Lexus2016/claude-code-studio
+npm install -g github:Mwogi/claude-code-studio
 ```
 
 **Клонировать репозиторий** — для разработчиков:
 ```bash
-git clone https://github.com/Lexus2016/claude-code-studio.git
+git clone https://github.com/Mwogi/claude-code-studio.git
 cd claude-code-studio
 npm install && node server.js
 ```
 
 **Docker:**
 ```bash
-git clone https://github.com/Lexus2016/claude-code-studio.git
+git clone https://github.com/Mwogi/claude-code-studio.git
 cd claude-code-studio
 cp .env.example .env
 docker compose up -d --build
@@ -348,7 +348,7 @@ docker compose up -d --build
 npx github:Lexus2016/claude-flow
 
 # 2. Запускайте Studio как обычно
-npx github:Lexus2016/claude-code-studio
+npx github:Mwogi/claude-code-studio
 ```
 
 После настройки Claude Code CLI будет использовать ваш OpenRouter API ключ и выбранную модель. Studio наследует эти настройки автоматически — никакой дополнительной конфигурации не нужно.

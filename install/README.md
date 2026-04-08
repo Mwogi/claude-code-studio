@@ -8,7 +8,7 @@ Run these scripts on **remote servers** to install and configure Claude Code CLI
 
 ```bash
 # Run as root:
-curl -fsSL https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Mwogi/claude-code-studio/main/install/setup-linux.sh | bash
 ```
 
 Or if you downloaded the file:
@@ -21,7 +21,7 @@ chmod +x setup-linux.sh && sudo bash setup-linux.sh
 ### macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-macos.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Mwogi/claude-code-studio/main/install/setup-macos.sh | bash
 ```
 
 Or:
@@ -34,7 +34,7 @@ chmod +x setup-macos.sh && ./setup-macos.sh
 ### Windows (PowerShell as Administrator)
 
 ```powershell
-irm https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-windows.ps1 | iex
+irm https://raw.githubusercontent.com/Mwogi/claude-code-studio/main/install/setup-windows.ps1 | iex
 ```
 
 Or:

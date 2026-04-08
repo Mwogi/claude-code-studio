@@ -6,6 +6,7 @@ const fs = require('fs');
 const APP_DIR = process.env.APP_DIR || __dirname;
 const AUTH_FILE = path.join(APP_DIR, 'data', 'auth.json');
 const SESSIONS_FILE = path.join(APP_DIR, 'data', 'sessions-auth.json');
+const USERS_FILE = path.join(APP_DIR, 'data', 'users.json');
 const TOKEN_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_SESSIONS = 20; // cap concurrent sessions per installation
 // lastUsed is updated in-memory on every request but only flushed to disk at
@@ -101,15 +102,20 @@ async function setupUser(password, displayName) {
   }
 }
 
-async function login(password) {
-  const auth = loadAuth();
-  // Generic message: do not distinguish 'not configured' from 'wrong password'
-  // to prevent user-enumeration via error message differences.
-  if (!auth || !(await bcrypt.compare(password, auth.passwordHash))) throw new Error('Invalid credentials');
-  return createToken();
+async function login(password, username) {
+  // No username or 'admin' => admin login (backward compatible)
+  if (!username || username === 'admin') {
+    const auth = loadAuth();
+    if (!auth || !(await bcrypt.compare(password, auth.passwordHash))) throw new Error('Invalid credentials');
+    return createToken({ userId: 'admin', role: 'admin', username: 'admin' });
+  }
+  // User login
+  const user = getUserByUsername(username);
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) throw new Error('Invalid credentials');
+  return createToken({ userId: user.id, role: 'user', username: user.username });
 }
 
-function createToken() {
+function createToken(userInfo) {
   const token = crypto.randomBytes(32).toString('hex');
   const sessions = loadSessions();
   const now = Date.now();
@@ -121,7 +127,19 @@ function createToken() {
     entries.sort((a, b) => (a[1].lastUsed || 0) - (b[1].lastUsed || 0));
     for (const [t] of entries.slice(0, entries.length - MAX_SESSIONS + 1)) delete sessions[t];
   }
-  sessions[token] = { created: now, lastUsed: now };
+  // userInfo: { userId, role, username } — for multi-user support
+  const sessionData = { created: now, lastUsed: now };
+  if (userInfo) {
+    sessionData.userId = userInfo.userId || 'admin';
+    sessionData.role = userInfo.role || 'admin';
+    sessionData.username = userInfo.username || 'admin';
+  } else {
+    // Legacy: no userInfo means admin (backward compat with setupUser)
+    sessionData.userId = 'admin';
+    sessionData.role = 'admin';
+    sessionData.username = 'admin';
+  }
+  sessions[token] = sessionData;
   saveSessions(sessions);
   return token;
 }
@@ -133,16 +151,21 @@ function validateToken(token) {
   if (!s) return false;
   if (Date.now() - s.created > TOKEN_TTL) { delete sessions[token]; saveSessions(sessions); return false; }
   const now = Date.now();
-  // Always update lastUsed in the in-memory cache (loadSessions returns _sessionsCache,
-  // so s is a direct reference — mutation is visible immediately to all callers).
-  // Only flush to disk when the previous disk write was more than LAST_USED_FLUSH_INTERVAL
-  // ago: eliminates writeFileSync on every authenticated request / status poll.
   s.lastUsed = now;
   if (now - (s._lastFlushed || 0) > LAST_USED_FLUSH_INTERVAL) {
     s._lastFlushed = now;
     saveSessions(sessions);
   }
   return true;
+}
+
+/** Get session data for a token (userId, role, username). */
+function getTokenInfo(token) {
+  if (!token) return null;
+  const sessions = loadSessions();
+  const s = sessions[token];
+  if (!s) return null;
+  return { userId: s.userId || 'admin', role: s.role || 'admin', username: s.username || 'admin' };
 }
 
 function revokeToken(token) {
@@ -179,11 +202,110 @@ function authMiddleware(req, res, next) {
   }
   const token = req.cookies?.token || req.headers['x-auth-token'] ||
     (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
-  if (validateToken(token)) { req.authToken = token; return next(); }
+  if (validateToken(token)) {
+    req.authToken = token;
+    // Attach user info to request for authorization checks
+    const info = getTokenInfo(token);
+    req.userId = info?.userId || 'admin';
+    req.userRole = info?.role || 'admin';
+    req.userName = info?.username || 'admin';
+    return next();
+  }
   if (req.accepts('html') && !req.path.startsWith('/api/')) return res.redirect('/login');
   return res.status(401).json({ error: 'unauthorized' });
 }
 
 function validateWsToken(token) { return validateToken(token); }
 
-module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth };
+// ─── Users CRUD ───────────────────────────────────────────────────────────
+function loadUsers() {
+  try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')); }
+  catch { return { users: [] }; }
+}
+
+function saveUsers(data) {
+  const dir = path.dirname(USERS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  atomicWrite(USERS_FILE, JSON.stringify(data, null, 2));
+}
+
+function validateUsername(username) {
+  if (!username || typeof username !== 'string') throw new Error('Username is required');
+  if (!/^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$|^[a-z0-9]$/.test(username)) throw new Error('Username must be lowercase alphanumeric + hyphens, 1-32 chars');
+  if (username === 'admin') throw new Error('Username "admin" is reserved');
+}
+
+function getUserByUsername(username) {
+  const data = loadUsers();
+  return data.users.find(u => u.username === username) || null;
+}
+
+function getUserById(id) {
+  const data = loadUsers();
+  return data.users.find(u => u.id === id) || null;
+}
+
+async function createUser({ username, password, displayName, projects }) {
+  validateUsername(username);
+  validatePassword(password);
+  if (getUserByUsername(username)) throw new Error('Username already exists');
+  const safeName = sanitizeDisplayName(displayName || username);
+  const hash = await bcrypt.hash(password, 12);
+  const user = {
+    id: 'user-' + crypto.randomBytes(4).toString('hex'),
+    username,
+    displayName: safeName,
+    passwordHash: hash,
+    projects: Array.isArray(projects) ? projects : [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const data = loadUsers();
+  data.users.push(user);
+  saveUsers(data);
+  return { id: user.id, username: user.username, displayName: user.displayName, projects: user.projects };
+}
+
+async function updateUser(id, updates) {
+  const data = loadUsers();
+  const idx = data.users.findIndex(u => u.id === id);
+  if (idx === -1) throw new Error('User not found');
+  const user = data.users[idx];
+  if (updates.displayName !== undefined) user.displayName = sanitizeDisplayName(updates.displayName);
+  if (updates.projects !== undefined) user.projects = Array.isArray(updates.projects) ? updates.projects : user.projects;
+  if (updates.password) {
+    validatePassword(updates.password);
+    user.passwordHash = await bcrypt.hash(updates.password, 12);
+  }
+  user.updatedAt = new Date().toISOString();
+  saveUsers(data);
+  return { id: user.id, username: user.username, displayName: user.displayName, projects: user.projects };
+}
+
+function deleteUser(id) {
+  const data = loadUsers();
+  const idx = data.users.findIndex(u => u.id === id);
+  if (idx === -1) throw new Error('User not found');
+  data.users.splice(idx, 1);
+  saveUsers(data);
+  // Revoke all sessions for this user
+  const sessions = loadSessions();
+  for (const [t, s] of Object.entries(sessions)) {
+    if (s.userId === id) delete sessions[t];
+  }
+  saveSessions(sessions);
+}
+
+function listUsers() {
+  const data = loadUsers();
+  return data.users.map(u => ({
+    id: u.id, username: u.username, displayName: u.displayName,
+    projects: u.projects, createdAt: u.createdAt, updatedAt: u.updatedAt,
+  }));
+}
+
+module.exports = {
+  isSetupDone, setupUser, login, validateToken, getTokenInfo, revokeToken, revokeAll,
+  changePassword, authMiddleware, validateWsToken, loadAuth,
+  loadUsers, createUser, updateUser, deleteUser, listUsers, getUserById, getUserByUsername,
+};

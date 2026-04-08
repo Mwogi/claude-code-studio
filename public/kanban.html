@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Kanban — Claude Code Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,6 +60,11 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .nav-sw-btn{ display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:6px; font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; transition:all .15s; white-space:nowrap; }
 .nav-sw-btn:hover{ color:var(--text); background:rgba(255,255,255,.05); }
 .nav-sw-btn.active{ background:var(--s2); color:var(--accent2); box-shadow:0 1px 3px rgba(0,0,0,.3); }
+
+/* ─── Hamburger button (mobile only) ─── */
+.hdr-hamburger{ display:none; background:var(--s2); border:1px solid var(--border); color:var(--muted); padding:5px 9px; border-radius:7px; cursor:pointer; font-size:18px; min-height:44px; min-width:44px; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; line-height:1; }
+.hdr-hamburger:hover{ color:var(--text); border-color:var(--accent2); background:var(--s3); }
+.hdr-hamburger:active{ transform:scale(0.95); }
 
 /* ─── Project dropdown in header ─── */
 .proj-dd-wrap { position: relative; display: none; }
@@ -134,8 +139,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-panel-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .docs-panel-title { font-size:15px; font-weight:700; color:var(--fg); }
 .docs-panel-body { display:flex; flex:1; overflow:hidden; }
-.docs-sidebar { width:240px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
-.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-sidebar { width:280px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
+.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); word-wrap:break-word; overflow-wrap:break-word; }
 .docs-content h1,.docs-content h2,.docs-content h3 { color:var(--fg); margin:1em 0 .5em; }
 .docs-content h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:6px; }
 .docs-content h2 { font-size:16px; }
@@ -150,16 +155,35 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .docs-content th { background:var(--s2); font-weight:600; }
 .docs-content .yaml-content { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; background:var(--s2); padding:12px; border-radius:6px; }
 .docs-empty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
-.docs-cat { padding:6px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:8px; }
+.docs-cat { padding:6px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:4px; cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none; }
 .docs-cat:first-child { margin-top:0; }
-.docs-file { padding:8px 16px; cursor:pointer; font-size:13px; color:var(--fg2); display:flex; align-items:center; gap:8px; transition:background .15s; }
+.docs-cat:hover { color:var(--fg); }
+.docs-cat .chevron { font-size:9px; transition:transform .15s; display:inline-block; }
+.docs-cat.collapsed .chevron { transform:rotate(-90deg); }
+.docs-cat.collapsed + .docs-folder-contents { display:none; }
+.docs-subfolder { padding:2px 0 2px 12px; }
+.docs-subfolder-label { padding:4px 12px; font-size:11px; font-weight:600; color:var(--fg2); cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none; border-radius:4px; margin:1px 4px; }
+.docs-subfolder-label:hover { background:var(--s2); }
+.docs-subfolder-label .chevron { font-size:8px; transition:transform .15s; display:inline-block; }
+.docs-subfolder-label.collapsed .chevron { transform:rotate(-90deg); }
+.docs-subfolder-label.collapsed ~ .docs-subfolder-files { display:none; }
+.docs-subfolder-count { font-size:9px; color:var(--muted); font-weight:400; margin-left:auto; }
+.docs-file { padding:5px 12px 5px 24px; cursor:pointer; font-size:12px; color:var(--fg2); display:flex; align-items:center; gap:6px; transition:background .15s; border-radius:4px; margin:1px 4px; }
 .docs-file:hover { background:var(--s2); }
-.docs-file.active { background:var(--accent); color:#fff; border-radius:0; }
-.docs-file-icon { font-size:14px; flex-shrink:0; }
+.docs-file.active { background:var(--accent); color:#fff; border-radius:4px; }
+.docs-file-icon { font-size:12px; flex-shrink:0; }
 .docs-file-info { flex:1; min-width:0; }
-.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.docs-file-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+.docs-file-meta { font-size:9px; color:var(--muted); margin-top:1px; }
 .docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
+.docs-share-btn { background:none; border:none; cursor:pointer; font-size:12px; padding:2px 4px; opacity:0; transition:opacity .15s; border-radius:4px; flex-shrink:0; }
+.docs-file:hover .docs-share-btn { opacity:1; }
+.docs-file.active .docs-share-btn { opacity:0.7; color:#fff; }
+.docs-file.active .docs-share-btn:hover { opacity:1; }
+.doc-share-indicator { font-size:10px; vertical-align:middle; margin-left:3px; }
+.docs-search { padding:6px 8px; margin:0 8px 6px; border:1px solid var(--border); border-radius:6px; background:var(--s2); color:var(--fg); font-size:12px; width:calc(100% - 16px); outline:none; }
+.docs-search:focus { border-color:var(--accent); }
+.docs-search::placeholder { color:var(--muted); }
 /* Docs editor */
 .docs-editor { display:flex; flex:1; overflow:hidden; height:100%; }
 .docs-editor-left { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); }
@@ -244,6 +268,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .dot-in_progress{ background:var(--orange); }
 .dot-awaiting_input{ background:#f59e0b; }
 .dot-done{ background:var(--green); }
+.dot-done_review{ background:#f59e0b; }
+.dot-archived{ background:var(--muted); }
 .dot-cancelled{ background:var(--red); }
 /* BMAD upstream workflow colour */
 .dot-bmad_workflow{ background:#9333ea; }
@@ -256,12 +282,31 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 /* BMAD phase column accent */
 .col-head.bmad-col{ border-color:rgba(124,106,239,.35); background:linear-gradient(135deg,rgba(124,106,239,.12),rgba(124,106,239,.05)); }
 .col-head.bmad-col .col-title{ color:var(--accent2); }
+/* Done for Review column — amber accent */
+.col-head.review-col{ border-color:rgba(245,158,11,.35); background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.05)); cursor:default; }
+.col-head.review-col .col-title{ color:#f59e0b; }
+/* Archive column — collapsed by default, click to toggle */
+.col.col-archive{ width:48px; overflow:hidden; transition:width .25s ease; }
+.col.col-archive.expanded{ width:268px; }
+.col-head.archive-col{ border-color:rgba(120,120,120,.2); background:var(--s2); cursor:pointer; user-select:none; }
+.col-head.archive-col .col-title{ color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.col.col-archive:not(.expanded) .col-body,
+.col.col-archive:not(.expanded) .col-add{ display:none; }
+.col.col-archive:not(.expanded) .col-head{ writing-mode:vertical-rl; height:auto; width:44px; padding:12px 6px; flex-direction:column; gap:6px; border-radius:var(--r-md); }
+.col.col-archive:not(.expanded) .col-head .col-title{ font-size:10px; letter-spacing:.4px; }
+.col.col-archive:not(.expanded) .col-dot{ display:none; }
 /* BMAD board section divider */
 .board-divider{ flex-shrink:0; width:1px; background:var(--border); margin:0 8px; align-self:stretch; opacity:.6; }
 
 /* ─── Card ─── */
 .card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s,transform .1s; }
 .card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
+.activity-badge{ font-size:10px; padding:1px 6px; border-radius:8px; font-weight:500; display:inline-flex; align-items:center; gap:3px; }
+.activity-fresh{ background:rgba(34,197,94,.15); color:#22c55e; }
+.activity-warm{ background:rgba(234,179,8,.15); color:#eab308; }
+.activity-stale{ background:rgba(239,68,68,.15); color:#ef4444; }
+.activity-pulse{ animation:pulse-dot 1.5s ease-in-out infinite; }
+@keyframes pulse-dot{ 0%,100%{opacity:1} 50%{opacity:.4} }
 .card.dragging{ opacity:.4; cursor:grabbing; transform:scale(.97); }
 .card-ph{ border:2px dashed var(--accent); border-radius:var(--r-md); background:var(--abg); opacity:.5; }
 .card-title{ font-size:13px; font-weight:600; line-height:1.4; margin-bottom:5px; word-break:break-word; }
@@ -290,8 +335,9 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
 .modal.has-chat{ max-width:1200px; height:92vh; min-height:600px; }
 .modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
-.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
-.modal-left .modal-body{ padding:16px; gap:10px; }
+.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow:hidden; }
+.modal-left .modal-body{ padding:16px; gap:10px; overflow-y:auto; flex:1; }
+.modal-left .modal-ft{ flex-shrink:0; }
 .modal-right{ flex:1; display:flex; flex-direction:column; min-width:0; height:100%; overflow:hidden; }
 .modal-right .chat-panel{ border:none; border-radius:0; flex:1; display:flex; flex-direction:column; height:100%; overflow:hidden; }
 .modal-right .chat-panel-hd{ padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -320,7 +366,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .modal-hd-title{ font-size:15px; font-weight:700; flex:1; }
 .modal-close{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:20px; padding:2px 6px; border-radius:var(--r-sm); line-height:1; transition:color .1s,background .1s; }
 .modal-close:hover{ color:var(--text); background:var(--s2); }
-.modal-body{ padding:20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; }
+.modal-body{ padding:16px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px; }
 .modal-ft{ padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; flex-shrink:0; }
 
 /* Form elements */
@@ -354,6 +400,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .chat-reply-btn:hover{ opacity:.9; }
 .chat-msg{ padding:9px 14px; border-bottom:1px solid var(--border); }
 .chat-msg:last-child{ border-bottom:none; }
+.chat-ts{ font-size:10px; color:var(--muted); font-weight:400; margin-left:6px; }
 .chat-role{ font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:3px; letter-spacing:.5px; }
 .chat-role.user{ color:var(--blue); }
 .chat-role.assistant{ color:var(--accent2); }
@@ -406,10 +453,15 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .hdr { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
   .hdr-l { gap: 6px; flex-wrap: wrap; }
   .hb span { display: none; }
-  .hb { padding: 5px 8px; min-height: 40px; }
-  .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
+  .hb { padding: 5px 8px; min-height: 44px; min-width: 44px; justify-content: center; }
+  /* Hamburger: visible on mobile */
+  .hdr-hamburger { display: inline-flex; }
+  /* Nav tabs: horizontally scrollable, equal spacing */
+  .nav-sw { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .nav-sw::-webkit-scrollbar { display: none; }
+  .nav-sw-btn { flex: 1; justify-content: center; padding: 4px 8px; font-size: 12px; min-width: 60px; }
   .nav-sw-btn span { display: none; }
-  .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; }
+  .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; min-height: 44px; }
   .board { padding: 10px 8px 16px; gap: 8px; }
   .col { width: 240px; }
   .modal { max-width: 95vw; max-height: 92vh; max-height: 92dvh; }
@@ -421,13 +473,817 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .card-actions { opacity: 1; }
   /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
   .inp, .sel, .proj-dd-search input { font-size: 16px; }
+  /* Touch targets ≥44px */
+  .logo { width: 44px; height: 44px; border-radius: 12px; }
+  .nav-sw-btn { min-height: 44px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .modal-close { padding: 8px 12px; font-size: 24px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .col-add { padding: 12px; min-height: 44px; font-size: 14px; }
+  .col-cnt { font-size: 12px; padding: 2px 8px; }
+  /* Sidebar session & project touch targets */
+  .kb-sidebar-sess { padding: 10px 16px 10px 36px; min-height: 44px; display: flex; align-items: center; }
+  .kb-sidebar-hd .modal-close { font-size: 24px; padding: 8px; min-width: 44px; min-height: 44px; }
+  .kb-sidebar-proj-hd { min-height: 44px; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Card action buttons larger touch targets */
+  .cbtn { padding: 8px 10px; font-size: 16px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .card-actions { display: flex !important; gap: 4px; }
+  /* Attachment chip remove larger */
+  .att-chip button { padding: 6px; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
+
+  /* ─── Task Cards: readable body text, min touch area ─── */
+  .card { cursor: pointer; min-height: 48px; padding: 12px 13px; }
+  /* Title: 2-line max with ellipsis */
+  .card-title { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-desc { font-size: 13px; -webkit-line-clamp: 3; }
+  .card-foot { gap: 6px; row-gap: 6px; }
+  .card-foot .badge { font-size: 12px; padding: 3px 8px; }
+  .activity-badge { font-size: 12px; padding: 3px 8px; }
+  /* Ensure activity badge and all badges wrap to next line if needed */
+  .card-foot { flex-wrap: wrap; align-items: center; }
+  .card-time { font-size: 12px; }
+  /* Ensure gap between interactive elements */
+  .card-foot > * { margin-bottom: 2px; }
+
+  /* ─── Docs panel: touch-friendly file list & close button ─── */
+  .docs-file { padding: 10px 12px 10px 24px; min-height: 44px; display: flex; align-items: center; }
+  .docs-cat { padding: 10px 12px; min-height: 44px; }
+  .docs-search { font-size: 16px; padding: 10px 12px; }
+  .docs-panel-hd .modal-close { font-size: 24px; padding: 8px 12px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  /* Docs content: readable font size */
+  .docs-content { font-size: 14px; padding: 16px; }
+  .docs-content h1 { font-size: 18px; }
+  .docs-content h2 { font-size: 15px; }
+  .docs-content h3 { font-size: 14px; }
+  /* Upload & New Doc buttons: touch-friendly */
+  #docsNewBtn, #docsPanel .docs-panel-hd button { min-height: 44px; padding: 6px 14px; font-size: 13px; }
+
+  /* ─── Stats bar: min font size, no horizontal scroll ─── */
+  .proj-bar { flex-wrap: wrap; gap: 8px; padding: 6px 12px; overflow-x: hidden; }
+  .kb-stats { flex-wrap: wrap; gap: 8px; }
+  .kb-stat { font-size: 13px; }
+  .kb-stat-lbl { font-size: 12px; }
+  #sprintSyncBtn, #bmadDocsBtn, #autoModeBtn { min-height: 44px; padding: 6px 12px; font-size: 13px; }
+
+  /* ─── Chat reply bar ─── */
+  .chat-reply-input { font-size: 16px; padding: 10px 12px; min-height: 44px; }
+  .chat-reply-btn { min-height: 44px; padding: 10px 16px; font-size: 14px; }
+
+  /* ─── Toast: above iOS safe area ─── */
+  .toast { bottom: max(24px, env(safe-area-inset-bottom, 24px)); font-size: 14px; white-space: normal; max-width: calc(100vw - 32px); text-align: center; }
+
+  /* ─── Loading spinner: visible at small sizes ─── */
+  .spinning { width: 14px; height: 14px; }
+
+  /* Status dots slightly larger */
+  .col-dot { width: 10px; height: 10px; }
+  .kb-stat-dot { width: 9px; height: 9px; }
+
+  /* ─── No horizontal overflow ─── */
+  html, body { max-width: 100vw; overflow-x: hidden; }
+
+  /* ─── Caption font sizes: min 12px on mobile ─── */
+  .badge { font-size: 12px; }
+  .activity-badge { font-size: 12px; }
+  .col-cnt { font-size: 12px; }
+  .kb-stat-lbl { font-size: 12px; }
+  .card-time { font-size: 12px; }
+  .chat-ts { font-size: 11px; }
+
+  /* ─── Spacing between interactive elements: min 8px ─── */
+  .hdr-btns { gap: 8px; }
+  .card-foot { gap: 8px; row-gap: 8px; }
+  .card-foot > * { margin-bottom: 0; }
+  .hdr-l { gap: 8px; }
 }
+
+/* ─── Mobile: <768px — project selector full-width, header row 2 ─── */
+@media (max-width: 767px) {
+  /* Project selector: full-width row below logo+nav on phones/tablets */
+  .hdr-meta { display: flex; width: 100%; order: 3; }
+  .proj-dd-wrap { display: inline-block !important; flex: 1; }
+  .proj-dd-btn { max-width: 100%; width: 100%; }
+  /* Project dropdown menu: full-width */
+  .proj-dd-menu { min-width: unset; width: calc(100vw - 24px); left: 0; max-width: none; }
+}
+
 @media (max-width: 480px) {
-  .col { width: 85vw; }
-  .board { gap: 6px; padding: 8px 6px 14px; scroll-snap-type: x mandatory; }
-  .col { scroll-snap-align: start; }
-  .hdr-meta { display: none; }
+  /* ─── Kanban columns: 85vw with snap scroll ─── */
+  .col { width: 85vw; min-width: 85vw; max-width: 85vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 85vw; min-width: 85vw; max-width: 85vw; }
+  .board { overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; gap: 6px; padding: 8px 6px 14px; }
+  /* Hide board divider to save space */
+  .board-divider { display: none; }
+
+  /* ─── Header: two-row layout so all controls are accessible ─── */
+  /* Row 1 is: hdr-l (logo+nav) + hdr-btns, both flex children of .hdr */
+  /* Row 2 is: hdr-meta (project dropdown) wrapping inside hdr-l */
+  .hdr { flex-wrap: wrap; padding: 6px 8px; gap: 4px; }
+  .hdr-l { flex-wrap: wrap; flex: 1; min-width: 0; gap: 6px; align-items: center; }
+  .hdr-btns { flex-shrink: 0; }
+  /* Project dropdown row: full width inside hdr-l, so it drops to second row */
+  .hdr-meta { display: flex; width: 100%; }
+  .proj-dd-wrap { display: inline-block !important; flex: 1; }
+  .proj-dd-btn { max-width: 100%; width: 100%; }
+  /* Project dropdown menu: full-width on small screens */
+  .proj-dd-menu { min-width: unset; width: calc(100vw - 24px); left: 0; max-width: none; }
+  /* Status badge: smaller on mobile */
+  .status-dot { font-size: 11px; }
+  /* Refresh timestamp hidden to save space */
+  .refresh-ts { display: none; }
+
+  /* ─── Sidebar: full-width on very small screens ─── */
+  .kb-sidebar { width: 100vw; }
+
+  /* ─── Stats bar: single row, compact ─── */
   .kb-progress { display: none; }
+  .proj-bar { padding: 5px 8px; gap: 6px; }
+  .kb-stats { gap: 6px; }
+  #sprintSyncBtn, #bmadDocsBtn, #autoModeBtn { font-size: 12px; padding: 5px 10px; }
+
+  /* ─── Task Cards: 320px friendly ─── */
+  .card { padding: 10px 11px; }
+  .card-title { font-size: 14px; }
+  .card-desc { font-size: 13px; -webkit-line-clamp: 2; }
+  .card-foot { gap: 4px; row-gap: 5px; }
+  .card-foot .badge { font-size: 11px; padding: 2px 6px; max-width: 100px; }
+  .badge-accent { max-width: 100px; }
+  .activity-badge { font-size: 11px; padding: 2px 6px; }
+  .card-time { font-size: 11px; }
+
+  /* ─── Docs Panel: full-screen slide-out, stacked layout on mobile ─── */
+  /* Panel header: prominent close button */
+  .docs-panel-hd {
+    padding: 8px 12px;
+    min-height: 44px;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .docs-panel-hd > div { gap: 6px; flex-wrap: nowrap; }
+  .docs-panel-title { font-size: 14px; }
+  /* Show files toggle on mobile */
+  #docsToggleFiles { display: inline-flex !important; }
+  /* Compact buttons on mobile */
+  #docsNewBtn {
+    min-height: 36px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .docs-panel-hd button[onclick="uploadDocTrigger()"] {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .docs-panel-hd .modal-close {
+    font-size: 28px;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 8px;
+    background: var(--s3);
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Panel body: stack sidebar on top, content below */
+  .docs-panel-body {
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* Sidebar: collapsible on mobile — hidden when a doc is being viewed */
+  .docs-sidebar {
+    width: 100%;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+    transition: max-height 0.2s ease, padding 0.2s ease;
+  }
+  .docs-sidebar.collapsed {
+    max-height: 0;
+    padding: 0;
+    border-bottom: none;
+    overflow: hidden;
+  }
+  /* Doc content: takes remaining space */
+  .docs-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 14px;
+    line-height: 1.65;
+    padding: 14px 14px;
+  }
+  .docs-content h1 { font-size: 18px; }
+  .docs-content h2 { font-size: 15px; }
+  .docs-content h3 { font-size: 14px; }
+  .docs-content pre { font-size: 12px; overflow-x: auto; }
+  .docs-content code { font-size: 12px; }
+  .docs-content table { font-size: 12px; display: block; overflow-x: auto; }
+  /* Docs editor: stacked on mobile */
+  .docs-editor { flex-direction: column; }
+  .docs-editor-left { border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 50vh; }
+  .docs-editor-right { flex: 1; font-size: 14px; padding: 12px 14px; }
+  .docs-editor-textarea { font-size: 14px; }
+  .docs-editor-toolbar input, .docs-editor-toolbar select { font-size: 16px; }
+
+  /* ─── Modal: full-screen on mobile ─── */
+  .ov { padding: 0; }
+  .modal { max-width: 100vw !important; max-height: 100dvh !important; height: 100dvh; border-radius: 0; border: none; }
+  .modal.has-chat { min-height: unset; height: 100dvh; }
+  .modal-split { flex-direction: column; }
+  .modal-left { flex: 1 1 auto; max-height: none; overflow-y: auto; border-bottom: 1px solid var(--border); }
+  .modal-right { flex: 0 0 auto; max-height: 50vh; }
+  .modal-split.show-chat .modal-right { flex:1; max-height:none !important; height:100%; min-height:0; }
+  .modal-split.show-chat .modal-left { display:none !important; }
+  .modal-split.show-chat #chatContainer,
+  .modal-split.show-chat .chat-panel { flex:1; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .modal-split.show-chat .chat-panel-body { flex:1; min-height:0; overflow-y:auto; }
+  .modal-split.show-chat .chat-panel-hd { display:none !important; }
+
+  /* Compact modal header + tabs on mobile */
+  .modal-hd { padding:6px 12px !important; min-height:36px !important; }
+  .modal-tab-bar { background:var(--s1) !important; }
+  .modal-tab-btn { padding:6px 10px !important; min-height:32px !important; font-size:12px !important; }
+
+  /* Confirm modal: also respect 100vw cap */
+  .modal { max-width: 100vw !important; }
+
+  /* ─── Toast: bottom safe area aware, readable on small screens ─── */
+  .toast {
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    font-size: 14px;
+    white-space: normal;
+    max-width: calc(100vw - 24px);
+    text-align: center;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* ─── Error text and muted text: min 13px ─── */
+  .docs-empty { font-size: 14px; }
+  .col-empty { font-size: 13px; }
+  .chat-empty { font-size: 13px; }
+
+  /* ─── No horizontal overflow ─── */
+  html, body { max-width: 100vw; overflow-x: hidden; }
+}
+
+/* ─── Mobile: 481px–767px snap scroll (phones & small tablets) ─── */
+@media (min-width: 481px) and (max-width: 767px) {
+  /* Body: prevent horizontal page scroll */
+  body { overflow-x: hidden; }
+  /* Board: horizontal scroll with snap */
+  .board {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 8px 16px;
+    gap: 8px;
+  }
+  /* Columns: 85vw so one column fills the viewport */
+  .col { width: 85vw; min-width: 85vw; max-width: 85vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 85vw; min-width: 85vw; max-width: 85vw; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Cards: full width, no truncation */
+  .card { width: 100%; box-sizing: border-box; }
+  /* Board divider: hide to save space */
+  .board-divider { display: none; }
+}
+
+/* ─── Tablet layout (768px–1023px): 2 columns visible, rest scroll ─── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Body: prevent horizontal page scroll */
+  body { overflow-x: hidden; }
+  /* Board: horizontal scroll with snap, show ~2 columns */
+  .board {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 12px 18px;
+    gap: 10px;
+  }
+  /* Each column: ~48% of viewport so 2 fit, rest scrollable */
+  .col { width: 48vw; min-width: 48vw; max-width: 48vw; scroll-snap-align: start; flex-shrink: 0; }
+  /* Archive column: keep narrow collapsed state */
+  .col.col-archive { width: 48px; min-width: 48px; max-width: 48px; }
+  .col.col-archive.expanded { width: 48vw; min-width: 48vw; max-width: 48vw; }
+  /* Sticky column headers */
+  .col-head { position: sticky; top: 0; z-index: 10; }
+  /* Cards: full width, no truncation */
+  .card { width: 100%; box-sizing: border-box; }
+  /* Board divider: hide to save space */
+  .board-divider { display: none; }
+}
+
+/* ─── Sidebar overlay backdrop (shown when sidebar open) ─── */
+.kb-sidebar-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, .5);
+  z-index: 1499;
+  display: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.kb-sidebar-overlay.visible { display: block; }
+
+/* ─── Tablet (481–768px): sidebar slightly narrower ─── */
+@media (min-width: 481px) and (max-width: 800px) {
+  .kb-sidebar { width: min(280px, 85vw); }
+}
+
+/* ─── Form grids (responsive classes, replace inline styles) ─── */
+.form-grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+/* fsel: form select — base size controlled via class not inline style */
+.fsel { font-size:12px; }
+/* fnotes: notes textarea */
+.fnotes { font-size:12px; }
+/* att-dropzone-form: form attachment dropzone */
+.att-dropzone-form { padding:8px; font-size:12px; }
+
+/* ─── Mobile Tab Bar (Chat | Details) ─── */
+.modal-tabs { display:none; } /* unused */
+.modal-tab-bar { display:none; } /* hidden on desktop */
+.modal-tab-bar.no-chat-tab { display:none !important; } /* no tabs when no chat session */
+/* Tab content panels — desktop: all visible in split layout */
+.modal-tab-panel { display:flex; flex-direction:column; height:100%; overflow:hidden; }
+
+/* ─── Mobile: ≤ 480px — Full overhaul ─── */
+@media (max-width: 480px) {
+  /* ── Form grids: single column ── */
+  .form-grid-4 { grid-template-columns:1fr; }
+  .form-grid-2 { grid-template-columns:1fr; }
+  .fsel { font-size:16px !important; }
+  .fnotes { font-size:16px !important; }
+  .att-dropzone-form { padding:10px 12px; font-size:14px; }
+
+  /* ── Task Modal: truly full-screen ── */
+  .ov { padding:0; align-items:stretch; }
+  .modal {
+    max-width:100vw !important;
+    width:100vw;
+    max-height:100dvh !important;
+    height:100dvh;
+    border-radius:0;
+    border:none;
+    display:flex;
+    flex-direction:column;
+  }
+  .modal.has-chat { min-height:unset; height:100dvh; }
+
+  /* ── Modal header: fixed, prominent ── */
+  .modal-hd {
+    flex-shrink:0;
+    padding:12px 16px;
+    min-height:52px;
+    display:flex;
+    align-items:center;
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:var(--s1);
+  }
+  .modal-hd-title { font-size:14px; }
+
+  /* ── Modal body: scrollable area ── */
+  .modal-body { overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1; }
+
+  /* ── Modal split: tab-based on mobile ── */
+  .modal-split {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  /* ── Mobile tab bar ── */
+  .modal-tab-bar {
+    display:flex;
+    flex-shrink:0;
+    background:var(--s2);
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .modal-tab-bar::-webkit-scrollbar { display:none; }
+  .modal-tab-btn {
+    flex:1;
+    min-width:80px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    background:none;
+    border:none;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+    font-family:inherit;
+    transition:color .15s, border-color .15s;
+    text-align:center;
+  }
+  .modal-tab-btn.active { color:var(--accent2); border-bottom-color:var(--accent); }
+
+  /* ── Left panel (details/form): takes full split height ── */
+  .modal-left {
+    flex:1;
+    border-right:none;
+    border-bottom:none;
+    overflow:hidden;
+    max-height:none;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+  }
+  .modal-left .modal-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:12px 14px;
+  }
+  /* Footer sticky at bottom of details panel */
+  .modal-left .modal-ft {
+    flex-shrink:0;
+    flex-wrap:wrap;
+    padding:10px 12px;
+    padding-bottom:max(10px, env(safe-area-inset-bottom));
+    gap:8px;
+    display:flex;
+  }
+  .modal-left .modal-ft .btn { flex:1 1 auto; min-height:44px; justify-content:center; font-size:14px; }
+
+  /* ── Right panel (chat): full height, hidden by default, shown via tab ── */
+  .modal-right {
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+    display:none; /* hidden until chat tab selected */
+  }
+  /* When chat tab is active (.modal-chat-visible class added by JS) */
+  .modal-split.show-chat .modal-right { display:flex; flex-direction:column; }
+  .modal-split.show-chat .modal-left { display:none; }
+
+  /* ── Chat panel: full-width, fixed input ── */
+  .modal-right .chat-panel { flex:1; display:flex; flex-direction:column; height:100%; border:none; border-radius:0; }
+  .modal-right .chat-panel-hd {
+    flex-shrink:0;
+    padding:8px 12px;
+    flex-wrap:wrap;
+    gap:4px;
+  }
+  .modal-right .chat-panel-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:8px 12px;
+    font-size:13px;
+  }
+  .modal-right .chat-msg { margin-bottom:10px; padding:8px 10px; }
+  .modal-right .chat-text { font-size:13px; line-height:1.5; }
+  .modal-right .chat-role { font-size:11px; }
+  /* Reply bar: fixed to bottom of chat panel */
+  .chat-reply-bar {
+    flex-shrink:0;
+    padding:8px 12px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom));
+    background:var(--s2);
+  }
+  .chat-reply-input { font-size:16px !important; padding:10px 12px; min-height:44px; }
+  .chat-reply-btn { min-height:44px; padding:10px 16px; font-size:14px; }
+  /* Tool call details collapsed on mobile (max-height reduction) */
+  .modal-right .chat-tools-detail { max-height:120px; }
+  /* Session copy ID hidden on mobile to reduce clutter */
+  .modal-right .chat-panel-hd .mono-tag { display:none; }
+
+  /* ── Task form: single column, large touch targets ── */
+  .modal-left .modal-body { padding:12px; gap:12px; }
+  #fDesc { min-height:120px !important; font-size:14px !important; }
+  #fTitle { font-size:16px !important; min-height:44px; }
+  .lbl { font-size:12px; }
+  /* Session config: vertical stack */
+  .sc-row { flex-direction:column; align-items:stretch; gap:8px; }
+  .sc-seg { flex-wrap:wrap; justify-content:flex-start; }
+  .sc-sep { display:none; }
+  .sc-btn { min-height:44px; font-size:14px; flex:1; }
+  .sc-grp-lbl { font-size:11px; }
+  .sc-turns { min-height:44px; font-size:16px; width:100%; }
+  /* Status/workflow selectors: full-width, touch-friendly */
+  .sel, .inp { min-height:44px; }
+
+  /* ── Chain Info: vertical steps ── */
+  .chain-steps-list { display:flex; flex-direction:column; gap:8px; }
+  .chain-step-item {
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:10px 12px;
+    background:var(--s2);
+    border-radius:var(--r-sm);
+    border:1px solid var(--border);
+  }
+  .chain-step-indicator {
+    flex-shrink:0;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:var(--s3);
+    border:2px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+  }
+  .chain-step-indicator.current { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .chain-step-indicator.done { background:rgba(63,185,80,.2); border-color:var(--green); color:var(--green); }
+  .chain-step-body { flex:1; min-width:0; }
+  .chain-step-title { font-size:13px; font-weight:600; color:var(--text); word-break:break-word; }
+  .chain-step-status { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  /* ── Confirm modal: also full-width ── */
+  #confirmOv .modal { max-width:calc(100vw - 24px) !important; }
+}
+
+/* ─── Mobile CSS: 481–800px (medium: tablet) ─── */
+@media (min-width: 481px) and (max-width: 800px) {
+  /* form grids: 2 columns at tablet */
+  .form-grid-4 { grid-template-columns:1fr 1fr; }
+  .fsel { font-size:14px !important; }
+  .modal-ft .btn { min-height:44px; }
+  /* description textarea slightly smaller */
+  #fDesc { min-height:150px !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE TASK MODAL — full overhaul for phones (<768px)
+   All rules confined to max-width:767px so desktop is untouched.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  /* ── R1: Full-screen overlay + modal ── */
+  #taskOv { padding:0; align-items:stretch; }
+  #taskOv .modal {
+    max-width:100vw !important;
+    width:100vw;
+    max-height:100dvh !important;
+    height:100dvh;
+    border-radius:0 !important;
+    border:none !important;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #taskOv .modal.has-chat { min-height:unset; height:100dvh; }
+
+  /* ── R2: Header — fixed top, title truncated, close + status badge visible ── */
+  #taskOv .modal-hd {
+    flex-shrink:0;
+    position:sticky;
+    top:0;
+    z-index:20;
+    background:var(--s1);
+    padding:12px 16px;
+    min-height:52px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border-bottom:1px solid var(--border);
+  }
+  #taskOv .modal-hd-title {
+    font-size:14px;
+    font-weight:700;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    min-width:0;
+  }
+  #taskOv .modal-close {
+    flex-shrink:0;
+    min-width:44px;
+    min-height:44px;
+    padding:0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+    border-radius:8px;
+  }
+
+  /* ── Tab bar: horizontally scrollable (R8) ── */
+  #taskOv .modal-tab-bar {
+    display:flex;
+    flex-shrink:0;
+    background:var(--s2);
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  #taskOv .modal-tab-bar::-webkit-scrollbar { display:none; }
+  #taskOv .modal-tab-btn {
+    flex:1;
+    min-width:80px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    background:none;
+    border:none;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+    font-family:inherit;
+    transition:color .15s, border-color .15s;
+    text-align:center;
+    min-height:44px;
+  }
+  #taskOv .modal-tab-btn.active { color:var(--accent2); border-bottom-color:var(--accent); }
+
+  /* ── Modal split: column layout, fills remaining height ── */
+  #taskOv .modal-split {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
+  }
+
+  /* ── R3 & R7: Left panel (details/form) — scrollable content, fixed footer ── */
+  #taskOv .modal-left {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border-right:none;
+    border-bottom:none;
+    max-height:none;
+    height:100%;
+  }
+  #taskOv .modal-left .modal-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:12px 14px;
+    gap:12px;
+    /* R7: single-column form */
+    display:flex;
+    flex-direction:column;
+  }
+  /* R7: single-column, full-width inputs, 44px touch targets */
+  #taskOv .modal-left .grid2 { grid-template-columns:1fr; }
+  #taskOv .modal-left .form-grid-4 { grid-template-columns:1fr; }
+  #taskOv .modal-left .form-grid-2 { grid-template-columns:1fr; }
+  #taskOv .modal-left .inp,
+  #taskOv .modal-left .sel { width:100%; min-height:44px; font-size:16px; }
+  #taskOv .modal-left .btn { min-height:44px; }
+
+  /* R9: Footer — fixed at bottom, buttons full-width stacked ── */
+  #taskOv .modal-left .modal-ft {
+    flex-shrink:0;
+    display:flex;
+    flex-direction:row;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:10px 14px;
+    padding-bottom:max(10px, env(safe-area-inset-bottom, 10px));
+    border-top:1px solid var(--border);
+    background:var(--s1);
+  }
+  #taskOv .modal-left .modal-ft .btn {
+    flex:1 1 auto;
+    min-height:44px;
+    justify-content:center;
+    font-size:14px;
+  }
+
+  /* ── R4 & R5: Right panel (chat) — scrollable messages, fixed input ── */
+  #taskOv .modal-right {
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+    display:none; /* hidden until chat tab selected */
+    flex-direction:column;
+  }
+  /* Show chat panel when tab toggled */
+  #taskOv .modal-split.show-chat .modal-right {
+    display:flex;
+    flex-direction:column;
+    flex:1;
+    height:100%;
+    min-height:0;
+  }
+  #taskOv .modal-split.show-chat .modal-left { display:none; }
+
+  /* Ensure chat container and panel fill full height on mobile */
+  #taskOv .modal-split.show-chat #chatContainer,
+  #taskOv .modal-split.show-chat .chat-panel {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    min-height:0;
+    overflow:hidden;
+  }
+  #taskOv .modal-split.show-chat .chat-panel-body {
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+  }
+
+  /* Chat panel fills right panel */
+  #taskOv .modal-right .chat-panel,
+  #taskOv #chatContainer {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    overflow:hidden;
+    border:none;
+    border-radius:0;
+  }
+  /* Chat header */
+  #taskOv .modal-right .chat-panel-hd {
+    flex-shrink:0;
+    padding:8px 14px;
+    border-bottom:1px solid var(--border);
+    background:var(--s2);
+  }
+  /* R4: chat messages area — scrollable, takes remaining space ── */
+  #taskOv .modal-right .chat-panel-body {
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:10px 14px;
+    min-height:0;
+  }
+  /* R4: full-width bubbles, readable font ≥14px ── */
+  #taskOv .modal-right .chat-msg {
+    width:100%;
+    box-sizing:border-box;
+    margin-bottom:10px;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:14px;
+    line-height:1.55;
+  }
+  #taskOv .modal-right .chat-text { font-size:14px; line-height:1.55; }
+  #taskOv .modal-right .chat-role { font-size:11px; }
+
+  /* R5: Chat input — fixed at bottom, full-width ── */
+  #taskOv .modal-right .chat-reply-bar,
+  #taskOv .chat-reply-bar {
+    flex-shrink:0;
+    display:flex;
+    gap:6px;
+    padding:8px 12px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom, 8px));
+    background:var(--s2);
+    border-top:1px solid var(--border);
+  }
+  #taskOv .chat-reply-input {
+    flex:1;
+    font-size:16px !important;
+    padding:10px 12px;
+    min-height:44px;
+  }
+  #taskOv .chat-reply-btn {
+    flex-shrink:0;
+    min-height:44px;
+    padding:10px 16px;
+    font-size:14px;
+  }
+
+  /* R6: Tool call groups collapsed by default, tap to expand ── */
+  /* <details> is closed by default in HTML; we just ensure the summary is tappable */
+  #taskOv .modal-right .chat-tools-group { margin-bottom:8px; }
+  #taskOv .modal-right .chat-tools-summary {
+    padding:10px 12px;
+    min-height:44px;
+    display:flex;
+    align-items:center;
+    cursor:pointer;
+    font-size:13px;
+  }
+  #taskOv .modal-right .chat-tools-detail {
+    max-height:150px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* ── Session copy ID: hide on mobile to reduce clutter ── */
+  #taskOv .modal-right .chat-panel-hd .mono-tag { display:none; }
 }
 </style>
 </head>
@@ -436,9 +1292,13 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <!-- Header -->
 <div class="hdr">
   <div class="hdr-l">
+    <!-- Hamburger: mobile sidebar toggle (shown on mobile, hides on desktop) -->
+    <button class="hdr-hamburger" id="hdrHamburger" onclick="toggleKbSidebar()" title="Projects & Settings" aria-label="Toggle sidebar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="logo" onclick="toggleKbSidebar()" style="cursor:pointer" title="Projects & Settings">CCS</div>
     <nav class="nav-sw" aria-label="Навігація між розділами">
-      <a class="nav-sw-btn" href="/" data-tip="Чат">
+      <a class="nav-sw-btn" href="/chat" data-tip="Chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         Chat
       </a>
@@ -468,10 +1328,11 @@ textarea.inp{ resize:vertical; min-height:80px; }
     </div>
   </div>
   <div class="hdr-btns">
+    <span id="userInfoBadge" style="font-size:12px;color:var(--muted);margin-right:6px"></span>
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
-    <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
+    <a class="hb" href="https://github.com/Mwogi/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
   </div>
@@ -498,6 +1359,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
   <div class="kb-sidebar-body" id="kbSidebarBody"></div>
 </div>
+<!-- Sidebar overlay backdrop (mobile) -->
+<div class="kb-sidebar-overlay" id="kbSidebarOverlay" onclick="toggleKbSidebar()"></div>
 
 <!-- Board -->
 <div class="board" id="board"></div>
@@ -509,7 +1372,12 @@ textarea.inp{ resize:vertical; min-height:80px; }
       <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="modal-split">
+    <!-- Mobile tab bar (hidden on desktop via CSS) -->
+    <div class="modal-tab-bar" id="modalTabBar">
+      <button class="modal-tab-btn active" id="tabBtnDetails" onclick="switchModalTab('details')">Details</button>
+      <button class="modal-tab-btn" id="tabBtnChat" onclick="switchModalTab('chat')">Chat</button>
+    </div>
+    <div class="modal-split" id="modalSplit">
       <div class="modal-left">
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-ft" id="modalFt"></div>
@@ -544,11 +1412,12 @@ const TR = {
   uk: {
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
-    'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'⏳ В процесі','col.awaiting_input':'💬 Очікує відповіді',
+    'col.done':'Виконано','col.done_review':'✅📋 На огляд','col.archived':'📦 Архів',
+    'col.cancelled':'Скасовано','col.empty':'Немає задач',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
-    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (opus)',
     'bmad.gate_warn':'⚠️ BMAD gate: попередня фаза ще не завершена',
     'bmad.tpl_filled':'✓ Шаблон застосовано','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Нова задача','modal.edit':'Редагувати задачу',
@@ -580,10 +1449,11 @@ const TR = {
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'⏳ In Progress','col.awaiting_input':'💬 Awaiting Input',
-    'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.done':'Done','col.done_review':'✅📋 Done for Review','col.archived':'📦 Archive',
+    'col.cancelled':'Cancelled','col.empty':'No tasks',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
-    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (opus)',
     'bmad.gate_warn':'⚠️ BMAD gate: previous phase not completed yet',
     'bmad.tpl_filled':'✓ Template applied','bmad.use_tpl':'🧙 BMAD Template',
     'modal.add':'New task','modal.edit':'Edit task',
@@ -614,11 +1484,12 @@ const TR = {
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
-    'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
-    'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
-    'col.bmad_workflow':'🔮 BMAD Workflow',
+    'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'⏳ В процессе','col.awaiting_input':'💬 Ожидает ввода',
+    'col.done':'Выполнено','col.done_review':'✅📋 На проверку','col.archived':'📦 Архив',
+    'col.cancelled':'Отменено','col.empty':'Нет задач',
+    'col.bmad_workflow':'🔮 BMAD Queue',
     'col.bmad_brainstorm':'🧠 Brainstorm (opus)','col.bmad_prd':'📋 PRD (opus)',
-    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (sonnet)',
+    'col.bmad_architecture':'🏗️ Architecture (opus)','col.bmad_implementation':'💻 Implementation (sonnet)','col.bmad_qa':'🧪 QA (opus)',
     'bmad.gate_warn':'⚠️ BMAD gate: предыдущая фаза ещё не завершена',
     'bmad.tpl_filled':'✓ Шаблон применён','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
@@ -647,7 +1518,7 @@ const TR = {
     'card.sched_tip':'Ожидает запуска:','modal.sched_wait':'Ожидает запуска:','locale':'ru-RU',
   },
 };
-const lang = localStorage.getItem('lang') || 'uk';
+const lang = localStorage.getItem('lang') || 'en';
 function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
 document.title = t('hdr.title') + ' — Claude Code Studio';
@@ -655,7 +1526,7 @@ document.getElementById('addBtnLabel').textContent=t('hdr.add');
 document.getElementById('kbStatusEl').textContent=t('hdr.connected');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
 document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
-document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
+document.querySelector('a.nav-sw-btn[href="/chat"]').setAttribute('data-tip', t('nav.chat'));
 document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', t('nav.kanban'));
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
@@ -663,8 +1534,8 @@ document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 // BMAD phase columns (planning workflow) + standard kanban columns
 const BMAD_PHASES=['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
 const BMAD_PHASE_SET=new Set(BMAD_PHASES);
-// Helper: is a task actively running? (standard in_progress, bmad_workflow, OR any BMAD phase)
-function isTaskActive(status){ return status==='in_progress'||status==='bmad_workflow'||BMAD_PHASE_SET.has(status); }
+// Helper: is a task actively running? (standard in_progress OR any BMAD phase — NOT bmad_workflow which is just queued)
+function isTaskActive(status){ return status==='in_progress'||BMAD_PHASE_SET.has(status); }
 // Template mappings for BMAD phases (Task 8)
 const BMAD_PHASE_TEMPLATES={
   'bmad_brainstorm':'brainstorming-session',
@@ -676,8 +1547,8 @@ const COLS=[
   // ── Standard: left side ──
   {id:'backlog',dot:'dot-backlog'},
   {id:'bmad_workflow',dot:'dot-bmad_workflow',bmad:true},
-  {id:'todo',dot:'dot-todo'},
-  {id:'in_progress',dot:'dot-in_progress'},
+  
+  
   {id:'awaiting_input',dot:'dot-awaiting_input'},
   // ── BMAD workflow phases: center ──
   {id:'bmad_brainstorm',dot:'dot-bmad_brainstorm',bmad:true,bmadOrder:0},
@@ -686,12 +1557,19 @@ const COLS=[
   {id:'bmad_implementation',dot:'dot-bmad_implementation',bmad:true,bmadOrder:3},
   {id:'bmad_qa',dot:'dot-bmad_qa',bmad:true,bmadOrder:4},
   // ── Standard: right side ──
+  {id:'done_review',dot:'dot-done_review',review:true},
   {id:'done',dot:'dot-done'},
   {id:'cancelled',dot:'dot-cancelled'},
+  {id:'archived',dot:'dot-archived',archive:true},
 ];
 let tasks=[],sessions=[],projects=[];
 let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
 let pendingAttachments=[]; // [{name, type, base64}]
+// Activity timestamp cache: taskId → last_activity string (UTC, no Z suffix)
+// Preserved across renderBoard() calls so timers don't reset to zero on re-render
+// Also persisted to sessionStorage to survive page reloads
+const activityCache = new Map(JSON.parse(sessionStorage.getItem('activityCache')||'[]'));
+function persistActivityCache(){ try{sessionStorage.setItem('activityCache',JSON.stringify([...activityCache]));}catch{} }
 
 // ─── Session settings (persisted) ─────────────────────────────────────────
 let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30};
@@ -833,12 +1711,12 @@ function renderProjDropdownList(filter = '') {
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>
     `;
-  }).join('') + `
+  }).join('') + (window._userRole === 'admin' ? `
     <div class="proj-dd-divider"></div>
     <div class="proj-dd-item proj-dd-add" onclick="showAddProjectForm()">
       <div class="proj-dd-item-name">➕ Add Project</div>
     </div>
-  `;
+  ` : '');
 }
 
 function filterProjDropdown(value) {
@@ -849,7 +1727,7 @@ function showAddProjectForm() {
   // Open the Chat page's Add Project modal in a popup window
   const w = 600, h = 700;
   const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
-  const popup = window.open('/?addProject=1', 'addProject', `width=${w},height=${h},left=${left},top=${top},resizable=yes`);
+  const popup = window.open('/chat?addProject=1', 'addProject', `width=${w},height=${h},left=${left},top=${top},resizable=yes`);
   if(popup) {
     closeProjDropdown();
     // Poll for popup close, then reload projects
@@ -858,7 +1736,7 @@ function showAddProjectForm() {
     }, 500);
   } else {
     // Fallback: navigate
-    window.location.href = '/?addProject=1';
+    window.location.href = '/chat?addProject=1';
   }
 }
 function hideAddProjectForm() {}
@@ -932,11 +1810,11 @@ function startAutoRefresh(){
 function updateStats(){
   const el=$i('kbStats');
   if(!el)return;
-  const counts={backlog:0,todo:0,in_progress:0,done:0,cancelled:0};
+  const counts={backlog:0,todo:0,in_progress:0,done:0,done_review:0,archived:0,cancelled:0};
   for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
   const total=tasks.length;
-  const completed=counts.done;
-  const active=counts.todo+counts.in_progress;
+  const completed=(counts.done||0)+(counts.done_review||0)+(counts.archived||0);
+  const active=(counts.bmad_workflow||0)+(counts.in_progress||0);
   const pct=total>0?Math.round((completed/total)*100):0;
 
   el.innerHTML=`
@@ -952,8 +1830,8 @@ function updateStats(){
     </div>
     <div class="kb-stat">
       <div class="kb-stat-dot dot-todo"></div>
-      <span class="kb-stat-num">${counts.todo}</span>
-      <span class="kb-stat-lbl">${t('col.todo')}</span>
+      <span class="kb-stat-num">${counts.bmad_workflow||0}</span>
+      <span class="kb-stat-lbl">${t('col.bmad_workflow')}</span>
     </div>
     <div class="kb-stat">
       <div class="kb-stat-dot dot-bmad_implementation"></div>
@@ -966,6 +1844,11 @@ function updateStats(){
       <span class="kb-stat-num">${counts.done}</span>
       <span class="kb-stat-lbl">${t('col.done')}</span>
     </div>
+    ${counts.done_review>0?`<div class="kb-stat">
+      <div class="kb-stat-dot dot-done_review"></div>
+      <span class="kb-stat-num">${counts.done_review}</span>
+      <span class="kb-stat-lbl">Review</span>
+    </div>`:''}
     <div class="kb-progress">
       <div class="kb-progress-bar"><div class="kb-progress-fill" style="width:${pct}%"></div></div>
       <span class="kb-progress-pct">${pct}%</span>
@@ -975,7 +1858,14 @@ function updateStats(){
 
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
-  const board=$i('board');board.innerHTML='';
+  const board=$i('board');
+  // Snapshot activity timestamps before destroying DOM so timers don't reset on re-render
+  board.querySelectorAll('.card[data-id]').forEach(card=>{
+    const badge=card.querySelector('.activity-badge[data-started]');
+    if(badge&&badge.dataset.started) activityCache.set(card.dataset.id+'_start', badge.dataset.started);
+  });
+  persistActivityCache();
+  board.innerHTML='';
   let lastWasBmad=false;
   for(const col of COLS){
     if(col.hidden) continue; // Skip hidden columns (e.g., in_progress)
@@ -984,16 +1874,39 @@ function renderBoard(){
     if(lastWasBmad&&!isBmad){
       const div=document.createElement('div');div.className='board-divider';board.appendChild(div);
     }
-    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
+    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>(a.task_number||0)-(b.task_number||0));
     board.appendChild(makeColumn(col,colTasks));
     lastWasBmad=isBmad;
   }
+  // Evict completed tasks from activity cache to avoid stale data
+  const activeIds=new Set(tasks.filter(tk=>isTaskActive(tk.status)).map(tk=>tk.id));
+  activityCache.forEach((_,id)=>{ if(!activeIds.has(id)) activityCache.delete(id); });
   updateStats();
 }
 function makeColumn(col,colTasks){
-  const el=document.createElement('div');el.className='col';
-  const hd=document.createElement('div');hd.className='col-head'+(col.bmad?' bmad-col':'');
+  const el=document.createElement('div');
+  let colClass='col';
+  if(col.archive) colClass+=' col-archive';
+  el.className=colClass;
+  // Restore archived expanded state from localStorage
+  if(col.archive){
+    const archExpanded=localStorage.getItem('archive_col_expanded')==='1';
+    if(archExpanded) el.classList.add('expanded');
+  }
+  let headClass='col-head';
+  if(col.bmad) headClass+=' bmad-col';
+  else if(col.review) headClass+=' review-col';
+  else if(col.archive) headClass+=' archive-col';
+  const hd=document.createElement('div');hd.className=headClass;
   hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
+  // Archive column: click header to toggle collapse/expand
+  if(col.archive){
+    hd.title=t('col.archived')+' — click to expand/collapse';
+    hd.onclick=()=>{
+      el.classList.toggle('expanded');
+      localStorage.setItem('archive_col_expanded', el.classList.contains('expanded')?'1':'0');
+    };
+  }
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
   setupDropZone(body);
@@ -1022,11 +1935,39 @@ function makeCard(tk){
   const wfTagM=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
   const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard'};
   const wfBadge=wfTagM?`<span class="badge badge-purple" style="background:rgba(147,51,234,.18);color:#c084fc">${escH(wfLabels[wfTagM[1]]||wfTagM[1])}</span>`:'';
+  // Chain badge
+  let chainBadge='';
+  if(tk.chain_id){
+    const chainTasks=tasks.filter(t=>t.chain_id===tk.chain_id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    const idx=chainTasks.findIndex(t=>t.id===tk.id);
+    const total=chainTasks.length;
+    const earlierPending=chainTasks.some(t=>(t.sort_order||0)<(tk.sort_order||0)&&!['done','done_review','archived','cancelled'].includes(t.status));
+    if(total>1){
+      const waitIcon=earlierPending&&tk.status==='todo'?'⏳':'🔗';
+      const waitTip=earlierPending?' (waiting for previous task)':'';
+      chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}${waitTip}">${waitIcon} ${idx+1}/${total}</span>`;
+    }
+  }
+  // Activity badge for running tasks — shows elapsed runtime (not time since last event)
+  let activityBadge='';
+  const _startTs = tk.started_at || activityCache.get(tk.id+'_start') || tk.updated_at;
+  if(isTaskActive(tk.status) && _startTs){
+    // Cache the start time so it persists across re-renders
+    if(tk.started_at) { activityCache.set(tk.id+'_start', tk.started_at); persistActivityCache(); }
+    const ago=Date.now()-new Date(_startTs.endsWith('Z')?_startTs:_startTs+'Z').getTime();
+    const secs=Math.floor(ago/1000);
+    const mins=Math.floor(ago/60000);
+    const hrs=Math.floor(mins/60);
+    const cls=mins<5?'activity-fresh':mins<30?'activity-warm':'activity-stale';
+    const pulse=mins<5?'activity-pulse':'';
+    const label=secs<60?secs+'s':mins<60?mins+'m':hrs+'h '+Math.floor(mins%60)+'m';
+    activityBadge=`<span class="activity-badge ${cls} ${pulse}" data-started="${_startTs}" title="Running for ${label}">⚡ ${label}</span>`;
+  }
   el.innerHTML=`
-    <div class="card-title">${escH(tk.title)}</div>
+    <div class="card-title">${tk.task_number ? `<span style="color:var(--muted);font-size:11px;font-weight:500">#${tk.task_number}</span> ` : ''}${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${wfBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${schedBadge}${wfBadge}${chainBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
@@ -1045,6 +1986,24 @@ function makeCard(tk){
   });
   return el;
 }
+
+// ─── Live Activity Badge Updater (every 5s) ───────────────────────────────
+setInterval(()=>{
+  document.querySelectorAll('.activity-badge[data-started]').forEach(el=>{
+    const ts=el.dataset.started;
+    if(!ts) return;
+    const ago=Date.now()-new Date(ts.endsWith('Z')?ts:ts+'Z').getTime();
+    const secs=Math.floor(ago/1000);
+    const mins=Math.floor(ago/60000);
+    const hrs=Math.floor(mins/60);
+    const cls=mins<5?'activity-fresh':mins<30?'activity-warm':'activity-stale';
+    const pulse=mins<5?'activity-pulse':'';
+    const label=secs<60?secs+'s':mins<60?mins+'m':hrs+'h '+Math.floor(mins%60)+'m';
+    el.className='activity-badge '+cls+' '+pulse;
+    el.textContent='⚡ '+label;
+    el.title='Running for '+label;
+  });
+}, 5000);
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){
@@ -1119,6 +2078,46 @@ function getDragAfter(container,y){
   },{offset:-Infinity,el:null}).el;
 }
 
+// ─── Mobile tab switcher (layout/CSS only — no business logic) ───────────
+function switchModalTab(tab) {
+  const split = $i('modalSplit');
+  const btnDetails = $i('tabBtnDetails');
+  const btnChat = $i('tabBtnChat');
+  if (!split) return;
+  if (tab === 'chat') {
+    split.classList.add('show-chat');
+    if (btnDetails) btnDetails.classList.remove('active');
+    if (btnChat) btnChat.classList.add('active');
+  } else {
+    split.classList.remove('show-chat');
+    if (btnDetails) btnDetails.classList.add('active');
+    if (btnChat) btnChat.classList.remove('active');
+  }
+}
+function resetModalTabs() {
+  const split = $i('modalSplit');
+  const btnDetails = $i('tabBtnDetails');
+  const btnChat = $i('tabBtnChat');
+  if (split) split.classList.remove('show-chat');
+  if (btnDetails) btnDetails.classList.add('active');
+  if (btnChat) btnChat.classList.remove('active');
+}
+function updateModalTabBar(hasChat) {
+  const bar = $i('modalTabBar');
+  const btnChat = $i('tabBtnChat');
+  if (!bar) return;
+  if (hasChat) {
+    // Show tab bar (CSS media query controls whether it renders on desktop)
+    bar.classList.remove('no-chat-tab');
+    if (btnChat) btnChat.style.display = '';
+  } else {
+    // Hide chat tab — only show when task has a session
+    bar.classList.add('no-chat-tab');
+    if (btnChat) btnChat.style.display = 'none';
+  }
+  resetModalTabs();
+}
+
 // ─── Modal: Add ────────────────────────────────────────────────────────────
 function openAddModal(defaultStatus='backlog'){
   if(!curWorkdir){toast(t('toast.no_project'),true);return;}
@@ -1136,6 +2135,7 @@ function openAddModal(defaultStatus='backlog'){
   if(modal) { modal.classList.remove('has-chat'); modal.classList.add('no-chat'); }
   $i('chatContainer').innerHTML = '';
   if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
+  updateModalTabBar(false);
   setTimeout(()=>{$i('fTitle')?.focus();renderNotesTags('','');},60);
 }
 
@@ -1145,7 +2145,7 @@ async function openEditModal(id){
   if(!tk)return;
   modalMode='edit';editingId=id;
   try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
-  $i('modalTitle').textContent=t('modal.edit');
+  $i('modalTitle').textContent=(tk.task_number ? `#${tk.task_number} · ` : '') + t('modal.edit');
   $i('modalBody').innerHTML=buildForm(tk);
   setTimeout(()=>{renderAttPreviews();renderNotesTags(tk.notes||'',$i('fWorkflow')?.value||'');},0);
   $i('modalFt').innerHTML=`
@@ -1166,17 +2166,20 @@ async function openEditModal(id){
       modalChat.style.display = '';
       modal.classList.add('has-chat');
       modal.classList.remove('no-chat');
+      updateModalTabBar(true);
     }catch{
       chatContainer.innerHTML = '';
       modalChat.style.display = 'none';
       modal.classList.remove('has-chat');
       modal.classList.add('no-chat');
+      updateModalTabBar(false);
     }
   } else {
     chatContainer.innerHTML = '';
     modalChat.style.display = 'none';
     modal.classList.remove('has-chat');
     modal.classList.add('no-chat');
+    updateModalTabBar(false);
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
   // ── WebSocket streaming for live task output ──
@@ -1213,7 +2216,7 @@ async function openEditModal(id){
         if(!streamingEl) {
           streamingEl = document.createElement('div');
           streamingEl.className = 'chat-msg';
-          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE <span class="chat-ts">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span></div><div class="chat-text"></div>';
           body.appendChild(streamingEl);
         }
         const textEl = streamingEl.querySelector('.chat-text');
@@ -1243,7 +2246,7 @@ async function openEditModal(id){
         streamingEl = null;
         const startDiv = document.createElement('div');
         startDiv.className = 'chat-msg';
-        startDiv.innerHTML = `<div class="chat-role user">TASK</div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
+        startDiv.innerHTML = `<div class="chat-role user">TASK <span class="chat-ts">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span></div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
         body.appendChild(startDiv);
         if(wasAtBottom) body.scrollTop = body.scrollHeight;
       }
@@ -1255,7 +2258,8 @@ async function openEditModal(id){
           body.innerHTML = msgs.map(m => {
             const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
             const label=role==='user'?'YOU':role==='tool'?`TOOL: ${escH(m.tool_name||'')}`:'CLAUDE';
-            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
+            const ts=m.created_at?`<span class="chat-ts">${new Date(m.created_at+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`:'';
+            return `<div class="chat-msg"><div class="chat-role ${role}">${label} ${ts}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
           }).join('');
           body.scrollTop = body.scrollHeight;
         }).catch(()=>{});
@@ -1266,7 +2270,7 @@ async function openEditModal(id){
           if(!streamingEl) {
             streamingEl = document.createElement('div');
             streamingEl.className = 'chat-msg';
-            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE <span class="chat-ts">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</span></div><div class="chat-text"></div>';
             body.appendChild(streamingEl);
           }
           streamingEl.querySelector('.chat-text').textContent += d.buffer;
@@ -1283,7 +2287,7 @@ async function openEditModal(id){
 function buildForm(tk={}){
   const isNew=!tk.id;
   const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
-  const NEW_TASK_STATUSES = new Set(['backlog','bmad_workflow','todo']);
+  const NEW_TASK_STATUSES = new Set(['backlog','bmad_workflow']);
   const statusOpts=COLS.filter(c=>!c.hidden).map(c=>{
     const disabled = modalMode==='add' && !NEW_TASK_STATUSES.has(c.id);
     return disabled ? '' : `<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`;
@@ -1303,9 +2307,82 @@ function buildForm(tk={}){
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
-    <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()">${statusOpts}</select></div>
-      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
+    <div class="form-grid-4">
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel fsel" onchange="onFStatusChange()">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel fsel" onchange="onFSessionChange()">${sessOpts}</select></div>
+      <div><label class="lbl">BMAD Workflow</label>
+        <select id="fWorkflow" class="sel fsel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
+          <option value=""${wfVal===''?' selected':''}>None</option>
+          <optgroup label="Analysis">
+            <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
+            <option value="product-brief-preview"${wfVal==='product-brief-preview'?' selected':''}>📄 Product Brief (Preview)</option>
+            <option value="research"${wfVal==='research'?' selected':''}>🔬 Research</option>
+            <option value="domain-research"${wfVal==='domain-research'?' selected':''}>🌐 Domain Research</option>
+            <option value="market-research"${wfVal==='market-research'?' selected':''}>📊 Market Research</option>
+            <option value="technical-research"${wfVal==='technical-research'?' selected':''}>🔭 Technical Research</option>
+          </optgroup>
+          <optgroup label="Planning">
+            <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
+            <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
+            <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
+            <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
+          </optgroup>
+          <optgroup label="Solutioning">
+            <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture</option>
+            <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Readiness Check</option>
+          </optgroup>
+          <optgroup label="Implementation">
+            <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning</option>
+            <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
+            <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story</option>
+            <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
+            <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
+            <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
+            <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
+            <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
+            <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
+            <option value="quick-dev-new-preview"${wfVal==='quick-dev-new-preview'?' selected':''}>🚀 Quick Dev (New Preview)</option>
+            <option value="quick-flow-solo-dev"${wfVal==='quick-flow-solo-dev'?' selected':''}>🎯 Quick Flow Solo Dev</option>
+          </optgroup>
+          <optgroup label="Tools">
+            <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
+            <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Context</option>
+            <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 E2E Tests</option>
+            <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
+            <option value="index-docs"${wfVal==='index-docs'?' selected':''}>📇 Index Documents</option>
+            <option value="bmad-help"${wfVal==='bmad-help'?' selected':''}>❓ BMAD Help</option>
+          </optgroup>
+          <optgroup label="Reviews">
+            <option value="adversarial-review"${wfVal==='adversarial-review'?' selected':''}>😈 Adversarial Review</option>
+            <option value="edge-case-review"${wfVal==='edge-case-review'?' selected':''}>🔬 Edge Case Hunter</option>
+            <option value="editorial-prose"${wfVal==='editorial-prose'?' selected':''}>✍️ Editorial — Prose</option>
+            <option value="editorial-structure"${wfVal==='editorial-structure'?' selected':''}>🏗️ Editorial — Structure</option>
+          </optgroup>
+          <optgroup label="Enhancement">
+            <option value="distillator"${wfVal==='distillator'?' selected':''}>🗜️ Distillator (Compress)</option>
+            <option value="advanced-elicitation"${wfVal==='advanced-elicitation'?' selected':''}>🧠 Advanced Elicitation</option>
+          </optgroup>
+          <optgroup label="Technical Writer">
+            <option value="write-document"${wfVal==='write-document'?' selected':''}>📝 Write Document</option>
+            <option value="validate-doc"${wfVal==='validate-doc'?' selected':''}>✅ Validate Document</option>
+            <option value="mermaid-generate"${wfVal==='mermaid-generate'?' selected':''}>🧜 Mermaid Diagram</option>
+            <option value="explain-concept"${wfVal==='explain-concept'?' selected':''}>💡 Explain Concept</option>
+          </optgroup>
+        </select>
+      </div>
+      <div><label class="lbl">🔗 Run After</label>
+        <select id="fAfter" class="sel fsel">
+          <option value="">None</option>
+          ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
+            .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+            .slice(0,30)
+            .map(t=>{
+              const sel=(tk.chain_id&&t.chain_id===tk.chain_id&&(t.sort_order||0)<(tk.sort_order||0))?'selected':'';
+              return '<option value="'+t.id+'" '+sel+'>'+escH((t.title||t.id).substring(0,40))+' ['+t.status+']</option>';
+            }).join('')}
+        </select>
+        ${tk.chain_id?'<div style="margin-top:2px;font-size:10px;color:#9ca3af">🔗 <code style="font-size:9px">'+escH(tk.chain_id.slice(0,20))+'</code></div>':''}
+      </div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
       <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
@@ -1336,60 +2413,25 @@ function buildForm(tk={}){
         </div>
       </div>
     </div>
-    <div>
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0">
       <label class="lbl">${t('modal.desc')}</label>
-      <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
-      <div id="bmadTplBtn" style="margin-top:6px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
+      <textarea id="fDesc" class="inp" style="flex:1;min-height:200px;resize:vertical;font-family:monospace;font-size:13px;line-height:1.5" placeholder="Task description — be specific about what needs to be done…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <div id="bmadTplBtn" style="margin-top:4px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
         <button type="button" class="hb" style="font-size:12px;padding:4px 10px" onclick="fillBmadTemplate()">
           ${t('bmad.use_tpl')}
         </button>
       </div>
     </div>
-    <div><label class="lbl">Notes & Tags</label>
-      <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
-      <textarea id="fNotes" class="inp" rows="2" placeholder="Additional context for the agent…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
-    </div>
-    <div><label class="lbl">BMAD Workflow</label>
-      <select id="fWorkflow" class="sel" onchange="renderNotesTags($i('fNotes')?.value||'',this.value)">
-        <option value=""${wfVal===''?' selected':''}>None (regular task)</option>
-        <optgroup label="Analysis">
-          <option value="analysis"${wfVal==='analysis'?' selected':''}>🔍 Product Brief</option>
-          <option value="research"${wfVal==='research'?' selected':''}>🔬 Research (Domain/Market/Tech)</option>
-        </optgroup>
-        <optgroup label="Planning">
-          <option value="planning"${wfVal==='planning'?' selected':''}>📋 Create PRD</option>
-          <option value="edit-prd"${wfVal==='edit-prd'?' selected':''}>✏️ Edit PRD</option>
-          <option value="validate-prd"${wfVal==='validate-prd'?' selected':''}>🔎 Validate PRD</option>
-          <option value="ux-design"${wfVal==='ux-design'?' selected':''}>🎨 UX Design</option>
-        </optgroup>
-        <optgroup label="Solutioning">
-          <option value="solutioning"${wfVal==='solutioning'?' selected':''}>🏗️ Architecture + Epics</option>
-          <option value="readiness-check"${wfVal==='readiness-check'?' selected':''}>✅ Implementation Readiness Check</option>
-        </optgroup>
-        <optgroup label="Implementation">
-          <option value="sprint-planning"${wfVal==='sprint-planning'?' selected':''}>📐 Sprint Planning → sprint-status.yaml</option>
-          <option value="create-story"${wfVal==='create-story'?' selected':''}>📝 Create Story</option>
-          <option value="dev-story"${wfVal==='dev-story'?' selected':''}>💻 Dev Story (Implement)</option>
-          <option value="code-review"${wfVal==='code-review'?' selected':''}>🔍 Code Review</option>
-          <option value="sprint-status"${wfVal==='sprint-status'?' selected':''}>📊 Sprint Status</option>
-          <option value="correct-course"${wfVal==='correct-course'?' selected':''}>🔄 Correct Course</option>
-          <option value="retrospective"${wfVal==='retrospective'?' selected':''}>🔮 Retrospective</option>
-          <option value="quick-spec"${wfVal==='quick-spec'?' selected':''}>⚡ Quick Spec</option>
-          <option value="quick-dev"${wfVal==='quick-dev'?' selected':''}>⚡ Quick Dev</option>
-        </optgroup>
-        <optgroup label="Tools">
-          <option value="document-project"${wfVal==='document-project'?' selected':''}>📚 Document Project</option>
-          <option value="generate-context"${wfVal==='generate-context'?' selected':''}>📑 Generate Project Context</option>
-          <option value="e2e-tests"${wfVal==='e2e-tests'?' selected':''}>🧪 Generate E2E Tests</option>
-          <option value="shard"${wfVal==='shard'?' selected':''}>✂️ Shard Document</option>
-        </optgroup>
-      </select>
-    </div>
-    <div>
-      <label class="lbl">${t('modal.attach')}</label>
-      <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
-      <div class="att-dropzone" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
-      <div class="att-previews" id="attPreviews"></div>
+    <div class="form-grid-2">
+      <div><label class="lbl">Notes & Tags</label>
+        <div id="fNotesTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
+        <textarea id="fNotes" class="inp fnotes" rows="2" placeholder="Additional context…" maxlength="2000">${escH(stripBmadTags(tk.notes||''))}</textarea>
+      </div>
+      <div><label class="lbl">${t('modal.attach')}</label>
+        <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
+        <div class="att-dropzone att-dropzone-form" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
+        <div class="att-previews" id="attPreviews"></div>
+      </div>
     </div>`;
 }
 
@@ -1499,7 +2541,7 @@ function getSessCfg(){
 
 function buildChatPanel(tk,msgs){
   const claudeId=tk.claude_session_id||'';
-  const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
+  const openUrl=`/chat?open_session=${encodeURIComponent(tk.session_id)}`;
   const isActive=isTaskActive(tk.status);
   let msgsHtml;
   if(!msgs.length){
@@ -1533,7 +2575,8 @@ function buildChatPanel(tk,msgs){
       const m=g.msg;
       const label=role==='user'?'YOU':'CLAUDE';
       const text=escH(m.content||'');
-      return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
+      const ts=m.created_at?`<span class="chat-ts">${new Date(m.created_at+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`:'';
+      return `<div class="chat-msg"><div class="chat-role ${role}">${label} ${ts}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
   const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
@@ -1596,7 +2639,7 @@ async function saveTask(){
   if(wfType) rawNotes=(rawNotes?rawNotes+'\n':'')+`[bmad-workflow:${wfType}]`;
   if(sprintTags) rawNotes=(rawNotes?rawNotes+' ':'')+sprintTags;
   if(phaseTags) rawNotes=(rawNotes?rawNotes+' ':'')+phaseTags;
-  const resolvedStatus=wfType?'bmad_workflow':($i('fStatus')?.value||'backlog');
+  const resolvedStatus = modalMode==='add' && wfType ? 'bmad_workflow' : ($i('fStatus')?.value||'backlog');
   const body={
     title,
     description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
@@ -1620,10 +2663,12 @@ async function saveTask(){
         body.session_id=session_id;
         toast(t('toast.sess_created'));
       }
+      const afterId=$i('fAfter')?.value||'';
+      if(afterId) body.after=afterId;
       const colTasks=tasks.filter(tk=>tk.status===body.status);
       body.sort_order=colTasks.length?Math.max(...colTasks.map(tk=>tk.sort_order))+1000:0;
       await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      toast(t('toast.created'));
+      toast(afterId?'✅ Created & chained':t('toast.created'));
     }else{
       const orig=tasks.find(tk=>tk.id===editingId);
       if(orig)body.sort_order=orig.sort_order;
@@ -1667,6 +2712,23 @@ document.addEventListener('keydown',e=>{
 });
 
 (async()=>{
+  // Load user info for header badge
+  try {
+    const authR = await fetch('/api/auth/status');
+    const authD = await authR.json();
+    if (authD.loggedIn) {
+      const badge = document.getElementById('userInfoBadge');
+      const name = authD.displayName || authD.username || 'Admin';
+      const isAdmin = authD.role === 'admin';
+      badge.innerHTML = `👤 ${name}` + (isAdmin ? ' <a href="/users" style="color:var(--accent);font-size:11px;margin-left:4px">Users</a>' : '');
+      // Hide project management for non-admin
+      if (!isAdmin) {
+        window._userRole = 'user';
+      } else {
+        window._userRole = 'admin';
+      }
+    }
+  } catch {}
   // Update project search placeholder with translation
   const searchInput = $i('projDdSearch');
   if (searchInput) searchInput.placeholder = t('proj.search');
@@ -1691,13 +2753,46 @@ let _kbSidebarOpen = false;
 function toggleKbSidebar() {
   _kbSidebarOpen = !_kbSidebarOpen;
   const sidebar = $i('kbSidebar');
+  const overlay = $i('kbSidebarOverlay');
   if (_kbSidebarOpen) {
     sidebar.classList.remove('collapsed');
+    if (overlay) overlay.classList.add('visible');
     renderKbSidebar();
   } else {
     sidebar.classList.add('collapsed');
+    if (overlay) overlay.classList.remove('visible');
   }
 }
+
+// ─── Swipe-left to close sidebar ─────────────────────────────────────────────
+(function initSidebarSwipe() {
+  let _swipeStartX = null, _swipeStartY = null;
+  const SWIPE_THRESHOLD = 50; // px leftward swipe to dismiss
+  const SWIPE_MAX_Y = 80;     // max vertical drift to count as horizontal swipe
+
+  document.addEventListener('touchstart', function(e) {
+    const sidebar = $i('kbSidebar');
+    if (!sidebar || sidebar.classList.contains('collapsed')) return;
+    const touch = e.touches[0];
+    _swipeStartX = touch.clientX;
+    _swipeStartY = touch.clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if (_swipeStartX === null) return;
+    const sidebar = $i('kbSidebar');
+    if (!sidebar || sidebar.classList.contains('collapsed')) { _swipeStartX = null; return; }
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - _swipeStartX;
+    const dy = Math.abs(touch.clientY - _swipeStartY);
+    _swipeStartX = null;
+    _swipeStartY = null;
+    // Swipe left (negative dx) by threshold, with limited vertical drift
+    if (dx < -SWIPE_THRESHOLD && dy < SWIPE_MAX_Y) {
+      if (_kbSidebarOpen) toggleKbSidebar();
+    }
+  }, { passive: true });
+})();
 
 async function renderKbSidebar() {
   const body = $i('kbSidebarBody');
@@ -1826,6 +2921,7 @@ function toggleSidebarProj(el, workdir) {
 // ─── BMAD Docs Panel ──────────────────────────────────────────────────────
 let _docsOpen = false;
 let _docsCache = null;
+let _docsShares = [];
 
 function toggleDocsPanel() {
   const panel = $i('docsPanel');
@@ -1841,44 +2937,263 @@ function toggleDocsPanel() {
 async function loadDocsList() {
   if (!curWorkdir) return;
   try {
-    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
-    const d = await r.json();
+    const [docsR, sharesR] = await Promise.all([
+      apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`),
+      apiFetch(`/api/docs/shares?projectId=${encodeURIComponent(curWorkdir)}`).catch(() => null)
+    ]);
+    const d = await docsR.json();
     _docsCache = d.docs;
+    if (sharesR && sharesR.ok) {
+      _docsShares = await sharesR.json();
+    }
     renderDocsSidebar(d.docs);
     // Also show/hide the docs button
-    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+    $i('bmadDocsBtn').style.display = (d.docs.length || d.hasBmad) ? '' : 'none';
   } catch { }
 }
 
 function renderDocsSidebar(docs) {
   const sidebar = $i('docsSidebar');
   if (!docs.length) {
-    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No BMAD documents yet.<br>Run a workflow to generate them.</div>';
+    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No documents yet.<br>Run a workflow to generate them.</div>';
     return;
   }
-  // Group by category
-  const groups = {};
-  for (const doc of docs) {
-    if (!groups[doc.category]) groups[doc.category] = [];
-    groups[doc.category].push(doc);
-  }
-  let html = '';
-  for (const [cat, files] of Object.entries(groups)) {
-    html += `<div class="docs-cat">${escH(cat)}</div>`;
-    for (const f of files) {
-      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : '📝';
-      const size = f.size < 1024 ? f.size + 'B' : Math.round(f.size / 1024) + 'KB';
-      const date = new Date(f.modified).toLocaleDateString();
-      html += `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
-        <span class="docs-file-icon">${icon}</span>
-        <div class="docs-file-info">
-          <div class="docs-file-name">${escH(f.name)}</div>
-          <div class="docs-file-meta">${size} · ${date}</div>
-        </div>
-      </div>`;
+
+  // Build folder tree from relativePath
+  // Group: top-level folder → subfolder → files
+  const tree = {};
+  for (const f of docs) {
+    const parts = f.relativePath.split('/');
+    let topFolder, subFolder, fileName;
+    if (parts.length === 1) {
+      topFolder = 'Root'; subFolder = null; fileName = parts[0];
+    } else if (parts.length === 2) {
+      topFolder = parts[0]; subFolder = null; fileName = parts[1];
+    } else {
+      topFolder = parts[0]; subFolder = parts.slice(1, -1).join('/'); fileName = parts[parts.length - 1];
+    }
+    if (!tree[topFolder]) tree[topFolder] = { files: [], subs: {} };
+    if (subFolder) {
+      if (!tree[topFolder].subs[subFolder]) tree[topFolder].subs[subFolder] = [];
+      tree[topFolder].subs[subFolder].push(f);
+    } else {
+      tree[topFolder].files.push(f);
     }
   }
+
+  const FOLDER_ICONS = {
+    '_bmad-output': '🔮', 'docs': '📚', 'tests': '🧪', 'test-screenshots': '📸', 'test-results': '📋', 'Root': '📁'
+  };
+  const FOLDER_LABELS = {
+    '_bmad-output': 'BMAD Output', 'docs': 'Project Docs', 'tests': 'Tests', 'test-screenshots': 'Screenshots', 'test-results': 'Test Results'
+  };
+
+  function fileIcon(name) {
+    if (/\.(yaml|yml)$/i.test(name)) return '📊';
+    if (/\.(png|jpg|jpeg|gif|svg|webp|bmp)$/i.test(name)) return '🖼️';
+    if (/\.(pdf|doc|docx|xls|xlsx)$/i.test(name)) return '📄';
+    if (/\.(json)$/i.test(name)) return '{}';
+    if (/\.(csv)$/i.test(name)) return '📈';
+    return '📝';
+  }
+
+  function fileRow(f) {
+    const size = f.size < 1024 ? f.size + 'B' : f.size < 1048576 ? Math.round(f.size / 1024) + 'KB' : (f.size / 1048576).toFixed(1) + 'MB';
+    const isShared = _docsShares.some(s => s.file_path === f.path);
+    const shareIndicator = isShared ? ' <span class="doc-share-indicator" title="Shared">🔗</span>' : '';
+    return `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}" data-filepath="${escH(f.path)}">
+      <span class="docs-file-icon">${fileIcon(f.name)}</span>
+      <div class="docs-file-info">
+        <div class="docs-file-name">${escH(f.name)}${shareIndicator}</div>
+        <div class="docs-file-meta">${size}</div>
+      </div>
+      <button class="docs-share-btn" onclick="event.stopPropagation();openShareModal('${escH(f.path)}')" title="Share document">🔗</button>
+    </div>`;
+  }
+
+  let html = '<input class="docs-search" id="docsSearchInput" type="text" placeholder="🔍 Search documents..." oninput="filterDocs(this.value)">';
+
+  // Sort top folders: BMAD Output first, then docs, then screenshots, then rest
+  const folderOrder = ['_bmad-output', 'docs', 'test-screenshots', 'tests', 'test-results'];
+  const sortedFolders = Object.keys(tree).sort((a, b) => {
+    const ai = folderOrder.indexOf(a), bi = folderOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  for (const folder of sortedFolders) {
+    const node = tree[folder];
+    const totalFiles = node.files.length + Object.values(node.subs).reduce((s, arr) => s + arr.length, 0);
+    const icon = FOLDER_ICONS[folder] || '📁';
+    const label = FOLDER_LABELS[folder] || folder;
+    const folderId = 'df_' + folder.replace(/[^a-z0-9]/gi, '_');
+
+    html += `<div class="docs-cat" onclick="this.classList.toggle('collapsed')" id="${folderId}">
+      <span class="chevron">▼</span>${icon} ${escH(label)} <span style="font-weight:400;font-size:9px;color:var(--muted)">(${totalFiles})</span>
+    </div>`;
+    html += `<div class="docs-folder-contents" data-folder="${escH(folderId)}">`;
+
+    // Subfolders first
+    const subKeys = Object.keys(node.subs).sort();
+    for (const sub of subKeys) {
+      const subFiles = node.subs[sub];
+      const subId = folderId + '_' + sub.replace(/[^a-z0-9]/gi, '_');
+      const subIcon = sub.includes('planning') ? '📋' : sub.includes('implementation') ? '⚙️' : sub.includes('analysis') ? '🔬' : '📂';
+      html += `<div class="docs-subfolder">
+        <div class="docs-subfolder-label" onclick="this.classList.toggle('collapsed')" id="${subId}">
+          <span class="chevron">▼</span>${subIcon} ${escH(sub)}<span class="docs-subfolder-count">${subFiles.length}</span>
+        </div>
+        <div class="docs-subfolder-files" data-sub="${escH(subId)}">`;
+      for (const f of subFiles.sort((a, b) => a.name.localeCompare(b.name))) {
+        html += fileRow(f);
+      }
+      html += `</div></div>`;
+    }
+
+    // Direct files
+    for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
+      html += fileRow(f);
+    }
+
+    html += `</div>`;
+  }
+
   sidebar.innerHTML = html;
+}
+
+function filterDocs(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.docs-file').forEach(el => {
+    const name = (el.querySelector('.docs-file-name')?.textContent || '').toLowerCase();
+    const path = (el.getAttribute('title') || '').toLowerCase();
+    el.style.display = (!q || name.includes(q) || path.includes(q)) ? '' : 'none';
+  });
+  // Show all folders/subfolders when searching
+  if (q) {
+    document.querySelectorAll('.docs-cat.collapsed, .docs-subfolder-label.collapsed').forEach(el => el.classList.remove('collapsed'));
+    document.querySelectorAll('.docs-folder-contents, .docs-subfolder-files').forEach(el => el.style.display = '');
+  }
+}
+
+// ─── Document Sharing UI ─────────────────────────────────────────────────────
+async function openShareModal(filePath) {
+  if (!curWorkdir) { toast('No project selected', true); return; }
+  // Check if already shared
+  const existing = _docsShares.find(s => s.file_path === filePath);
+  const name = filePath.split('/').pop();
+  let modal = document.getElementById('shareDocModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'shareDocModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.6);z-index:4000;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;color:var(--fg);font-size:15px">🔗 Share Document</h3>
+        <button onclick="document.getElementById('shareDocModal').remove()" style="background:none;border:none;color:var(--fg2);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px">×</button>
+      </div>
+      <p style="color:var(--fg2);font-size:13px;margin:0 0 16px">${escH(name)}</p>
+      ${existing ? `
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Share URL</label>
+        <div style="display:flex;gap:6px">
+          <input id="shareUrlInput" type="text" value="${escH(existing.url)}" readonly style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:12px;font-family:monospace;cursor:text" onclick="this.select()">
+          <button onclick="copyShareUrl()" style="background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">📋 Copy</button>
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Update Expiry</label>
+        <select id="shareExpiry" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:13px;width:100%">
+          <option value="">Never</option>
+          <option value="1">1 hour</option>
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="updateShare('${escH(filePath)}')" style="flex:1;background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 Update Link</button>
+        <button onclick="revokeShare('${escH(existing.id)}','${escH(filePath)}')" style="flex:1;background:none;color:var(--red);border:1px solid var(--red);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🗑️ Revoke</button>
+      </div>
+      ` : `
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--fg2);display:block;margin-bottom:6px">Expiry</label>
+        <select id="shareExpiry" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--fg);font-size:13px;width:100%">
+          <option value="">Never</option>
+          <option value="1">1 hour</option>
+          <option value="24">24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+        </select>
+      </div>
+      <button onclick="createShare('${escH(filePath)}')" style="width:100%;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔗 Create Share Link</button>
+      `}
+    </div>`;
+  modal.style.display = 'flex';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
+async function createShare(filePath) {
+  const expiresIn = $i('shareExpiry')?.value || '';
+  try {
+    const r = await apiFetch('/api/docs/share', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.file_path !== filePath);
+    _docsShares.push({ id: d.token, project_id: curWorkdir, file_path: filePath, url: d.url, expires_at: d.expires_at });
+    renderDocsSidebar(_docsCache || []);
+    await openShareModal(filePath);
+    toast('Share link created!');
+  } catch (e) { toast('Failed to create share link', true); }
+}
+
+async function updateShare(filePath) {
+  const expiresIn = $i('shareExpiry')?.value || '';
+  try {
+    const r = await apiFetch('/api/docs/share', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectId: curWorkdir, filePath, expiresIn: expiresIn ? parseInt(expiresIn) : null }) });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.file_path !== filePath);
+    _docsShares.push({ id: d.token, project_id: curWorkdir, file_path: filePath, url: d.url, expires_at: d.expires_at });
+    renderDocsSidebar(_docsCache || []);
+    await openShareModal(filePath);
+    toast('Share link updated!');
+  } catch (e) { toast('Failed to update share link', true); }
+}
+
+async function revokeShare(token, filePath) {
+  try {
+    const r = await apiFetch(`/api/docs/share/${token}`, { method:'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast('Error: ' + d.error, true); return; }
+    _docsShares = _docsShares.filter(s => s.id !== token);
+    renderDocsSidebar(_docsCache || []);
+    document.getElementById('shareDocModal')?.remove();
+    toast('Share link revoked');
+  } catch (e) { toast('Failed to revoke share link', true); }
+}
+
+function copyShareUrl() {
+  const inp = $i('shareUrlInput');
+  if (!inp) return;
+  const url = inp.value;
+  // Try modern clipboard API first (requires HTTPS)
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => toast('URL copied!')).catch(() => fallbackCopy(url));
+  } else {
+    fallbackCopy(url);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); toast('URL copied!'); } catch (e) { toast('Copy failed — select URL manually', true); }
+  document.body.removeChild(ta);
 }
 
 async function loadDoc(filePath, el) {
@@ -1886,6 +3201,14 @@ async function loadDoc(filePath, el) {
   // Highlight active
   document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
   if (el) el.classList.add('active');
+  
+  // Auto-collapse sidebar on mobile when a doc is selected
+  if (window.innerWidth < 768) {
+    const sidebar = $i('docsSidebar');
+    if (sidebar) sidebar.classList.add('collapsed');
+    const toggleBtn = $i('docsToggleFiles');
+    if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+  }
   
   const content = $i('docsContent');
   content.innerHTML = '<div class="docs-empty">Loading…</div>';
@@ -1897,12 +3220,35 @@ async function loadDoc(filePath, el) {
     const toolbar = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
       <h1 style="margin:0;font-size:16px">${escH(d.name)}</h1>
       <div style="display:flex;gap:6px">
-        <button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>
+        <button onclick="downloadDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⬇️ Download</button>
+        ${d.isImage || d.isBinary ? '' : `<button onclick="editDocument()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✏️ Edit</button>`}
+        <button onclick="openShareModal('${escH(filePath)}')" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🔗 Share</button>
         <button onclick="deleteDocument('${escH(filePath)}')" style="background:none;color:var(--red);border:1px solid var(--red);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">🗑️</button>
       </div>
     </div>`;
     
-    if (d.ext === '.yaml' || d.ext === '.yml') {
+    if (d.isImage) {
+      // Image preview with zoom controls
+      content.innerHTML = toolbar + `<div style="text-align:center;padding:20px;overflow:auto;flex:1">
+        <div style="margin-bottom:12px;display:flex;gap:8px;justify-content:center">
+          <button onclick="imgZoom(-1)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:14px">➖</button>
+          <button onclick="imgZoom(0)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px">Fit</button>
+          <button onclick="imgZoom(1)" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:14px">➕</button>
+          <span style="color:var(--muted);font-size:12px;align-self:center" id="imgZoomLabel">Fit</span>
+        </div>
+        <img id="docPreviewImg" src="${d.content}" alt="${escH(d.name)}" style="max-width:100%;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.3);cursor:zoom-in" onclick="window.open(this.src,'_blank')">
+        <div style="margin-top:8px;color:var(--muted);font-size:12px">${(d.size/1024).toFixed(1)} KB · Click image to open full size</div>
+      </div>`;
+    } else if (d.isBinary) {
+      // Binary file — download only
+      const sizeStr = d.size < 1024*1024 ? (d.size/1024).toFixed(1)+' KB' : (d.size/1024/1024).toFixed(1)+' MB';
+      content.innerHTML = toolbar + `<div class="docs-empty" style="text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">📄</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">${escH(d.name)}</div>
+        <div style="color:var(--muted);margin-bottom:16px">${sizeStr} · ${d.ext.toUpperCase().slice(1)} file</div>
+        <button onclick="downloadDocument()" style="background:var(--accent);color:#fff;border:none;padding:8px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⬇️ Download File</button>
+      </div>`;
+    } else if (d.ext === '.yaml' || d.ext === '.yml') {
       content.innerHTML = toolbar + `<div class="yaml-content">${escH(d.content)}</div>`;
     } else {
       content.innerHTML = toolbar + `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
@@ -1969,6 +3315,111 @@ function newDocument() {
   document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
   // Focus title
   setTimeout(() => $i('docEditorTitle')?.focus(), 100);
+}
+
+// ─── Document Upload ──────────────────────────────────────────────────────
+let _uploadTargetFolder = 'docs'; // default upload target
+function toggleDocsSidebar() {
+  const sidebar = $i('docsSidebar');
+  if (!sidebar) return;
+  sidebar.classList.toggle('collapsed');
+}
+
+// Show/hide files toggle button based on viewport
+window.addEventListener('resize', () => {
+  const toggleBtn = $i('docsToggleFiles');
+  if (!toggleBtn) return;
+  if (window.innerWidth >= 768) {
+    toggleBtn.style.display = 'none';
+    const sidebar = $i('docsSidebar');
+    if (sidebar) sidebar.classList.remove('collapsed');
+  }
+});
+
+function uploadDocTrigger() {
+  // Show upload modal with folder selection
+  let modal = $i('uploadFolderModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'uploadFolderModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:24px;width:380px;max-width:90vw">
+        <h3 style="margin:0 0 16px;color:var(--fg);font-size:15px">📤 Upload Documents</h3>
+        <p style="color:var(--fg2);font-size:13px;margin:0 0 12px">Select target folder:</p>
+        <div id="uploadFolderOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border);color:var(--fg);font-size:13px;transition:background .15s">
+            <input type="radio" name="uploadFolder" value="docs" checked> 📁 docs/
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border);color:var(--fg);font-size:13px;transition:background .15s">
+            <input type="radio" name="uploadFolder" value="_bmad-output/planning-artifacts"> 📁 planning-artifacts/
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border);color:var(--fg);font-size:13px;transition:background .15s">
+            <input type="radio" name="uploadFolder" value="_bmad-output/implementation-artifacts"> 📁 implementation-artifacts/
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border);color:var(--fg);font-size:13px;transition:background .15s">
+            <input type="radio" name="uploadFolder" value="_bmad"> 📁 _bmad/ (framework)
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="$i('uploadFolderModal').style.display='none'" style="padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:var(--s3);color:var(--fg);cursor:pointer;font-size:13px">Cancel</button>
+          <button onclick="confirmUploadFolder()" style="padding:8px 16px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600">Choose Files…</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+  }
+  modal.style.display = 'flex';
+}
+
+function confirmUploadFolder() {
+  const checked = document.querySelector('input[name="uploadFolder"]:checked');
+  if (!checked) return;
+  _uploadTargetFolder = checked.value;
+  $i('uploadFolderModal').style.display = 'none';
+  $i('docUploadInput').click();
+}
+
+async function handleDocUpload(input) {
+  if (!input.files.length || !curWorkdir) return;
+  const formData = new FormData();
+  formData.append('workdir', curWorkdir);
+  formData.append('folder', _uploadTargetFolder);
+  for (const file of input.files) {
+    formData.append('files', file);
+  }
+  try {
+    const r = await fetch('/api/bmad/upload', { method: 'POST', body: formData });
+    const d = await r.json();
+    if (d.error) { toast('Upload failed: ' + d.error, true); return; }
+    toast(`Uploaded ${d.count} file(s) to ${_uploadTargetFolder}/`);
+    loadDocsList(); // refresh sidebar
+  } catch(e) { toast('Upload failed: ' + e.message, true); }
+  input.value = ''; // reset file input
+}
+// ─── End Document Upload ──────────────────────────────────────────────────
+
+function downloadDocument() {
+  if (!_editingDocPath) return;
+  const a = document.createElement('a');
+  a.href = `/api/bmad/doc/download?path=${encodeURIComponent(_editingDocPath)}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+let _imgZoomLevel = 0; // 0 = fit
+function imgZoom(dir) {
+  const img = document.getElementById('docPreviewImg');
+  const label = document.getElementById('imgZoomLabel');
+  if (!img) return;
+  if (dir === 0) { _imgZoomLevel = 0; img.style.maxWidth = '100%'; img.style.width = ''; label.textContent = 'Fit'; return; }
+  _imgZoomLevel = Math.max(25, Math.min(300, (_imgZoomLevel || 100) + dir * 25));
+  img.style.maxWidth = 'none';
+  img.style.width = _imgZoomLevel + '%';
+  label.textContent = _imgZoomLevel + '%';
 }
 
 function editDocument() {
@@ -2107,7 +3558,7 @@ async function checkBmadDocs() {
   try {
     const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
     const d = await r.json();
-    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+    $i('bmadDocsBtn').style.display = (d.docs.length || d.hasBmad) ? '' : 'none';
   } catch { $i('bmadDocsBtn').style.display = 'none'; }
 }
 async function checkSprintStatus() {
@@ -2259,7 +3710,10 @@ async function doSprintSync() {
   <div class="docs-panel-hd">
     <span class="docs-panel-title">📄 BMAD Documents</span>
     <div style="display:flex;gap:8px;align-items:center">
+      <button id="docsToggleFiles" onclick="toggleDocsSidebar()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none">📁 Files</button>
       <button id="docsNewBtn" onclick="newDocument()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ New Doc</button>
+      <input type="file" id="docUploadInput" multiple accept=".md,.yaml,.yml,.json,.txt,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.doc,.docx,.xls,.xlsx" style="display:none" onchange="handleDocUpload(this)">
+      <button onclick="uploadDocTrigger()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📤 Upload</button>
       <button class="modal-close" onclick="toggleDocsPanel()">×</button>
     </div>
   </div>

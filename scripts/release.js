@@ -97,4 +97,4 @@ run(`git push origin main`);
 run(`git push origin ${tag}`);
 
 console.log(`\n✅ Done! GitHub Actions will create the release automatically.`);
-console.log(`   https://github.com/Lexus2016/claude-code-studio/releases/tag/${tag}\n`);
+console.log(`   https://github.com/Mwogi/claude-code-studio/releases/tag/${tag}\n`);
