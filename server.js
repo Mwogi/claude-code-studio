@@ -681,6 +681,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`)
 try { db.exec(`ALTER TABLE tasks ADD COLUMN scheduled_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN task_number INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -7794,7 +7795,7 @@ initTunnelManager();
 // Start Telegram bot if configured
 initTelegramBot();
 
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 server.listen(PORT, HOST, () => {
   log.info('server started', {
     port:      PORT,
