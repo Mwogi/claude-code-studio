@@ -123,3 +123,22 @@ if (!fs.existsSync(gitkeep)) fs.writeFileSync(gitkeep, '');
 ensureScriptsDir();
 
 console.log('✓ Claude Code file-lock hooks installed (.claude/settings.json)');
+
+// 6. Auto-install Frappe MCP server dependencies (if submodule exists)
+const FRAPPE_MCP_DIR = path.join(ROOT, 'mcp-servers', 'frappe');
+if (fs.existsSync(path.join(FRAPPE_MCP_DIR, 'pyproject.toml'))) {
+  try {
+    const { execSync } = require('child_process');
+    // Check if uv is available
+    try { execSync('uv --version', { stdio: 'pipe' }); } catch {
+      console.log('⚠ uv not found — skipping Frappe MCP server setup (install uv: https://docs.astral.sh/uv/)');
+      process.exit(0);
+    }
+    console.log('Installing Frappe MCP server dependencies...');
+    execSync('uv sync', { cwd: FRAPPE_MCP_DIR, stdio: 'inherit', timeout: 120000 });
+    console.log('✓ Frappe MCP server ready (configure credentials in config.json → mcpServers.frappe.env)');
+  } catch (e) {
+    console.log('⚠ Frappe MCP server setup failed:', e.message);
+    console.log('  You can install manually: cd mcp-servers/frappe && uv sync');
+  }
+}

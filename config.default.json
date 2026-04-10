@@ -83,7 +83,7 @@
             "command": "uv",
             "args": [
                 "--directory",
-                "/home/ubuntu/frappe-mcp-server",
+                "./mcp-servers/frappe",
                 "run",
                 "frappe-mcp-server"
             ],

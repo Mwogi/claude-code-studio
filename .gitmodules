@@ -1,0 +1,3 @@
+[submodule "mcp-servers/frappe"]
+	path = mcp-servers/frappe
+	url = https://github.com/appliedrelevance/frappe-mcp-server.git
