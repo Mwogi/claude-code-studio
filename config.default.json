@@ -1,75 +1,138 @@
 {
-  "mcpServers": {
-    "git": {
-      "label": "Git",
-      "description": "Git operations — branch, commit, diff, log, blame",
-      "enabled": true,
-      "custom": true,
-      "command": "uvx",
-      "args": ["mcp-server-git"],
-      "env": {}
+    "mcpServers": {
+        "git": {
+            "label": "Git",
+            "description": "Git operations \u2014 branch, commit, diff, log, blame",
+            "enabled": true,
+            "custom": true,
+            "command": "uvx",
+            "args": [
+                "mcp-server-git"
+            ],
+            "env": {}
+        },
+        "github": {
+            "label": "GitHub",
+            "description": "GitHub PRs, issues, CI status, code review",
+            "enabled": true,
+            "custom": true,
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-github"
+            ],
+            "env": {
+                "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+            }
+        },
+        "sequential-thinking": {
+            "label": "Sequential Thinking",
+            "description": "Structured chain-of-thought reasoning for complex analysis",
+            "enabled": true,
+            "custom": true,
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "env": {}
+        },
+        "memory": {
+            "label": "Memory",
+            "description": "Persistent knowledge graph across sessions",
+            "enabled": true,
+            "custom": true,
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-memory"
+            ],
+            "env": {}
+        },
+        "context7": {
+            "label": "Context7",
+            "description": "Up-to-date library docs \u2014 prevents hallucinated APIs",
+            "enabled": true,
+            "custom": true,
+            "command": "npx",
+            "args": [
+                "-y",
+                "@upstash/context7-mcp@latest"
+            ],
+            "env": {}
+        },
+        "playwright": {
+            "label": "Playwright",
+            "description": "Browser automation, E2E testing, screenshots",
+            "enabled": true,
+            "custom": true,
+            "command": "npx",
+            "args": [
+                "-y",
+                "@playwright/mcp@latest",
+                "--",
+                "--headless"
+            ],
+            "env": {}
+        }
     },
-    "github": {
-      "label": "GitHub",
-      "description": "GitHub PRs, issues, CI status, code review",
-      "enabled": true,
-      "custom": true,
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
-      }
-    },
-    "sequential-thinking": {
-      "label": "Sequential Thinking",
-      "description": "Structured chain-of-thought reasoning for complex analysis",
-      "enabled": true,
-      "custom": true,
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-      "env": {}
-    },
-    "memory": {
-      "label": "Memory",
-      "description": "Persistent knowledge graph across sessions",
-      "enabled": true,
-      "custom": true,
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
-      "env": {}
-    },
-    "context7": {
-      "label": "Context7",
-      "description": "Up-to-date library docs — prevents hallucinated APIs",
-      "enabled": true,
-      "custom": true,
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
-      "env": {}
-    },
-    "playwright": {
-      "label": "Playwright",
-      "description": "Browser automation, E2E testing, screenshots",
-      "enabled": true,
-      "custom": true,
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"],
-      "env": {}
-    }
-  },
-  "skills": {},
-  "slashCommands": [
-    { "id": "sc1", "name": "/check", "text": "Check this step by step: syntax, logic, edge cases, and potential bugs. Be thorough." },
-    { "id": "sc2", "name": "/review", "text": "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels (critical / warning / suggestion)." },
-    { "id": "sc3", "name": "/fix", "text": "Find and fix the bug. Explain what caused it and exactly what you changed." },
-    { "id": "sc4", "name": "/explain", "text": "Explain this code clearly: what it does, how it works, and why it's structured this way. Use examples if helpful." },
-    { "id": "sc5", "name": "/refactor", "text": "Refactor this code for clarity and maintainability. Keep the exact same behavior. Show what changed and why." },
-    { "id": "sc6", "name": "/test", "text": "Write comprehensive tests: happy path, edge cases, and error scenarios. Explain what each test covers." },
-    { "id": "sc7", "name": "/docs", "text": "Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas." },
-    { "id": "sc8", "name": "/optimize", "text": "Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains." },
-    { "id": "sc9", "name": "/compact", "text": "Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured." },
-    { "id": "sc10", "name": "/init", "text": "Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise." },
-    { "id": "sc11", "name": "/bmad-help", "text": "Analyze the current project state and provide contextual BMAD guidance. Do the following:\n\n1. **Project Phase Detection**: Check for BMAD artifacts in the workspace:\n   - Look for product-brief.md, prd.md, architecture docs → determines current phase\n   - Look for sprint-status.yaml → implementation phase indicator\n   - Look for test files, coverage reports → QA phase indicator\n   - Check recent git commits for phase clues\n\n2. **Phase Assessment**: Based on what you find, identify which BMAD phase the project is in:\n   - 🧠 Brainstorm (no PRD yet)\n   - 📋 PRD (has brief, needs PRD)\n   - 🏗️ Architecture (has PRD, needs architecture doc)\n   - 💻 Implementation (has architecture, coding in progress)\n   - 🧪 QA (implementation done, needs testing)\n   - ✅ Done (all phases complete)\n\n3. **Next Steps**: Suggest the 2-3 most important next actions, including which BMAD agent to use (analyst, architect, developer, qa-engineer, etc.)\n\n4. **Quick Commands**: Provide copy-pasteable prompts for the suggested next steps.\n\nBe concise and actionable. Focus on what's most useful right now." }
-  ],
-  "lang": "en"
+    "skills": {},
+    "slashCommands": [
+        {
+            "id": "sc1",
+            "name": "/check",
+            "text": "Check this step by step: syntax, logic, edge cases, and potential bugs. Be thorough."
+        },
+        {
+            "id": "sc2",
+            "name": "/review",
+            "text": "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels (critical / warning / suggestion)."
+        },
+        {
+            "id": "sc3",
+            "name": "/fix",
+            "text": "Find and fix the bug. Explain what caused it and exactly what you changed."
+        },
+        {
+            "id": "sc4",
+            "name": "/explain",
+            "text": "Explain this code clearly: what it does, how it works, and why it's structured this way. Use examples if helpful."
+        },
+        {
+            "id": "sc5",
+            "name": "/refactor",
+            "text": "Refactor this code for clarity and maintainability. Keep the exact same behavior. Show what changed and why."
+        },
+        {
+            "id": "sc6",
+            "name": "/test",
+            "text": "Write comprehensive tests: happy path, edge cases, and error scenarios. Explain what each test covers."
+        },
+        {
+            "id": "sc7",
+            "name": "/docs",
+            "text": "Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas."
+        },
+        {
+            "id": "sc8",
+            "name": "/optimize",
+            "text": "Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains."
+        },
+        {
+            "id": "sc9",
+            "name": "/compact",
+            "text": "Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured."
+        },
+        {
+            "id": "sc10",
+            "name": "/init",
+            "text": "Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise."
+        },
+        {
+            "id": "sc11",
+            "name": "/bmad-help",
+            "text": "Analyze the current project state and provide contextual BMAD guidance. Do the following:\n\n1. **Project Phase Detection**: Check for BMAD artifacts in the workspace:\n   - Look for product-brief.md, prd.md, architecture docs \u2192 determines current phase\n   - Look for sprint-status.yaml \u2192 implementation phase indicator\n   - Look for test files, coverage reports \u2192 QA phase indicator\n   - Check recent git commits for phase clues\n\n2. **Phase Assessment**: Based on what you find, identify which BMAD phase the project is in:\n   - \ud83e\udde0 Brainstorm (no PRD yet)\n   - \ud83d\udccb PRD (has brief, needs PRD)\n   - \ud83c\udfd7\ufe0f Architecture (has PRD, needs architecture doc)\n   - \ud83d\udcbb Implementation (has architecture, coding in progress)\n   - \ud83e\uddea QA (implementation done, needs testing)\n   - \u2705 Done (all phases complete)\n\n3. **Next Steps**: Suggest the 2-3 most important next actions, including which BMAD agent to use (analyst, architect, developer, qa-engineer, etc.)\n\n4. **Quick Commands**: Provide copy-pasteable prompts for the suggested next steps.\n\nBe concise and actionable. Focus on what's most useful right now."
+        }
+    ],
+    "lang": "en"
 }
