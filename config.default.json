@@ -74,6 +74,24 @@
                 "--headless"
             ],
             "env": {}
+        },
+        "frappe": {
+            "label": "Frappe/ERPNext",
+            "description": "Frappe Framework CRUD, schema, reports via MCP",
+            "enabled": true,
+            "custom": true,
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/home/ubuntu/frappe-mcp-server",
+                "run",
+                "frappe-mcp-server"
+            ],
+            "env": {
+                "FRAPPE_API_KEY": "YOUR_API_KEY",
+                "FRAPPE_API_SECRET": "YOUR_API_SECRET",
+                "FRAPPE_BASE_URL": "https://your-frappe-site.com"
+            }
         }
     },
     "skills": {},
