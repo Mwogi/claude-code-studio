@@ -80,7 +80,19 @@ const MODEL_MAP = {
 const _mcpConfigCache = new Map();
 
 function getMcpConfigPath(mcpServers) {
-  const json = JSON.stringify({ mcpServers });
+  // Strip non-standard fields (label, description, enabled, custom) that Claude CLI doesn't understand.
+  // Claude CLI only expects: command, args, env, cwd
+  const cleanServers = {};
+  for (const [name, server] of Object.entries(mcpServers)) {
+    if (server.enabled === false) continue; // skip disabled servers
+    cleanServers[name] = {
+      command: server.command,
+      ...(server.args && { args: server.args }),
+      ...(server.env && Object.keys(server.env).length && { env: server.env }),
+      ...(server.cwd && { cwd: server.cwd }),
+    };
+  }
+  const json = JSON.stringify({ mcpServers: cleanServers });
   const hash = crypto.createHash('sha256').update(json).digest('hex').slice(0, 16);
   const cached = _mcpConfigCache.get(hash);
   if (cached) {
