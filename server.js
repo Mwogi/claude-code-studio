@@ -1526,11 +1526,13 @@ async function startTask(task) {
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
-      // Pass MCP servers so tasks have access to Playwright, GitHub, etc.
-      const _mcpConfig = loadMergedConfig();
-      if (_mcpConfig.mcpServers && Object.keys(_mcpConfig.mcpServers).length > 0) {
-        _sendOpts.mcpServers = _mcpConfig.mcpServers;
-      }
+      // MCP servers: disabled for --print mode (Claude CLI ignores --mcp-config in --print mode).
+      // QA browser testing uses Playwright via Bash scripts instead.
+      // Uncomment below if future Claude CLI versions support MCP in --print mode.
+      // const _mcpConfig = loadMergedConfig();
+      // if (_mcpConfig.mcpServers && Object.keys(_mcpConfig.mcpServers).length > 0) {
+      //   _sendOpts.mcpServers = _mcpConfig.mcpServers;
+      // }
       const stream = cli.send(_sendOpts);
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {

@@ -150,41 +150,19 @@ class ClaudeCLI {
     // allowedTools: pass each tool as separate arg (variadic)
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
 
-    // MCP servers: write into project .claude/settings.json so they work with --print mode.
-    // --mcp-config does NOT work with --print (Claude CLI ignores it). The only reliable
-    // way is to have MCP servers in the project's .claude/settings.json.
+    // MCP config: --print mode ignores --mcp-config AND .claude/settings.json mcpServers.
+    // We still pass --mcp-config as a no-op (in case future CLI versions support it).
+    // QA browser testing uses Playwright via Bash scripts instead of MCP.
     let mcpConfigHash = null;
     let mcpConfigPath = null;
     if (mcpServers && typeof mcpServers === 'object') {
       const mcp = getMcpConfigPath(mcpServers);
       mcpConfigPath = mcp.path;
       mcpConfigHash = mcp.hash;
-      // Also inject into .claude/settings.json in the task's working directory
-      const taskCwd = this.cwd;
-      try {
-        const settingsDir = path.join(taskCwd, '.claude');
-        const settingsPath = path.join(settingsDir, 'settings.json');
-        fs.mkdirSync(settingsDir, { recursive: true });
-        let settings = {};
-        try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch {}
-        // Clean MCP servers for Claude CLI (only command, args, env, cwd)
-        const cleanServers = {};
-        for (const [name, server] of Object.entries(mcpServers)) {
-          if (server.enabled === false) continue;
-          cleanServers[name] = {
-            command: server.command,
-            ...(server.args && { args: server.args }),
-            ...(server.env && Object.keys(server.env).length && { env: server.env }),
-            ...(server.cwd && { cwd: server.cwd }),
-          };
-        }
-        settings.mcpServers = cleanServers;
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-      } catch (e) {
-        console.warn('[claude-cli] Failed to inject MCP into .claude/settings.json:', e.message);
-        // Fallback to --mcp-config (may not work in --print mode)
-        args.push('--mcp-config', mcpConfigPath);
-      }
+      // Note: --mcp-config is ignored by --print mode but we pass it anyway
+      // for forward compatibility. Don't write to .claude/settings.json as it
+      // causes "Invalid MCP configuration" errors.
+      args.push('--mcp-config', mcpConfigPath);
     }
 
     // CRITICAL: bypass permission prompts in non-interactive mode
