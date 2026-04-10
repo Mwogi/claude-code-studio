@@ -2544,6 +2544,13 @@ function autoCreateQATask(task, fullText) {
   const qaTitle = `QA: ${task.title.substring(0, 80)}`;
   const qaDesc = `## QA Report Task — DO NOT MODIFY CODE
 
+### PRE-CHECK: Verify code is committed
+Before testing, run \`git status\` and \`git log --oneline -3\` in the project directory.
+If the dev task's changes are NOT committed (untracked/modified files from the feature), FAIL the task immediately with:
+- Finding: "Code not committed — changes exist only as uncommitted files"
+- Severity: P0
+- This means the dev task did not properly finish its work.
+
 **Review task #${task.task_number}: ${task.title}**
 **QA Depth: ${qaDepth}/1** (max depth reached = no further QA cycles)
 
