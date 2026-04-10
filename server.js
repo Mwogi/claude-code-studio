@@ -1705,6 +1705,8 @@ async function startTask(task) {
           // 📝 Update story file and sprint status
           try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
           try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+          // 🔗 Auto-chain: create-story → dev-story (server-enforced, not agent-dependent)
+          try { autoChainCreateStoryToDev(task); } catch (e) { log.warn(`[auto-chain] ${e.message}`); }
           // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
           try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
           // 🔧 Auto-create fix tasks from QA reports (server-side, no auth needed)
@@ -2442,6 +2444,59 @@ function purgeOldScreenshots() {
  * - If issues found, chain a fix task after
  */
 const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev']);
+
+/**
+ * Auto-chain: When a create-story task completes, automatically transition it to dev-story
+ * so the implementation actually happens. Previously this relied on the AI agent making a
+ * curl call to self-update, which was unreliable.
+ *
+ * Instead of updating the same task (which would lose the create-story session), we create
+ * a NEW dev-story task that references the story file, inheriting chain_id and workdir.
+ */
+function autoChainCreateStoryToDev(task) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  if (!wfMatch || wfMatch[1] !== 'create-story') return;
+
+  // Check if a dev-story task already exists for this title (avoid duplicates)
+  const existing = db.prepare(
+    `SELECT id FROM tasks WHERE title=? AND workdir=? AND notes LIKE '%[bmad-workflow:dev-story]%' LIMIT 1`
+  ).get(task.title, task.workdir);
+  if (existing) {
+    log.info(`[auto-chain] dev-story already exists for "${task.title}", skipping`);
+    return;
+  }
+
+  const id = genId();
+  const taskNum = stmts.nextTaskNumber.get(sqlVal(task.workdir) || '').next_num;
+  const devNotes = `[bmad-workflow:dev-story]`;
+  const devDesc = (task.description || '') + `\n\nStory file created by task #${task.task_number || task.id}. Read the story from _bmad-output/implementation-artifacts/ and implement all acceptance criteria.`;
+
+  stmts.createTask.run(
+    id,
+    String(task.title).substring(0, 200),
+    String(devDesc).substring(0, 2000),
+    String(devNotes).substring(0, 2000),
+    'bmad_workflow',        // status — queued for BMAD worker
+    sqlVal(task.sort_order) || 0,
+    null,                   // session_id
+    sqlVal(task.workdir) || null,
+    'sonnet',               // model — dev-story uses sonnet
+    'auto',                 // mode
+    'single',               // agent_mode
+    100,                    // max_turns — dev needs more turns
+    null,                   // attachments
+    null,                   // depends_on
+    sqlVal(task.chain_id) || null,
+    null,                   // source_session_id
+    null,                   // scheduled_at
+    null,                   // recurrence
+    null,                   // recurrence_end_at
+    taskNum
+  );
+
+  log.info(`[auto-chain] create-story → dev-story: created task ${id} ("${task.title}") for implementation`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
 
 function autoCreateQATask(task, fullText) {
   const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
