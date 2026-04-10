@@ -1341,7 +1341,10 @@ async function startTask(task) {
           'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
         };
         const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_implementation';
+        log.info(`[taskWorker] Setting BMAD phase: ${task.id} ("${task.title}") workflow=${wfType} → status=${phase}`);
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
+        // Notify kanban immediately so the card moves to the correct column
+        wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
       } else {
         stmts.setTaskInProgress.run(task.id);
       }
@@ -2265,17 +2268,27 @@ setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
 
 // ── Orphaned task recovery on startup ──
 // Tasks stuck in active BMAD phases after a server restart have no Claude process.
-// Reset them to 'todo' so processQueue picks them up again.
+// Reset them to 'bmad_workflow' so processQueue picks them up again.
+// Also kill any orphaned worker PIDs that no longer exist.
 (function recoverOrphanedTasks() {
   const orphaned = db.prepare(`
-    SELECT id, title, status, session_id FROM tasks 
+    SELECT id, title, status, session_id, worker_pid, notes FROM tasks 
     WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
     AND status != 'awaiting_input'
   `).all();
   if (orphaned.length) {
     log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to bmad_workflow`);
-    const reset = db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL WHERE id=?`);
+    const reset = db.prepare(`UPDATE tasks SET status='bmad_workflow', session_id=NULL, worker_pid=NULL WHERE id=?`);
     for (const t of orphaned) {
+      // Check if the worker PID is still alive
+      let stillRunning = false;
+      if (t.worker_pid) {
+        try { process.kill(t.worker_pid, 0); stillRunning = true; } catch { stillRunning = false; }
+      }
+      if (stillRunning) {
+        log.info(`[Recovery] Skipping: ${t.title.substring(0, 60)} (pid ${t.worker_pid} still alive, status=${t.status})`);
+        continue; // Don't reset tasks that are still actually running
+      }
       reset.run(t.id);
       log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
     }
