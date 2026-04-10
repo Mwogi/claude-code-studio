@@ -1700,6 +1700,20 @@ async function startTask(task) {
             const projName = getProjectName(task.workdir);
             openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
           } else {
+          // 🎭 Server-enforced Playwright check: QA tasks MUST have used browser tools
+          const _isQaTask = (task.title || '').startsWith('QA:') || ((task.notes || '').includes('[bmad-workflow:playwright-qa]'));
+          if (_isQaTask && fullText) {
+            const usedPlaywright = /mcp__playwright__browser_navigate|browser_navigate|playwright.*navigate/i.test(fullText);
+            if (!usedPlaywright) {
+              // QA task didn't use Playwright — FAIL it, don't mark as done
+              log.warn(`[taskWorker] QA task ${task.id} ("${task.title}") FAILED: no Playwright browser testing detected in output`);
+              db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason='QA_NO_PLAYWRIGHT: Browser testing was mandatory but Playwright MCP tools were never used. Task will be retried.', task_retry_count=COALESCE(task_retry_count,0)+1, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(task.id);
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              openclawNotify.taskFailed && openclawNotify.taskFailed(task, 'Playwright browser testing was mandatory but not performed', getProjectName(task.workdir));
+              return; // Don't proceed to done_review
+            }
+          }
           // ✅ Success — AI-completed tasks go to done_review for user approval (auto-moves to done after 24h)
           db.prepare(`UPDATE tasks SET status='done_review', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
