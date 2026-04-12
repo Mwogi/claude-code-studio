@@ -2408,20 +2408,27 @@ setInterval(autoModeProcess, 15000);
 
 // ── Auto-archive: done_review → done (after 24h) and done → archived (after 48h) ──
 // Also cleans up task screenshots on archive and purges old screenshots (>48h)
-function cleanupTaskScreenshots(workdir, taskId) {
+// Matches both task-{id}- and task-{taskNumber}- prefixes
+function cleanupTaskScreenshots(workdir, taskId, taskNumber) {
   try {
-    const screenshotDir = path.join(workdir, 'test-screenshots');
-    if (!fs.existsSync(screenshotDir)) return;
-    const prefix = `task-${taskId}-`;
-    const files = fs.readdirSync(screenshotDir);
+    const screenshotDirs = [
+      path.join(workdir, 'test-screenshots'),
+      path.join(workdir, 'docs', 'screenshots'),
+    ];
+    const prefixes = [`task-${taskId}-`];
+    if (taskNumber) prefixes.push(`task-${taskNumber}-`);
     let deleted = 0;
-    for (const f of files) {
-      if (f.startsWith(prefix)) {
-        fs.unlinkSync(path.join(screenshotDir, f));
-        deleted++;
+    for (const screenshotDir of screenshotDirs) {
+      if (!fs.existsSync(screenshotDir)) continue;
+      const files = fs.readdirSync(screenshotDir);
+      for (const f of files) {
+        if (prefixes.some(p => f.startsWith(p))) {
+          fs.unlinkSync(path.join(screenshotDir, f));
+          deleted++;
+        }
       }
     }
-    if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task ${taskId}`);
+    if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task ${taskId}${taskNumber ? ` (#${taskNumber})` : ''}`);
   } catch (e) {
     log.warn('[screenshot-cleanup] error', { error: e.message });
   }
@@ -2434,18 +2441,23 @@ function purgeOldScreenshots() {
     const cutoff = Date.now() - 48 * 60 * 60 * 1000;
     let totalDeleted = 0;
     for (const { workdir } of workdirs) {
-      const screenshotDir = path.join(workdir, 'test-screenshots');
-      if (!fs.existsSync(screenshotDir)) continue;
-      const files = fs.readdirSync(screenshotDir);
-      for (const f of files) {
-        const fp = path.join(screenshotDir, f);
-        try {
-          const stat = fs.statSync(fp);
-          if (stat.isFile() && stat.mtimeMs < cutoff) {
-            fs.unlinkSync(fp);
-            totalDeleted++;
-          }
-        } catch (e) { /* skip */ }
+      const dirs = [
+        path.join(workdir, 'test-screenshots'),
+        path.join(workdir, 'docs', 'screenshots'),
+      ];
+      for (const screenshotDir of dirs) {
+        if (!fs.existsSync(screenshotDir)) continue;
+        const files = fs.readdirSync(screenshotDir);
+        for (const f of files) {
+          const fp = path.join(screenshotDir, f);
+          try {
+            const stat = fs.statSync(fp);
+            if (stat.isFile() && stat.mtimeMs < cutoff) {
+              fs.unlinkSync(fp);
+              totalDeleted++;
+            }
+          } catch (e) { /* skip */ }
+        }
       }
     }
     if (totalDeleted > 0) log.info(`[screenshot-cleanup] Purged ${totalDeleted} screenshots older than 48h`);
@@ -2801,26 +2813,14 @@ function autoArchiveProcess() {
       const approveStmt = db.prepare(`UPDATE tasks SET status='done', updated_at=datetime('now') WHERE id=?`);
       for (const t of tasksToApprove) {
         approveStmt.run(t.id);
-        cleanupTaskScreenshots(t.workdir, t.id);
-        // Also clean by task_number
-        if (t.task_number) {
-          try {
-            const screenshotDir = path.join(t.workdir, 'test-screenshots');
-            if (fs.existsSync(screenshotDir)) {
-              const prefix = `task-${t.task_number}-`;
-              for (const f of fs.readdirSync(screenshotDir)) {
-                if (f.startsWith(prefix)) fs.unlinkSync(path.join(screenshotDir, f));
-              }
-            }
-          } catch (e) { /* skip */ }
-        }
+        cleanupTaskScreenshots(t.workdir, t.id, t.task_number);
       }
       log.info(`[autoArchive] Auto-approved ${tasksToApprove.length} done_review task(s) → done + cleaned screenshots`);
       wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
     }
     // Move done tasks older than 48h to archived + clean up their screenshots
     const tasksToArchive = db.prepare(`
-      SELECT id, workdir FROM tasks
+      SELECT id, workdir, task_number FROM tasks
       WHERE status='done'
         AND updated_at < datetime('now', '-48 hours')
     `).all();
@@ -2828,7 +2828,7 @@ function autoArchiveProcess() {
       const archiveStmt = db.prepare(`UPDATE tasks SET status='archived', updated_at=datetime('now') WHERE id=?`);
       for (const t of tasksToArchive) {
         archiveStmt.run(t.id);
-        cleanupTaskScreenshots(t.workdir, t.id);
+        cleanupTaskScreenshots(t.workdir, t.id, t.task_number);
       }
       log.info(`[autoArchive] Archived ${tasksToArchive.length} done task(s) → archived + cleaned screenshots`);
       wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
@@ -3407,7 +3407,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code.\n\nQA TASK RULES: If this IS a QA task, you MUST write and run Playwright test scripts using the Bash tool.\n\n**HOW TO DO BROWSER TESTING (via Bash + Playwright scripts):**\n\nWrite a Node.js script that uses Playwright to test the feature. Example:\n\n\`\`\`bash\ncat > /tmp/qa-test.mjs << 'SCRIPT'\nimport { chromium } from "playwright";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// Read test URL from docs/testing-info.md first!\nawait page.goto("http://18.132.129.240:5173/");\nawait page.screenshot({ path: "test-screenshots/task-ID-01-login.png" });\n// Login, navigate, test...\nawait browser.close();\nSCRIPT\nnode /tmp/qa-test.mjs\n\`\`\`\n\n**IMPORTANT:** Playwright is installed globally (npx playwright). Use \`chromium.launch({ headless: true })\`.\n\n**First step in every QA task:** Read docs/testing-info.md to get the correct test URL and credentials. NEVER assume or hardcode a URL.\n\nQA RULES:\n1. Write and run Playwright scripts via Bash for EVERY test step — do NOT skip browser testing\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\n**IF YOUR OUTPUT DOES NOT CONTAIN \"playwright\" AND \"screenshot\" THE QA TASK IS FAILED.**\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_ID}-{NN}-{description}.png\` where TASK_ID is this task's ID (from the task context), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label.`;
+const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code.\n\nQA TASK RULES: If this IS a QA task, you MUST write and run Playwright test scripts using the Bash tool.\n\n**HOW TO DO BROWSER TESTING (via Bash + Playwright scripts):**\n\nWrite a Node.js script that uses Playwright to test the feature. Example:\n\n\`\`\`bash\ncat > /tmp/qa-test.mjs << 'SCRIPT'\nimport { chromium } from "playwright";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// Read test URL from docs/testing-info.md first!\nawait page.goto("http://18.132.129.240:5173/");\nawait page.screenshot({ path: "test-screenshots/task-ID-01-login.png" });\n// Login, navigate, test...\nawait browser.close();\nSCRIPT\nnode /tmp/qa-test.mjs\n\`\`\`\n\n**IMPORTANT:** Playwright is installed globally (npx playwright). Use \`chromium.launch({ headless: true })\`.\n\n**First step in every QA task:** Read docs/testing-info.md to get the correct test URL and credentials. NEVER assume or hardcode a URL.\n\nQA RULES:\n1. Write and run Playwright scripts via Bash for EVERY test step — do NOT skip browser testing\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\n**IF YOUR OUTPUT DOES NOT CONTAIN \"playwright\" AND \"screenshot\" THE QA TASK IS FAILED.**\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_NUMBER}-{NN}-{description}.png\` where TASK_NUMBER is this task's numeric task number (e.g. 78, 161 — shown in the task title as #N), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: task-78-01-login-page.png, task-78-02-modal-open.png. NEVER use the task ID string — always use the numeric task number.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
@@ -4811,6 +4811,26 @@ app.post('/api/tasks', (req, res) => {
     }
   }
   
+  // ── Require valid project: resolve project_id from workdir ──────────────────
+  const allProjects = loadProjects();
+  if (!workdir) {
+    // If no workdir, try to find a single project and use its workdir
+    if (allProjects.length === 1) {
+      workdir = allProjects[0].workdir;
+    } else {
+      return res.status(400).json({ error: 'workdir is required — every task must belong to a project' });
+    }
+  }
+  const matchedProject = allProjects.find(p => p.workdir === workdir);
+  if (!matchedProject) {
+    return res.status(400).json({ error: `No project found for workdir "${workdir}". Register the project first.` });
+  }
+
+  // ── Normalize status to valid kanban columns ──────────────────────────────
+  const VALID_KANBAN = new Set(['backlog','todo','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','awaiting_input','in_progress','done_review','done','archived','cancelled']);
+  if (status === 'open') status = 'backlog';
+  if (!VALID_KANBAN.has(status)) status = 'backlog';
+
   const id = genId();
   const taskNum = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
   
@@ -4971,21 +4991,7 @@ app.put('/api/tasks/:id', (req, res) => {
   if (status !== task.status && ['done', 'archived'].includes(status)) {
     const wd = workdir || WORKDIR;
     try {
-      cleanupTaskScreenshots(wd, req.params.id);
-      if (task.task_number) {
-        const screenshotDir = path.join(wd, 'test-screenshots');
-        if (fs.existsSync(screenshotDir)) {
-          const prefix = `task-${task.task_number}-`;
-          let deleted = 0;
-          for (const f of fs.readdirSync(screenshotDir)) {
-            if (f.startsWith(prefix)) {
-              fs.unlinkSync(path.join(screenshotDir, f));
-              deleted++;
-            }
-          }
-          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${status}`);
-        }
-      }
+      cleanupTaskScreenshots(wd, req.params.id, task.task_number);
     } catch (e) {
       log.warn('[screenshot-cleanup] PUT transition cleanup error', { error: e.message });
     }
@@ -5020,6 +5026,8 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
   }
   // Handle 'column' as alias for 'status' (friendlier API)
   if (req.body.column !== undefined) updates.status = req.body.column;
+  // Normalize 'open' → 'backlog' on status updates too
+  if (updates.status === 'open') updates.status = 'backlog';
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields provided' });
   const merged = { ...task, ...updates };
   // Stop task if being moved away from in_progress
@@ -5066,24 +5074,7 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
   if (updates.status && ['done', 'archived'].includes(updates.status) && !['done', 'archived'].includes(task.status)) {
     const wd = merged.workdir || WORKDIR;
     try {
-      // Clean by task ID
-      cleanupTaskScreenshots(wd, req.params.id);
-      // Also clean by task_number (screenshots use task-{number}-{nn}-{desc}.png naming)
-      if (task.task_number) {
-        const screenshotDir = path.join(wd, 'test-screenshots');
-        if (fs.existsSync(screenshotDir)) {
-          const prefix = `task-${task.task_number}-`;
-          const files = fs.readdirSync(screenshotDir);
-          let deleted = 0;
-          for (const f of files) {
-            if (f.startsWith(prefix)) {
-              fs.unlinkSync(path.join(screenshotDir, f));
-              deleted++;
-            }
-          }
-          if (deleted > 0) log.info(`[screenshot-cleanup] Deleted ${deleted} screenshots for task #${task.task_number} on status → ${updates.status}`);
-        }
-      }
+      cleanupTaskScreenshots(wd, req.params.id, task.task_number);
     } catch (e) {
       log.warn('[screenshot-cleanup] manual transition cleanup error', { error: e.message });
     }
@@ -6282,7 +6273,19 @@ app.post('/api/projects', requireAdmin, (req,res) => {
     }
     const projects = loadProjects();
     const existing = projects.find(p => p.workdir === workdir);
-    if (existing) { existing.name = name; saveProjects(projects); return res.json({ ok:true, id:existing.id, actions, updated:true }); }
+    if (existing) {
+      existing.name = name; saveProjects(projects);
+      // Auto-install BMAD even for re-added projects if missing
+      if (!fs.existsSync(path.join(workdir, '_bmad'))) {
+        const { execFile: ef2 } = require('child_process');
+        ef2('npx', ['bmad-method', 'install', '--directory', workdir, '--tools', 'claude-code', '--user-name', 'Mwogi', '--modules', 'bmm', '--output-folder', '_bmad-output', '--yes'], { timeout: 120000, cwd: workdir }, (err) => {
+          if (err) log.warn('BMAD auto-install failed (existing project)', { workdir, error: err.message });
+          else log.info('BMAD auto-installed (existing project)', { workdir });
+        });
+        actions.push('bmad install (background)');
+      }
+      return res.json({ ok:true, id:existing.id, actions, updated:true });
+    }
     const id = 'proj-' + genId();
     projects.push({ id, name, workdir, createdAt:new Date().toISOString() });
     saveProjects(projects);
