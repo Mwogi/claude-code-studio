@@ -4,25 +4,25 @@
       "id": "user-11840cb2",
       "username": "ckiprotich",
       "displayName": "Cyrus Kiprotich",
-      "passwordHash": "$2a$12$q3rMG/8o4Ewo6HE5YHbQ2.TvOgSCejB72wphxiiXcobB.8xEovN7.",
+      "passwordHash": "$2a$12$zR2AI2glQfsE3otMsa5afuG/.79PXvkcve9vhC3oOyVpCfH5/Vc5q",
       "projects": [
-        "proj-mmnp9duzq6pne5",
-        "proj-mn4bqan3s71a32"
+        "proj-mnqj7v77l89nl9",
+        "proj-mnvnspau1aliqg"
       ],
       "createdAt": "2026-04-08T08:13:39.698Z",
-      "updatedAt": "2026-04-08T08:13:39.698Z"
+      "updatedAt": "2026-04-13T21:41:51.223Z"
     },
     {
       "id": "user-e3c06e28",
       "username": "dnamakoto",
       "displayName": "Duncan Namakoto",
-      "passwordHash": "$2a$12$DRJMvlrNG8zw011IjbI1LOJDdlX/aAaPiSAiTD5XGRRfechk4/xYu",
+      "passwordHash": "$2a$12$v0l7Dwp857ROtnfhcYPysOpdS/zQHE32zF6RkGtOg205qOn3/vds6",
       "projects": [
-        "proj-mmnp9duzq6pne5",
-        "proj-mn4bqan3s71a32"
+        "proj-mnqj7v77l89nl9",
+        "proj-mnvnspau1aliqg"
       ],
       "createdAt": "2026-04-08T08:26:02.003Z",
-      "updatedAt": "2026-04-08T08:26:02.003Z"
+      "updatedAt": "2026-04-13T21:42:05.143Z"
     }
   ]
 }
