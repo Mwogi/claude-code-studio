@@ -682,6 +682,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN scheduled_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_number INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN dep_group TEXT`); } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_dep_group ON tasks(dep_group)`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -799,8 +801,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,task_number) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,task_number,dep_group) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,dep_group=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -1974,7 +1976,7 @@ function scheduleNextRun(task) {
     task.session_id || null, task.workdir || null, task.model || 'sonnet',
     task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
     null, null, null, null,
-    next, task.recurrence, task.recurrence_end_at || null, _tn
+    next, task.recurrence, task.recurrence_end_at || null, _tn, task.dep_group || null
   );
   log.info(`[schedule] Next run queued: "${task.title}" → ${new Date(next * 1000).toISOString()}`);
 }
@@ -2171,7 +2173,7 @@ function processQueue() {
           chainSessionId, workdir,
           st.model || task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
           null, realDeps.length ? JSON.stringify(realDeps) : null,
-          chainId, null, null, null, null, _tn2
+          chainId, null, null, null, null, _tn2, null
         );
       }
       // Remove the original task — it's been replaced by the chain subtasks
@@ -2206,7 +2208,8 @@ function processQueue() {
       try {
         const deps = JSON.parse(task.depends_on);
         if (deps.length) {
-          const failedDep = deps.find(depId => {
+                    const failedDep = deps.find(depId => {
+            if (typeof depId === 'string' && depId.startsWith('group:')) return false; // handled below
             const dep = stmts.getTask.get(depId);
             return dep && dep.status === 'cancelled';
           });
@@ -2228,10 +2231,33 @@ function processQueue() {
             continue;
           }
           const allDone = deps.every(depId => {
+            // Support group dependencies: "group:S1.1" means all tasks with dep_group="S1.1" must be done
+            if (typeof depId === 'string' && depId.startsWith('group:')) {
+              const groupName = depId.slice(6);
+              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=?`).all(groupName);
+              if (groupTasks.length === 0) return true; // no tasks in group yet — treat as satisfied
+              return groupTasks.every(gt => ['done', 'done_review', 'archived'].includes(gt.status));
+            }
             const dep = stmts.getTask.get(depId);
             return dep && ['done', 'done_review', 'archived'].includes(dep.status);
           });
           if (!allDone) continue; // deps not ready yet
+
+          // Check for cancelled group deps — cascade cancel
+          const hasFailedGroup = deps.some(depId => {
+            if (typeof depId === 'string' && depId.startsWith('group:')) {
+              const groupName = depId.slice(6);
+              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=?`).all(groupName);
+              return groupTasks.some(gt => gt.status === 'cancelled');
+            }
+            return false;
+          });
+          if (hasFailedGroup) {
+            db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='dep_group_failed', updated_at=datetime('now') WHERE id=?`)
+              .run(task.id);
+            log.warn('Task cascade-cancelled (group dep failed)', { taskId: task.id });
+            continue;
+          }
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
@@ -2532,7 +2558,8 @@ function autoChainCreateStoryToDev(task) {
     null,                   // scheduled_at
     null,                   // recurrence
     null,                   // recurrence_end_at
-    taskNum
+    taskNum,
+    task.dep_group || null     // inherit dep_group
   );
 
   log.info(`[auto-chain] create-story → dev-story: created task ${id} ("${task.title}") for implementation`);
@@ -2641,7 +2668,7 @@ You do NOT need to create fix tasks via curl anymore — just write a thorough Q
     null, workdir, 'opus',
     'auto', 'single', 80,
     null, null, task.chain_id || null, null,
-    null, null, null, taskNum
+    null, null, null, taskNum, task.dep_group || null
   );
   
   log.info(`[auto-qa] Created QA task #${taskNum} "${qaTitle}" for dev task #${task.task_number}`);
@@ -2741,7 +2768,7 @@ ${qaReportContent ? qaReportContent.substring(0, 4000) : fixContext}
     null, workdir, 'sonnet',
     'auto', 'single', 60,
     null, null, task.chain_id || null, null,
-    null, null, null, fixTaskNum
+    null, null, null, fixTaskNum, task.dep_group || null
   );
   
   log.info(`[auto-fix] Created fix task #${fixTaskNum} "${fixTitle}" from QA task #${task.task_number}`);
@@ -4795,7 +4822,7 @@ app.post('/api/tasks', (req, res) => {
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
           scheduled_at=null, recurrence=null, recurrence_end_at=null,
-          after=null } = req.body;
+          after=null, dep_group=null } = req.body;
   
   // Auto-chaining: if 'after' is a task ID, inherit or create chain_id and set sort_order
   if (after) {
@@ -4839,7 +4866,7 @@ app.post('/api/tasks', (req, res) => {
     status = 'bmad_workflow';
   }
   
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum, sqlVal(dep_group)||null);
   const task = stmts.getTask.get(id);
   if (['todo', 'bmad_workflow'].includes(status)) setImmediate(processQueue);
   res.json(task);
@@ -5019,7 +5046,7 @@ app.delete('/api/tasks/:id', (req, res) => {
 app.patch('/api/tasks/:id', express.json(), (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
-  const allowed = ['title', 'description', 'notes', 'status', 'sort_order', 'model', 'mode', 'agent_mode', 'max_turns', 'scheduled_at', 'recurrence', 'recurrence_end_at'];
+  const allowed = ['title', 'description', 'notes', 'status', 'sort_order', 'model', 'mode', 'agent_mode', 'max_turns', 'scheduled_at', 'recurrence', 'recurrence_end_at', 'dep_group', 'depends_on', 'chain_id'];
   const updates = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
@@ -5043,6 +5070,7 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
     sqlVal(merged.model), sqlVal(merged.mode), sqlVal(merged.agent_mode), sqlVal(merged.max_turns), sqlVal(merged.attachments)||null,
     sqlVal(merged.depends_on)||null, sqlVal(merged.chain_id)||null, sqlVal(merged.source_session_id)||null,
     sqlVal(merged.scheduled_at)||null, sqlVal(merged.recurrence)||null, sqlVal(merged.recurrence_end_at)||null,
+    sqlVal(merged.dep_group)||null,
     req.params.id
   );
   if (merged.status === 'todo') setImmediate(processQueue);
@@ -5197,7 +5225,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
         source_session_id || null,
-        null, null, null, _tn3  // scheduled_at, recurrence, recurrence_end_at, task_number
+        null, null, null, _tn3, null  // scheduled_at, recurrence, recurrence_end_at, task_number, dep_group
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -5616,7 +5644,7 @@ app.post('/api/bmad/sprint-sync', express.json(), (req, res) => {
         stmts.createTask.run(
           id, title, description, notes,
           story.kanbanStatus, sortOrder, null, workdir,
-          null, null, null, null, null, null, null, null, null, null, null, _tn4
+          null, null, null, null, null, null, null, null, null, null, null, _tn4, null
         );
         created.push({ id: story.id, kanbanId: id, status: story.kanbanStatus });
       }
@@ -7756,7 +7784,7 @@ wss.on('connection', (ws) => {
                 sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
-                null, null, null, _tn5  // scheduled_at, recurrence, recurrence_end_at, task_number
+                null, null, null, _tn5, null  // scheduled_at, recurrence, recurrence_end_at, task_number, dep_group
               );
               created.push(stmts.getTask.get(taskId));
             }

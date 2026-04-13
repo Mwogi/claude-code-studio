@@ -1,12 +1,24 @@
 /**
  * openclaw-notify.js — Send notifications through OpenClaw → Discord
  * Routes notifications to project-specific Discord threads.
+ * New projects get threads auto-created and persisted to data/discord-threads.json.
  */
 'use strict';
 const { execFile } = require('child_process');
+const path = require('path');
+const fs   = require('fs');
+const os   = require('os');
 
-const NOTIFY_ENABLED = process.env.OPENCLAW_NOTIFY !== 'false';
-const DISCORD_CHANNEL = process.env.OPENCLAW_NOTIFY_CHANNEL || '1479520243385765888';
+const NOTIFY_ENABLED   = process.env.OPENCLAW_NOTIFY !== 'false';
+const DISCORD_CHANNEL  = process.env.OPENCLAW_NOTIFY_CHANNEL || '1479520243385765888';
+
+// Persistent storage for auto-created thread mappings
+const DATA_DIR     = process.env.APP_DIR ? path.join(process.env.APP_DIR, 'data') : path.join(__dirname, 'data');
+const THREADS_FILE = path.join(DATA_DIR, 'discord-threads.json');
+
+// ---------------------------------------------------------------------------
+// Hardcoded mappings — these always take priority over persisted entries
+// ---------------------------------------------------------------------------
 
 /**
  * Project → Discord thread mapping.
@@ -18,6 +30,7 @@ const PROJECT_THREADS = {
   'HMIS Lite - Frontend':'1485939027759857829',
   'HMIS Backend':        '1485939083925651486',
   'HMIS-Frontend':       '1476556097312522311',  // existing thread
+  'HMIS Frontend':       '1476556097312522311',  // project name in DB
   'Golf Casino Backend': '1479043614628647074',  // existing Golf Project thread
   'Claude Code Studio':  '1479520243385765888',  // main thread
 };
@@ -30,40 +43,178 @@ const WORKDIR_THREADS = {
   'vue-apps/hmis-lite':          '1485939027759857829',
   'frappe-bench/apps/hmis':      '1485939083925651486',
   'hmis_frontend':               '1476556097312522311',
+  'projects/hmis-lite':          '1476556097312522311',
   'claude-code-studio':          '1479520243385765888',
   'golf_casino':                 '1479043614628647074',
 };
 
-function _getThreadId(projectName, workdir) {
-  // Try project name first
-  if (projectName && PROJECT_THREADS[projectName]) {
-    return PROJECT_THREADS[projectName];
+// ---------------------------------------------------------------------------
+// Persistent thread store — loaded from disk, merged with hardcoded defaults
+// { projects: { "Name": { threadId, createdAt } }, workdirs: { "key": { threadId, createdAt } } }
+// ---------------------------------------------------------------------------
+
+let _store = { projects: {}, workdirs: {} };
+
+function _loadThreads() {
+  try {
+    if (fs.existsSync(THREADS_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(THREADS_FILE, 'utf8'));
+      _store = { projects: {}, workdirs: {}, ...parsed };
+    }
+  } catch (e) {
+    console.error('[openclaw-notify] Failed to load discord-threads.json:', e.message);
   }
-  // Try workdir substring match
+}
+
+function _saveThreads() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(THREADS_FILE, JSON.stringify(_store, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[openclaw-notify] Failed to save discord-threads.json:', e.message);
+  }
+}
+
+// Load persisted mappings on startup
+_loadThreads();
+
+// ---------------------------------------------------------------------------
+// Binary resolution — mirrors findClaudeBin() in claude-cli.js
+// ---------------------------------------------------------------------------
+
+function findOpenclawBin() {
+  if (process.platform !== 'win32') {
+    const candidates = [
+      path.join(os.homedir(), '.local', 'bin', 'openclaw'),
+      '/opt/homebrew/bin/openclaw',
+      '/usr/local/bin/openclaw',
+      '/usr/bin/openclaw',
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+  }
+  return 'openclaw'; // fall back to PATH
+}
+
+const OPENCLAW_BIN = findOpenclawBin();
+
+// ---------------------------------------------------------------------------
+// Thread resolution — check hardcoded → persisted → auto-create
+// ---------------------------------------------------------------------------
+
+/** Returns a known thread ID without triggering creation, or null if unknown. */
+function _getExistingThreadId(projectName, workdir) {
+  // 1. Hardcoded project mapping (highest priority)
+  if (projectName && PROJECT_THREADS[projectName]) return PROJECT_THREADS[projectName];
+
+  // 2. Persisted project mapping
+  if (projectName && _store.projects[projectName]) return _store.projects[projectName].threadId;
+
+  // 3. Hardcoded workdir substring match
   if (workdir) {
     for (const [key, threadId] of Object.entries(WORKDIR_THREADS)) {
       if (workdir.includes(key)) return threadId;
     }
+    // 4. Persisted workdir mapping
+    for (const [key, data] of Object.entries(_store.workdirs)) {
+      if (workdir.includes(key)) return data.threadId;
+    }
   }
-  // Fallback to main thread
-  return DISCORD_CHANNEL;
+
+  return null;
 }
+
+/**
+ * In-flight creation promises — prevents duplicate thread creation when
+ * multiple notifications arrive for the same new project simultaneously.
+ */
+const _pendingThreads = new Map();
+
+/** Creates a new Discord thread and persists the mapping. Returns threadId or null on failure. */
+function _createThread(projectName) {
+  if (_pendingThreads.has(projectName)) return _pendingThreads.get(projectName);
+
+  const promise = new Promise((resolve) => {
+    execFile(OPENCLAW_BIN, [
+      'message', 'thread-create',
+      '--channel', 'discord',
+      '--target',  DISCORD_CHANNEL,
+      '--name',    `${projectName} Tasks`,
+      '--message', `Task notifications for ${projectName}`,
+    ], { timeout: 30000 }, (err, stdout) => {
+      _pendingThreads.delete(projectName);
+
+      if (err) {
+        console.error('[openclaw-notify] Thread creation failed for', projectName, ':', err.message);
+        resolve(null);
+        return;
+      }
+
+      // Parse thread ID — try JSON first, then a bare Snowflake (17-20 digit number)
+      let threadId = null;
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        threadId = String(parsed.id || parsed.threadId || parsed.thread_id || '');
+      } catch {
+        const m = stdout.match(/"?id"?\s*[=:]\s*"?(\d{17,20})"?/i) || stdout.match(/\b(\d{17,20})\b/);
+        if (m) threadId = m[1];
+      }
+
+      if (!threadId) {
+        console.error('[openclaw-notify] Could not parse thread ID from response:', stdout.trim().slice(0, 200));
+        resolve(null);
+        return;
+      }
+
+      // Persist and log
+      _store.projects[projectName] = { threadId, createdAt: new Date().toISOString() };
+      _saveThreads();
+      console.log(`[openclaw-notify] Auto-created Discord thread for "${projectName}": ${threadId}`);
+      resolve(threadId);
+    });
+  });
+
+  _pendingThreads.set(projectName, promise);
+  return promise;
+}
+
+/**
+ * Resolves the target thread ID for a notification.
+ * Auto-creates a thread if the project is unknown (async, non-blocking for caller).
+ */
+async function _resolveThreadId(projectName, workdir) {
+  const existing = _getExistingThreadId(projectName, workdir);
+  if (existing) return existing;
+
+  // Only auto-create when we have a named project to label the thread
+  if (projectName) {
+    const created = await _createThread(projectName);
+    if (created) return created;
+  }
+
+  return DISCORD_CHANNEL; // fallback — never lose a notification
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 function notify(text, projectName, workdir) {
   if (!NOTIFY_ENABLED) return;
-  const target = _getThreadId(projectName, workdir);
-  try {
-    execFile('openclaw', [
+
+  _resolveThreadId(projectName, workdir).then(target => {
+    execFile(OPENCLAW_BIN, [
       'message', 'send',
       '--channel', 'discord',
-      '--target', target,
-      '--message', text
+      '--target',  target,
+      '--message', text,
     ], { timeout: 30000 }, (err) => {
       if (err) console.error('[openclaw-notify] Failed:', err.message);
     });
-  } catch (e) {
+  }).catch(e => {
     console.error('[openclaw-notify] Error:', e.message);
-  }
+  });
 }
 
 function _projectTag(projectName) {

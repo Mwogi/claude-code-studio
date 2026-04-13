@@ -37,6 +37,40 @@ if (!process.env.WORKDIR) {
   process.env.WORKDIR = path.join(process.env.APP_DIR, 'workspace');
 }
 
+// Ensure ~/.local/bin/claude and ~/.local/bin/openclaw symlinks exist so the
+// systemd service (which runs without a login shell / nvm) can find both binaries.
+(function ensureLocalBinSymlinks() {
+  const localBin = path.join(os.homedir(), '.local', 'bin');
+  try { fs.mkdirSync(localBin, { recursive: true }); } catch {}
+
+  /** Try to locate a binary via `which`, return its real path or null. */
+  function whichBin(name) {
+    try {
+      const { execSync: _exec } = require('child_process');
+      return _exec(`which ${name} 2>/dev/null`, { encoding: 'utf8' }).trim() || null;
+    } catch { return null; }
+  }
+
+  for (const bin of ['claude', 'openclaw']) {
+    const symlink = path.join(localBin, bin);
+    if (fs.existsSync(symlink)) continue; // already there
+
+    const resolved = whichBin(bin);
+    if (!resolved) {
+      console.warn(`   [setup] '${bin}' not found in PATH — symlink skipped.`);
+      continue;
+    }
+
+    try {
+      fs.symlinkSync(resolved, symlink);
+      console.log(`   [setup] Created symlink: ${symlink} → ${resolved}`);
+    } catch (e) {
+      // Non-fatal: systemd service may still find the binary via PATH
+      console.warn(`   [setup] Could not create ${symlink} symlink: ${e.message}`);
+    }
+  }
+})();
+
 const pkg = require('../package.json');
 console.log(`\n🚀 Claude Code Chat v${pkg.version}`);
 console.log(`   Data dir : ${process.env.APP_DIR}`);
