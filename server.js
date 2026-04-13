@@ -275,7 +275,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'qa',
     skills: [],
     model: 'opus',
-    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\nExample: cat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\n// ... test code ...\nS\nnode /tmp/qa-test.mjs\n\n-  mcp__playwright__browser_navigate (NOT AVAILABLE — navigate to a URL\n- mcp__playwright__browser_click — click an element  \n- mcp__playwright__browser_type — type into an input\n- mcp__playwright__browser_screenshot — take a screenshot\n- mcp__playwright__browser_snapshot — get page accessibility tree\n- mcp__playwright__browser_wait — wait for elements\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Write a Playwright script that navigates to the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
+    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\nExample: cat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// ... test code ...\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Write a Playwright script that navigates to the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\n## SCREENSHOT RULES — FOCUSED SCREENSHOTS ONLY\nDo NOT screenshot login, OTP, sidebar navigation, or loading states.\nOnly screenshot what directly verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page, OTP screen, navigation steps, spinners\nAim for 2-5 focused screenshots per task. Save to test-screenshots/ with descriptive names.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
   },
   'edge-case-review': {
     label: '🔬 Edge Case Hunter',
@@ -2609,21 +2609,24 @@ If the dev task's changes are NOT committed (untracked/modified files from the f
 **Review task #${task.task_number}: ${task.title}**
 **QA Depth: ${qaDepth}/1** (max depth reached = no further QA cycles)
 
-### MANDATORY: Use Playwright MCP for ALL browser testing
-You have access to Playwright MCP tools. You MUST use them. The tools are prefixed with \`mcp__playwright__\`.
+### MANDATORY: Use Playwright via Bash scripts for ALL browser testing
+You MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available.
 
-**Available Playwright MCP tools (use these exact names):**
-- \`mcp__playwright__browser_navigate\` — navigate to a URL
-- \`mcp__playwright__browser_click\` — click an element
-- \`mcp__playwright__browser_type\` — type into an input
-- \`mcp__playwright__browser_screenshot\` — take a screenshot
-- \`mcp__playwright__browser_snapshot\` — get accessibility snapshot of page
-- \`mcp__playwright__browser_wait\` — wait for element/time
+Example pattern:
+\`\`\`
+cat > /tmp/qa-test.mjs << 'SCRIPT'
+import { chromium } from "playwright";
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+// ... test code ...
+await browser.close();
+SCRIPT
+node /tmp/qa-test.mjs
+\`\`\`
 
-**If you skip Playwright testing, the task will be considered FAILED.**
+**If you skip Playwright testing, the task will be FAILED by the server automatically.**
 
-Start by reading docs/testing-info.md for the correct URL and credentials, then navigate: \`mcp__playwright__browser_navigate\` with the URL from that file
-Then login with credentials from docs/testing-info.md (or use: Administrator / admin)
+Start by reading docs/testing-info.md for the correct test URL and credentials.
 
 ### What to verify
 Read the story file for acceptance criteria: \`${storyFile}\`
@@ -2631,17 +2634,29 @@ Read the story file for acceptance criteria: \`${storyFile}\`
 ### Files changed
 ${fileList}
 
+### Screenshot Rules — FOCUSED SCREENSHOTS ONLY
+**Do NOT screenshot login, OTP, or navigation steps.** These waste time and add no value.
+
+Only take screenshots that directly verify acceptance criteria:
+- ✅ The feature UI after it loads (the component/page being tested)
+- ✅ Test results or data displayed by the feature
+- ✅ Error states being verified
+- ✅ Before/after comparisons for visual changes
+- ❌ Login page, OTP screen, sidebar navigation, loading spinners
+- ❌ Generic homepage or dashboard unless that IS the feature
+
+Save screenshots to \`test-screenshots/\` with descriptive names prefixed by task number: \`task-${task.task_number}-feature-name.png\`
+
+Aim for 2-5 focused screenshots per QA task, not 10+ routine ones.
+
 ### Test steps
 1. Read docs/testing-info.md for the correct test URL and credentials
-1. Use \`mcp__playwright__browser_navigate\` to go to the URL from testing-info.md
-2. Login using Playwright tools (navigate to login, type credentials, click login)
+2. Write a Playwright script that logs in (no screenshot needed for login)
 3. Navigate to the relevant pages for this feature
-4. Test each acceptance criterion using Playwright interactions
-5. Take screenshots: \`mcp__playwright__browser_screenshot\`
-6. Check console for errors
-3. Test each acceptance criterion from the story file
-4. Check for regressions in related functionality
-5. Verify no console errors
+4. Test each acceptance criterion from the story file
+5. Take FOCUSED screenshots only for AC verification (see rules above)
+6. Check for console errors
+7. Check for regressions in related functionality
 
 ### Deliverable
 Produce \`docs/qa-report-task-${task.task_number}.md\` with:
