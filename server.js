@@ -1727,6 +1727,8 @@ async function startTask(task) {
           // 📝 Update story file and sprint status
           try { updateStoryOnCompletion(task, 'done', fullText); } catch (e) { log.warn(`[bmad-story] ${e.message}`); }
           try { updateSprintStatus(task.workdir || WORKDIR); } catch (e) { log.warn(`[bmad-sprint] ${e.message}`); }
+          // 🔗 Auto-chain: BMAD planning pipeline (domain-research → planning → solutioning → sprint-planning)
+          try { autoBmadPipelineChain(task); } catch (e) { log.warn(`[auto-pipeline] ${e.message}`); }
           // 🔗 Auto-chain: create-story → dev-story (server-enforced, not agent-dependent)
           try { autoChainCreateStoryToDev(task); } catch (e) { log.warn(`[auto-chain] ${e.message}`); }
           // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
@@ -2521,6 +2523,72 @@ const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec'
  * Instead of updating the same task (which would lose the create-story session), we create
  * a NEW dev-story task that references the story file, inheriting chain_id and workdir.
  */
+/**
+ * Auto-chain BMAD planning pipeline:
+ *   domain-research → planning (PRD) → solutioning (arch+epics) → sprint-planning
+ * Each step creates the next task automatically when it completes.
+ * The task description is forwarded so context carries through.
+ */
+function autoBmadPipelineChain(task) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  if (!wfMatch) return;
+  const currentWf = wfMatch[1];
+
+  // Define the pipeline sequence
+  const PIPELINE = {
+    'domain-research': { next: 'planning', model: 'opus', title: (t) => t.replace(/^Domain Research:?\s*/i, 'PRD: ').replace(/^PRD: PRD:/i, 'PRD:') },
+    'planning':        { next: 'solutioning', model: 'opus', title: (t) => t.replace(/^PRD:?\s*/i, 'Architecture & Epics: ') },
+    'solutioning':     { next: 'sprint-planning', model: 'opus', title: (t) => t.replace(/^Architecture & Epics:?\s*/i, 'Sprint Planning: ') },
+  };
+
+  const step = PIPELINE[currentWf];
+  if (!step) return;
+
+  const nextWf = step.next;
+  const nextTitle = step.title(task.title).substring(0, 200);
+
+  // Check for existing task with same workflow for this workdir (avoid duplicates)
+  const existing = db.prepare(
+    `SELECT id FROM tasks WHERE workdir=? AND notes LIKE ? AND status NOT IN ('cancelled','archived') LIMIT 1`
+  ).get(task.workdir, `%[bmad-workflow:${nextWf}]%`);
+  if (existing) {
+    log.info(`[auto-pipeline] ${nextWf} task already exists for workdir ${task.workdir}, skipping`);
+    return;
+  }
+
+  const id = genId();
+  const taskNum = stmts.nextTaskNumber.get(sqlVal(task.workdir) || '').next_num;
+  const nextDesc = (task.description || '').substring(0, 2000) +
+    `\n\n---\nAuto-chained from ${currentWf} task #${task.task_number || task.id}.`;
+
+  stmts.createTask.run(
+    id,
+    nextTitle,
+    nextDesc,
+    `[bmad-workflow:${nextWf}]`,
+    'bmad_workflow',        // status
+    sqlVal(task.sort_order) || 0,
+    null,                   // session_id
+    sqlVal(task.workdir) || null,
+    step.model,             // model
+    'auto',                 // mode
+    'single',               // agent_mode
+    100,                    // max_turns
+    null,                   // attachments
+    null,                   // depends_on
+    sqlVal(task.chain_id) || null,
+    null,                   // source_session_id
+    null,                   // scheduled_at
+    null,                   // recurrence
+    null,                   // recurrence_end_at
+    taskNum,
+    task.dep_group || null
+  );
+
+  log.info(`[auto-pipeline] ${currentWf} → ${nextWf}: created task ${id} ("${nextTitle}")`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
 function autoChainCreateStoryToDev(task) {
   const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
   if (!wfMatch || wfMatch[1] !== 'create-story') return;
