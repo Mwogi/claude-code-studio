@@ -147,6 +147,44 @@ curl -s -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks \
   }'
 ```
 
+### Dependency Groups (dep_group)
+
+For sprint-based parallel execution, use `dep_group` and `depends_on`:
+
+- **`dep_group`**: Groups a story's dev task with its auto-spawned QA and Fix tasks (e.g. `"S1.1"` for Epic 1, Story 1)
+- **`depends_on`**: JSON array of dependencies using `"group:S1.1"` syntax — waits for ALL tasks in that group to complete
+- Auto-chained QA and Fix tasks **inherit `dep_group`** from their parent automatically
+- Tasks without `depends_on` run in parallel; tasks with group deps wait for the full group (dev+QA+fix) to finish
+
+```json
+// Story 1.1 — no dependencies, runs immediately
+{
+  "title": "User Authentication",
+  "dep_group": "S1.1",
+  "chain_id": "epic-1",
+  "sort_order": 1
+}
+
+// Story 1.2 — depends on story 1.1 completing (including QA/fixes)
+{
+  "title": "Account Management",
+  "dep_group": "S1.2",
+  "depends_on": "[\"group:S1.1\"]",
+  "chain_id": "epic-1",
+  "sort_order": 2
+}
+
+// Story 2.1 — independent epic, runs in parallel with epic 1
+{
+  "title": "Dashboard Layout",
+  "dep_group": "S2.1",
+  "chain_id": "epic-2",
+  "sort_order": 1
+}
+```
+
+**Cascade behavior:** If a group dependency fails (task cancelled/failed), dependent tasks are also cancelled.
+
 ## Task API Reference
 
 | Method | Endpoint | Description |
@@ -177,6 +215,8 @@ curl -s -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks \
 | `chain_id` | string | null | Chain identifier for task sequencing |
 | `sort_order` | number | 0 | Order within chain |
 | `after` | string | null | Dependency task ID (auto-sets chain) |
+| `dep_group` | string | null | Dependency group ID (e.g. "S1.1"). Groups a dev task with its auto-spawned QA and Fix tasks. |
+| `depends_on` | string (JSON) | null | JSON array of dependencies. Use `"group:S1.1"` to wait for all tasks in a dep_group. |
 
 ## OpenClaw Agent Configuration
 
@@ -190,6 +230,7 @@ In your OpenClaw workspace, add this to `TOOLS.md` so the agent knows how to rou
 - **API:** `POST /api/tasks` to create kanban cards
 - **BMAD Workflows:** Use `notes: "[bmad-workflow:<type>]"` + `status: "bmad_workflow"`
 - **Chaining:** Use `chain_id` + `sort_order` + `after`
+- **Parallel deps:** Use `dep_group` + `depends_on` with `"group:S1.1"` syntax
 
 ### ⚠️ CRITICAL RULE
 ALL coding/BMAD tasks MUST go through Claude Studio's API — NEVER run Claude Code CLI directly.
