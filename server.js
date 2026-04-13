@@ -1706,7 +1706,8 @@ async function startTask(task) {
           } else {
           // 🎭 Server-enforced Playwright check: QA tasks MUST have used browser tools
           const _isQaTask = (task.title || '').startsWith('QA:') || ((task.notes || '').includes('[bmad-workflow:playwright-qa]'));
-          if (_isQaTask && fullText) {
+          const _isBackendQa = (task.notes || '').includes('[bmad-workflow:backend-qa]');
+          if (_isQaTask && !_isBackendQa && fullText) {
             const usedPlaywright = /playwright|chromium\.launch|browser\.newPage|page\.goto|page\.screenshot/i.test(fullText);
             if (!usedPlaywright) {
               // QA task didn't use Playwright — FAIL it, don't mark as done
@@ -2596,8 +2597,73 @@ function autoCreateQATask(task, fullText) {
   const slug = slugify(task.title);
   const storyFile = `_bmad-output/implementation-artifacts/story-${task.task_number || 0}-${slug}.md`;
   
+  // Detect backend-only vs frontend tasks based on files changed in output
+  const _isBackendOnly = (() => {
+    const output = fullText || '';
+    // Check for frontend file extensions in the changed files
+    const hasFrontendFiles = /\.(vue|tsx?|jsx?|css|scss|svelte|html)\b/i.test(
+      (output.match(/files?\s*(?:changed|modified|created|updated)[:\s]*([^\n]+)/gi) || []).join(' ')
+    );
+    // Also check git diff output for frontend files
+    const hasFrontendDiff = /\+\+\+.*\.(vue|tsx?|jsx?|css|scss|svelte|html)/i.test(output);
+    // If only .py files mentioned, it's backend-only
+    const hasOnlyPython = /\.(py)\b/i.test(output) && !hasFrontendFiles && !hasFrontendDiff;
+    return hasOnlyPython;
+  })();
+
   const qaTitle = `QA: ${task.title.substring(0, 80)}`;
-  const qaDesc = `## QA Report Task — DO NOT MODIFY CODE
+  const qaWorkflow = _isBackendOnly ? '[bmad-workflow:backend-qa]' : '[bmad-workflow:playwright-qa]';
+  
+  const qaDesc = _isBackendOnly ? `## Backend QA Report — DO NOT MODIFY CODE
+
+### PRE-CHECK: Verify code is committed
+Before testing, run \`git status\` and \`git log --oneline -3\` in the project directory.
+If the dev task's changes are NOT committed (untracked/modified files from the feature), FAIL the task immediately with:
+- Finding: "Code not committed — changes exist only as uncommitted files"
+- Severity: P0
+
+**Review task #${task.task_number}: ${task.title}**
+
+### This is a BACKEND-ONLY task — no Playwright browser testing required
+Focus on:
+1. **Unit test coverage** — run \`bench run-tests\` for the affected modules
+2. **Acceptance criteria verification** — use \`bench execute\` or \`bench console\` to verify each AC
+3. **Regression testing** — ensure existing tests still pass
+4. **Code review** — verify the implementation matches the story requirements
+
+Start by reading docs/testing-info.md for backend test configuration.
+
+### What to verify
+Read the story file for acceptance criteria: \`${storyFile}\`
+
+### Files changed
+${fileList}
+
+### Test steps
+1. Read docs/testing-info.md for backend test configuration
+2. Run \`bench run-tests\` for affected modules — ALL must pass
+3. Use \`bench execute\` or \`bench console\` to verify each acceptance criterion with real data
+4. Check for regressions in related test suites
+5. Verify the implementation handles edge cases
+
+### Deliverable
+Produce \`docs/qa-report-task-${task.task_number}.md\` with:
+- Each AC: PASS/FAIL with evidence (test output, bench execute results)
+- Unit test results (total pass/fail counts)
+- Regression test results
+- Severity ratings (P0-P3) for any failures
+
+### Creating fix tasks (HANDLED AUTOMATICALLY BY SERVER)
+If you find P0 or P1 failures, clearly document them in your QA report with:
+1. **Severity level** (P0/P1) clearly labeled in headings
+2. **Exact file paths + line numbers** for every issue
+3. **Before/after code snippets** showing exactly what to change
+4. **Verification command** for each fix
+
+The server will automatically create a fix task from your QA report when P0/P1 issues are detected.
+
+**CRITICAL: Clearly label P0/P1 issues in your report. Do NOT mark ALL PASS if there are P0/P1 issues.**`
+  : `## QA Report Task — DO NOT MODIFY CODE
 
 ### PRE-CHECK: Verify code is committed
 Before testing, run \`git status\` and \`git log --oneline -3\` in the project directory.
@@ -2678,7 +2744,7 @@ You do NOT need to create fix tasks via curl anymore — just write a thorough Q
 **CRITICAL: Clearly label P0/P1 issues in your report. Do NOT mark ALL PASS if there are P0/P1 issues.**`;
 
   stmts.createTask.run(
-    qaId, qaTitle, qaDesc, '[bmad-workflow:playwright-qa]', 'bmad_workflow', 
+    qaId, qaTitle, qaDesc, qaWorkflow, 'bmad_workflow', 
     (task.sort_order || 0) + 1,
     null, workdir, 'opus',
     'auto', 'single', 80,
