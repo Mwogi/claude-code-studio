@@ -2028,8 +2028,9 @@ function showMoveMenu(btn,fromStatus,colTasks){
   const allCols=[{id:'backlog'},{id:'bmad_workflow'},{id:'todo'},{id:'in_progress'},{id:'done_review'},{id:'done'},{id:'cancelled'},{id:'archived'}];
   for(const c of allCols){
     if(c.id===fromStatus)continue;
+    const destCount=tasks.filter(tk=>tk.status===c.id).length;
     const b=document.createElement('button');
-    b.textContent=(t('col.'+c.id)||c.id)+` (${colTasks.length})`;
+    b.textContent=(t('col.'+c.id)||c.id)+(destCount>0?` (${destCount})`:'')+` ← ${colTasks.length}`;
     b.onclick=async()=>{
       closeMoveMenu();
       try{
