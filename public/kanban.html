@@ -254,6 +254,12 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .col{ flex-shrink:0; width:268px; display:flex; flex-direction:column; max-height:100%; }
 .col-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:8px; border-radius:var(--r-md); background:var(--s2); border:1px solid var(--border); }
 .col-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.col-move-btn{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:4px; opacity:0; transition:opacity .15s; }
+.col-head:hover .col-move-btn{ opacity:.7; }
+.col-move-btn:hover{ opacity:1!important; background:var(--abg); color:var(--text); }
+.col-move-menu{ position:absolute; right:0; top:100%; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:4px 0; z-index:100; min-width:160px; box-shadow:0 4px 12px rgba(0,0,0,.3); }
+.col-move-menu button{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--text); padding:6px 12px; font-size:12px; cursor:pointer; }
+.col-move-menu button:hover{ background:var(--abg); }
 .col-title{ font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.6px; flex:1; color:var(--muted); }
 .col-cnt{ background:var(--s3); color:var(--muted); font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
 .col-body{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; padding:2px; min-height:80px; border-radius:var(--r-md); transition:background .12s; }
@@ -1898,15 +1904,19 @@ function makeColumn(col,colTasks){
   else if(col.review) headClass+=' review-col';
   else if(col.archive) headClass+=' archive-col';
   const hd=document.createElement('div');hd.className=headClass;
-  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
+  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>${colTasks.length>0?'<button class="col-move-btn" title="Move all tasks">⋮</button>':''}`;
   // Archive column: click header to toggle collapse/expand
   if(col.archive){
     hd.title=t('col.archived')+' — click to expand/collapse';
-    hd.onclick=()=>{
+    hd.onclick=(e)=>{
+      if(e.target.classList.contains('col-move-btn'))return;
       el.classList.toggle('expanded');
       localStorage.setItem('archive_col_expanded', el.classList.contains('expanded')?'1':'0');
     };
   }
+  // Move All button
+  const moveBtn=hd.querySelector('.col-move-btn');
+  if(moveBtn)moveBtn.onclick=(e)=>{e.stopPropagation();showMoveMenu(moveBtn,col.id,colTasks);};
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
   setupDropZone(body);
@@ -2004,6 +2014,38 @@ setInterval(()=>{
     el.title='Running for '+label;
   });
 }, 5000);
+
+// ─── Bulk Move All ───────────────────────────────────────────────────────
+let activeColMenu=null;
+function closeMoveMenu(){if(activeColMenu){activeColMenu.remove();activeColMenu=null;}}
+document.addEventListener('click',()=>closeMoveMenu());
+
+function showMoveMenu(btn,fromStatus,colTasks){
+  closeMoveMenu();
+  if(colTasks.length===0){toast('No tasks to move');return;}
+  const menu=document.createElement('div');menu.className='col-move-menu';
+  menu.onclick=e=>e.stopPropagation();
+  const allCols=[{id:'backlog'},{id:'bmad_workflow'},{id:'todo'},{id:'in_progress'},{id:'done_review'},{id:'done'},{id:'cancelled'},{id:'archived'}];
+  for(const c of allCols){
+    if(c.id===fromStatus)continue;
+    const b=document.createElement('button');
+    b.textContent=(t('col.'+c.id)||c.id)+` (${colTasks.length})`;
+    b.onclick=async()=>{
+      closeMoveMenu();
+      try{
+        const r=await apiFetch('/api/tasks/bulk-move',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({from_status:fromStatus,to_status:c.id,workdir:curWorkdir||undefined})});
+        const d=await r.json();
+        toast(`Moved ${d.moved} tasks → ${t('col.'+c.id)||c.id}`);
+        await refresh(true);
+      }catch(e){toast('Error: '+e.message,true);}
+    };
+    menu.appendChild(b);
+  }
+  btn.parentElement.style.position='relative';
+  btn.parentElement.appendChild(menu);
+  activeColMenu=menu;
+}
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){

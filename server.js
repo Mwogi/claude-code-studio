@@ -5195,6 +5195,25 @@ app.delete('/api/tasks/:id', (req, res) => {
 });
 
 // ─── Task 16: Extended REST API for external card creation ───────────────────
+// POST /api/tasks/bulk-move — move all tasks from one status to another
+app.post('/api/tasks/bulk-move', express.json(), (req, res) => {
+  const { from_status, to_status, workdir } = req.body;
+  if (!from_status || !to_status) return res.status(400).json({ error: 'from_status and to_status required' });
+  if (from_status === to_status) return res.status(400).json({ error: 'from_status and to_status must differ' });
+  const wd = workdir || null;
+  let result;
+  if (wd) {
+    result = db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE status=? AND workdir=?`).run(to_status, from_status, wd);
+  } else {
+    result = db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE status=?`).run(to_status, from_status);
+  }
+  log.info(`[bulk-move] Moved ${result.changes} tasks from ${from_status} → ${to_status}${wd ? ` (workdir=${wd})` : ''}`);
+  // Trigger queue if moving to todo
+  if (to_status === 'todo') setImmediate(processQueue);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  res.json({ moved: result.changes });
+});
+
 // PATCH /api/tasks/:id — partial update (only provide fields you want to change)
 app.patch('/api/tasks/:id', express.json(), (req, res) => {
   const task = stmts.getTask.get(req.params.id);
