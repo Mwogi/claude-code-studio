@@ -5139,7 +5139,8 @@ app.put('/api/tasks/:id', (req, res) => {
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
           max_turns=task.max_turns||30, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
-          scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at } = req.body;
+          scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
+          dep_group=task.dep_group } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -5159,6 +5160,7 @@ app.put('/api/tasks/:id', (req, res) => {
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments) || null,
     sqlVal(depends_on) || null, sqlVal(chain_id) || null, sqlVal(source_session_id) || null,
     sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
+    sqlVal(dep_group) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
