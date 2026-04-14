@@ -5208,6 +5208,19 @@ app.post('/api/tasks/bulk-move', express.json(), (req, res) => {
     result = db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE status=?`).run(to_status, from_status);
   }
   log.info(`[bulk-move] Moved ${result.changes} tasks from ${from_status} → ${to_status}${wd ? ` (workdir=${wd})` : ''}`);
+  // Clean up screenshots when bulk-moving to done/archived
+  if (['done', 'archived'].includes(to_status) && wd) {
+    try {
+      const screenshotDirs = [path.join(wd, 'test-screenshots'), path.join(wd, 'docs', 'screenshots')];
+      let deleted = 0;
+      for (const dir of screenshotDirs) {
+        if (!fs.existsSync(dir)) continue;
+        const files = fs.readdirSync(dir).filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
+        for (const f of files) { fs.unlinkSync(path.join(dir, f)); deleted++; }
+      }
+      if (deleted > 0) log.info(`[bulk-move] Cleaned up ${deleted} screenshots in ${wd}`);
+    } catch (e) { log.warn('[bulk-move] screenshot cleanup error', { error: e.message }); }
+  }
   // Trigger queue if moving to todo
   if (to_status === 'todo') setImmediate(processQueue);
   wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
