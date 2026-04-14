@@ -2237,7 +2237,8 @@ function processQueue() {
             // Support group dependencies: "group:S1.1" means all tasks with dep_group="S1.1" must be done
             if (typeof depId === 'string' && depId.startsWith('group:')) {
               const groupName = depId.slice(6);
-              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=?`).all(groupName);
+              // Exclude self from group check to prevent deadlock (task in its own dep_group)
+              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
               if (groupTasks.length === 0) return true; // no tasks in group yet — treat as satisfied
               return groupTasks.every(gt => ['done', 'done_review', 'archived'].includes(gt.status));
             }
@@ -2250,7 +2251,8 @@ function processQueue() {
           const hasFailedGroup = deps.some(depId => {
             if (typeof depId === 'string' && depId.startsWith('group:')) {
               const groupName = depId.slice(6);
-              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=?`).all(groupName);
+              // Exclude self from group check
+              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
               return groupTasks.some(gt => gt.status === 'cancelled');
             }
             return false;
@@ -2916,7 +2918,7 @@ ${qaReportContent ? qaReportContent.substring(0, 4000) : fixContext}
     (task.sort_order || 0) + 1,
     null, workdir, 'sonnet',
     'auto', 'single', 60,
-    null, null, task.chain_id || null, null,
+    null, null, null, null,  // Fix tasks: no chain_id (prevents deadlock with chain sort order)
     null, null, null, fixTaskNum, task.dep_group || null
   );
   
