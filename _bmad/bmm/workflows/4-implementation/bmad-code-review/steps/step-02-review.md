@@ -35,6 +35,16 @@ failed_layers: '' # set at runtime: comma-separated list of layers that failed o
 
 5. Collect all findings from the completed layers.
 
+6. **Frappe Backend Lint** (if any `.py` files appear in the diff):
+   - Run `python3 {project-root}/_bmad/bmm/tools/frappe_api_lint.py` on each changed `.py` file
+   - Any HIGH severity findings are auto-promoted to the final report as **Critical** findings
+   - These catch silent-failure bugs (wrong field names, wrong API signatures, None docnames) that pass all tests but break in production
+   - If the tool is not available, manually inspect all `get_cached_value`, `get_value`, and `set_value` calls for:
+     - Dict used as second arg to `get_cached_value` (must be string docname)
+     - Field names that don't exist on the target doctype
+     - Missing null checks before using fetched values in `set_value`
+     - Linked record chains (e.g. Patient → Customer) where only one side is updated
+
 
 ## NEXT
 

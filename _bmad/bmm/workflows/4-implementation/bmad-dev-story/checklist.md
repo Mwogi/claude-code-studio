@@ -47,6 +47,14 @@ validation-rules:
 - [ ] **Code Quality:** Linting and static checks pass when configured in project
 - [ ] **Test Framework Compliance:** Tests use project's testing frameworks and patterns from Dev Notes
 
+## 🔍 Frappe Backend Validation (when Python files are modified)
+
+- [ ] **Frappe API Lint:** Run `python3 {project-root}/_bmad/bmm/tools/frappe_api_lint.py` on all changed .py files — ZERO HIGH severity issues
+- [ ] **Field Name Verification:** Every `get_cached_value` / `get_value` / `set_value` field reference verified against doctype definition
+- [ ] **API Signature Check:** No `get_cached_value(DocType, {dict}, field)` — second arg must be string docname, not filters
+- [ ] **Null Guard Check:** Every value fetched via `get_cached_value` / `get_value` that is used in a subsequent `set_value` has a null/existence check
+- [ ] **Integration Trace:** For any function that updates linked records (e.g. Patient → Customer), verify the FULL chain is tested — not just the direct record but downstream linked records too
+
 ## 📝 Documentation & Tracking
 
 - [ ] **File List Complete:** File List includes EVERY new, modified, or deleted file (paths relative to repo root)

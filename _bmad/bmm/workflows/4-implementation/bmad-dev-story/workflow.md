@@ -303,9 +303,13 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
     <action>Run all existing tests to ensure no regressions</action>
     <action>Run the new tests to verify implementation correctness</action>
     <action>Run linting and code quality checks if configured in project</action>
+    <action>If any Python files were modified, run Frappe API lint: python3 {project-root}/_bmad/bmm/tools/frappe_api_lint.py on each changed .py file</action>
+    <action>If Frappe API lint reports HIGH severity issues, STOP and fix them before proceeding — these are silent data bugs that bypass normal testing</action>
+    <action>For any function that updates linked records (e.g. Patient → Customer → Price List), verify the FULL chain by checking downstream records actually changed — not just the direct target</action>
     <action>Validate implementation meets ALL story acceptance criteria; enforce quantitative thresholds explicitly</action>
     <action if="regression tests fail">STOP and fix before continuing - identify breaking changes immediately</action>
     <action if="new tests fail">STOP and fix before continuing - ensure implementation correctness</action>
+    <action if="Frappe API lint has HIGH issues">STOP and fix — these are silent-failure bugs that will pass all tests but break in production</action>
   </step>
 
   <step n="8" goal="Validate and mark task complete ONLY when fully done">
