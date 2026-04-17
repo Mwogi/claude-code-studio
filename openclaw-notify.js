@@ -11,6 +11,7 @@ const os   = require('os');
 
 const NOTIFY_ENABLED   = process.env.OPENCLAW_NOTIFY !== 'false';
 const DISCORD_CHANNEL  = process.env.OPENCLAW_NOTIFY_CHANNEL || '1479520243385765888';
+const DISCORD_PARENT_CHANNEL = process.env.OPENCLAW_THREAD_PARENT_CHANNEL || '1475490143635767468'; // Parent text channel for creating threads
 
 // Persistent storage for auto-created thread mappings
 const DATA_DIR     = process.env.APP_DIR ? path.join(process.env.APP_DIR, 'data') : path.join(__dirname, 'data');
@@ -132,48 +133,152 @@ function _getExistingThreadId(projectName, workdir) {
 const _pendingThreads = new Map();
 
 /** Creates a new Discord thread and persists the mapping. Returns threadId or null on failure. */
+function _getDiscordToken() {
+  // Read from OpenClaw config
+  try {
+    const home = os.homedir();
+    const cfgPath = path.join(home, '.openclaw', 'openclaw.json');
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      const token = cfg?.channels?.discord?.token;
+      if (token) return token;
+    }
+  } catch (e) {
+    console.error('[openclaw-notify] Failed to read Discord token from openclaw.json:', e.message);
+  }
+  return process.env.DISCORD_BOT_TOKEN || null;
+}
+
 function _createThread(projectName) {
   if (_pendingThreads.has(projectName)) return _pendingThreads.get(projectName);
 
-  const promise = new Promise((resolve) => {
-    execFile(OPENCLAW_BIN, [
-      'message', 'thread-create',
-      '--channel', 'discord',
-      '--target',  DISCORD_CHANNEL,
-      '--name',    `${projectName} Tasks`,
-      '--message', `Task notifications for ${projectName}`,
-    ], { timeout: 30000 }, (err, stdout) => {
-      _pendingThreads.delete(projectName);
-
-      if (err) {
-        console.error('[openclaw-notify] Thread creation failed for', projectName, ':', err.message);
-        resolve(null);
-        return;
+  const promise = (async () => {
+    try {
+      const token = _getDiscordToken();
+      if (!token) {
+        console.error('[openclaw-notify] No Discord bot token available for thread creation');
+        return null;
       }
 
-      // Parse thread ID — try JSON first, then a bare Snowflake (17-20 digit number)
-      let threadId = null;
-      try {
-        const parsed = JSON.parse(stdout.trim());
-        threadId = String(parsed.id || parsed.threadId || parsed.thread_id || '');
-      } catch {
-        const m = stdout.match(/"?id"?\s*[=:]\s*"?(\d{17,20})"?/i) || stdout.match(/\b(\d{17,20})\b/);
-        if (m) threadId = m[1];
-      }
+      const https = require('https');
+      const threadName = `${projectName} Tasks`;
 
+      // First send a message to the channel, then create a thread from it
+      const msgPayload = JSON.stringify({
+        content: `📋 Task notifications for **${projectName}**`
+      });
+
+      // Step 1: Send a message
+      const msgResponse = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'discord.com',
+          path: `/api/v10/channels/${DISCORD_PARENT_CHANNEL}/messages`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Bot ${token}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(msgPayload)
+          }
+        }, (res) => {
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(JSON.parse(body));
+            } else {
+              reject(new Error(`Discord API ${res.statusCode}: ${body.slice(0, 200)}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.write(msgPayload);
+        req.end();
+      });
+
+      // Step 2: Create a public thread from the message
+      const threadPayload = JSON.stringify({
+        name: threadName,
+        auto_archive_duration: 10080 // 7 days
+      });
+
+      const threadResponse = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'discord.com',
+          path: `/api/v10/channels/${msgResponse.id}/messages/${msgResponse.id}/threads`,
+          method: 'POST',
+          headers: {
+            'Authorization': `Bot ${token}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(threadPayload)
+          }
+        }, (res) => {
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(JSON.parse(body));
+            } else {
+              // If thread-from-message fails, try creating a standalone thread
+              reject(new Error(`Discord API ${res.statusCode}: ${body.slice(0, 200)}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.write(threadPayload);
+        req.end();
+      }).catch(async () => {
+        // Fallback: create a standalone public thread in the channel
+        const standalonePayload = JSON.stringify({
+          name: threadName,
+          auto_archive_duration: 10080,
+          type: 11, // PUBLIC_THREAD
+          message: { content: `📋 Task notifications for **${projectName}**` }
+        });
+        return new Promise((resolve, reject) => {
+          const req = https.request({
+            hostname: 'discord.com',
+            path: `/api/v10/channels/${DISCORD_PARENT_CHANNEL}/threads`,
+            method: 'POST',
+            headers: {
+              'Authorization': `Bot ${token}`,
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(standalonePayload)
+            }
+          }, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                resolve(JSON.parse(body));
+              } else {
+                reject(new Error(`Discord thread API ${res.statusCode}: ${body.slice(0, 200)}`));
+              }
+            });
+          });
+          req.on('error', reject);
+          req.write(standalonePayload);
+          req.end();
+        });
+      });
+
+      const threadId = threadResponse.id;
       if (!threadId) {
-        console.error('[openclaw-notify] Could not parse thread ID from response:', stdout.trim().slice(0, 200));
-        resolve(null);
-        return;
+        console.error('[openclaw-notify] No thread ID in response');
+        return null;
       }
 
-      // Persist and log
+      // Persist
       _store.projects[projectName] = { threadId, createdAt: new Date().toISOString() };
       _saveThreads();
       console.log(`[openclaw-notify] Auto-created Discord thread for "${projectName}": ${threadId}`);
-      resolve(threadId);
-    });
-  });
+      return threadId;
+    } catch (e) {
+      console.error('[openclaw-notify] Thread creation failed for', projectName, ':', e.message);
+      return null;
+    } finally {
+      _pendingThreads.delete(projectName);
+    }
+  })();
 
   _pendingThreads.set(projectName, promise);
   return promise;
