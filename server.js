@@ -3653,16 +3653,11 @@ const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are runnin
 - End with a clear summary of what was done, what was fixed, and any caveats.
 - NEVER git add or commit screenshots, test images, or any files from test-screenshots/. They are gitignored.
 
-QA REQUIREMENT: Every implementation/dev task (quick-dev, dev-story, quick-spec with code changes) MUST have a separate QA task chained after it. When you complete an implementation task:
-1. Create a NEW task via the API (POST /api/tasks) with title "QA: [original task title]"
-2. Set the workflow to a QA workflow: notes should be "[bmad-workflow:adversarial-review]" or "[bmad-workflow:code-review]"
-3. Set it as the next task in the chain (same chain_id, sort_order = current + 1) OR use the "after" field pointing to the current task ID
-4. The QA task description MUST include: what to test, expected behavior, test steps, files changed, and the requirement to use Playwright browser testing
-5. QA tasks produce a REPORT ONLY — they do NOT fix code. They document all findings (bugs, regressions, issues) in a structured report
-6. After the QA task, chain a SEPARATE fix/dev task (quick-dev) that addresses the QA findings
-7. Flow: Dev Task → QA Task (report) → Fix Task (implement fixes) → QA Task (verify fixes)
-8. Playwright browser testing is MANDATORY for QA tasks — login, navigate, interact, screenshot, verify console
-9. QA tasks run on Opus model for thorough independent review (different model than dev tasks)`;
+QA NOTE: QA tasks are auto-created server-side when a dev task (quick-dev, dev-story, quick-spec) completes. You do NOT need to create the QA task yourself — the server will spawn it with an adversarial-review workflow on Opus. Just complete your implementation cleanly and exit. If you see references in this task description to "create a QA task", they are outdated — ignore them.
+
+FLOW: Dev Task → (server auto-creates) QA Task → (server auto-creates if P0/P1 findings) Fix Task → (server auto-creates) QA Task again
+
+IF you are a QA task (title starts with "QA:"): Playwright browser testing is MANDATORY. Write a report, do NOT modify source code. If you find P0/P1 issues, the server will auto-create a fix task from your report — you do NOT need to POST /api/tasks.`;
 
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
