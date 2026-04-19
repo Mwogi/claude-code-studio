@@ -52,6 +52,17 @@ const BMAD_PHASE_MODEL_MAP = {
   'bmad_qa': 'opus',
 };
 
+// Per-phase thinking effort level (adaptive thinking on Opus 4.7 / Sonnet 4.6+).
+// xhigh = Opus 4.7 only (between high and max). Falls back to high on Opus 4.6 / Sonnet.
+// Coding and QA phases get xhigh because they benefit most from deeper reasoning.
+const BMAD_PHASE_EFFORT_MAP = {
+  'bmad_brainstorm':     'high',
+  'bmad_prd':            'high',
+  'bmad_architecture':   'xhigh',  // architecture benefits from deep reasoning
+  'bmad_implementation': 'xhigh',  // all coding uses xhigh effort
+  'bmad_qa':             'xhigh',  // QA analysis + test writing
+};
+
 const BMAD_WORKFLOWS = {
   analysis: {
     label: '🔍 Analysis → Product Brief',
@@ -151,6 +162,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'architect',
     skills: ['bmad-master'],
     model: 'opus',
+    effort: 'xhigh',
     prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-spec workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-spec/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
   },
   'quick-dev': {
@@ -158,6 +170,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'developer',
     skills: ['bmad-master'],
     model: 'opus',
+    effort: 'xhigh',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
   },
@@ -166,6 +179,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'developer',
     skills: ['bmad-quick-dev-new-preview'],
     model: 'opus',
+    effort: 'xhigh',
     maxTurns: 100,
     prompt: (title, workdir) => `Read the bmad-quick-dev-new-preview skill from ${workdir}/.claude/skills/bmad-quick-dev-new-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the user request using the new preview quick-dev workflow. Read the task description for the requirement.`
   },
@@ -174,6 +188,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'developer',
     skills: ['bmad-quick-flow-solo-dev'],
     model: 'opus',
+    effort: 'xhigh',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/quick-flow-solo-dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
   },
@@ -189,6 +204,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'qa',
     skills: ['bmad-master'],
     model: 'sonnet',
+    effort: 'xhigh',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/qa.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the QA E2E test generation workflow from ${workdir}/_bmad/bmm/workflows/qa-generate-e2e-tests/\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate end-to-end automated tests for existing features.`
   },
   shard: {
@@ -210,6 +226,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'developer',
     skills: ['bmad-master'],
     model: 'opus',
+    effort: 'xhigh',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/code-review/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
   },
   'correct-course': {
@@ -224,6 +241,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'product-manager',
     skills: ['bmad-master'],
     model: 'opus',
+    effort: 'xhigh',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
   },
   'dev-story': {
@@ -231,6 +249,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'developer',
     skills: ['bmad-master'],
     model: 'opus',
+    effort: 'xhigh',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story workflow and checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
   },
@@ -275,6 +294,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'qa',
     skills: [],
     model: 'opus',
+    effort: 'xhigh',
     prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\nExample: cat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// ... test code ...\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Write a Playwright script that navigates to the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\n## SCREENSHOT RULES — FOCUSED SCREENSHOTS ONLY\nDo NOT screenshot login, OTP, sidebar navigation, or loading states.\nOnly screenshot what directly verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page, OTP screen, navigation steps, spinners\nAim for 2-5 focused screenshots per task. Save to test-screenshots/ with descriptive names.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
   },
   'edge-case-review': {
@@ -1555,7 +1575,14 @@ async function startTask(task) {
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
+      // Resolve effort level: workflow-specific > phase map > global default (high).
+      // xhigh is Opus 4.7 only; falls back to high on other models.
+      const _bmadPhaseTag = (task.notes || '').match(/\[bmad-phase:(\w+)\]/);
+      const _effortFromWorkflow = task._bmadWorkflow?.effort;
+      const _effortFromPhase = _bmadPhaseTag && BMAD_PHASE_EFFORT_MAP[_bmadPhaseTag[1]];
+      const _resolvedEffort = _effortFromWorkflow || _effortFromPhase || undefined;
       const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
+      if (_resolvedEffort) _sendOpts.effort = _resolvedEffort;
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
       // MCP servers: disabled for --print mode (Claude CLI ignores --mcp-config in --print mode).
       // QA browser testing uses Playwright via Bash scripts instead.
@@ -2569,7 +2596,8 @@ function autoBmadPipelineChain(task) {
   const PIPELINE = {
     'domain-research': { next: 'planning', model: 'opus', title: (t) => t.replace(/^Domain Research:?\s*/i, 'PRD: ').replace(/^PRD: PRD:/i, 'PRD:') },
     'planning':        { next: 'solutioning', model: 'opus', title: (t) => t.replace(/^PRD:?\s*/i, 'Architecture & Epics: ') },
-    'solutioning':     { next: 'sprint-planning', model: 'opus', title: (t) => t.replace(/^Architecture & Epics:?\s*/i, 'Sprint Planning: ') },
+    'solutioning':     { next: 'sprint-planning', model: 'opus',
+    effort: 'xhigh', title: (t) => t.replace(/^Architecture & Epics:?\s*/i, 'Sprint Planning: ') },
   };
 
   const step = PIPELINE[currentWf];

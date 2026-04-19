@@ -132,7 +132,7 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, abortController }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, abortController, effort }) {
     const args = ['--print'];
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
@@ -148,10 +148,9 @@ class ClaudeCLI {
 
     // --effort controls adaptive thinking budget on Opus 4.7 / Sonnet 4.6+.
     // Valid levels: low, medium, high, xhigh (Opus 4.7 only), max.
-    // Default 'high' — docs say "Claude almost always thinks" at this level.
-    // Override via CLAUDE_EFFORT env var (e.g. 'low' for simple chat, 'xhigh'
-    // for complex implementation tasks, 'max' for research).
-    args.push('--effort', process.env.CLAUDE_EFFORT || 'high');
+    // Resolution: explicit param > CLAUDE_EFFORT env > 'high' default.
+    // Docs recommend 'high' as default; 'xhigh' used for coding/implementation.
+    args.push('--effort', effort || process.env.CLAUDE_EFFORT || 'high');
     // Don't pass --system-prompt when resuming a session — the system prompt is
     // already baked into the session history. Changing it invalidates cryptographic
     // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
