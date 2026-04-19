@@ -1385,7 +1385,10 @@ async function startTask(task) {
         if (phaseLabel && !task.title.toLowerCase().startsWith(phaseLabel.toLowerCase())) {
           // Only prepend if not already prefixed (e.g. by auto-pipeline)
           const hasAnyPrefix = Object.values(WORKFLOW_TO_LABEL).some(l => task.title.toLowerCase().startsWith(l.toLowerCase() + ':') || task.title.toLowerCase().startsWith(l.toLowerCase() + ' —'));
-          if (!hasAnyPrefix) {
+          // Don't mangle auto-generated Fix:/QA: tasks — they have special semantics
+          // for the QA/Fix depth guards in autoCreateQATask and autoCreateFixFromQA
+          const isAutoGenTask = /^(Fix:|QA:|🧪)/.test(task.title);
+          if (!hasAnyPrefix && !isAutoGenTask) {
             const newTitle = `${phaseLabel}: ${task.title}`.substring(0, 200);
             db.prepare(`UPDATE tasks SET title=?, updated_at=datetime('now') WHERE id=?`).run(newTitle, task.id);
             task.title = newTitle;
@@ -2705,7 +2708,9 @@ function autoCreateQATask(task, fullText) {
   
   // Depth limit: Fix tasks get ONE QA pass max. Check task lineage via description.
   // Fix tasks (depth=1) get QA. QA on fix tasks (depth=2) does NOT spawn more fixes.
-  const isFixTask = task.title.startsWith('Fix:') || task.title.startsWith('Fix ');
+  // Robust detection: any 'Fix:' or 'Fix ' segment anywhere in the title indicates a fix task
+  // (handles cases where title was enhanced with workflow prefix like 'Quick Dev: Fix: ...')
+  const isFixTask = /\bFix:\s|\bFix\s/.test(task.title);
   const qaDepth = isFixTask ? 2 : 1;
   
   // Depth 2 = this is already a fix-of-a-fix scenario. Stop here.
@@ -2894,8 +2899,10 @@ function autoCreateFixFromQA(task, fullText) {
   if (!task.title.startsWith('QA:') && !task.title.startsWith('🧪')) return;
   
   // Don't create fixes for QA-on-fix tasks (depth limit)
+  // Robust detection: any 'Fix:' or 'Fix ' segment anywhere in the rest of the title
+  // (handles titles like 'QA: Quick Dev: Fix: ...' where workflow prefix was added)
   const parentTitle = task.title.replace(/^QA:\s*/, '').replace(/^🧪\s*/, '');
-  if (parentTitle.startsWith('Fix:') || parentTitle.startsWith('Fix ')) return;
+  if (/\bFix:\s|\bFix\s/.test(parentTitle)) return;
   
   const output = fullText || '';
   
