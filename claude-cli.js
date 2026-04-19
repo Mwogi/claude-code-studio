@@ -143,16 +143,15 @@ class ClaudeCLI {
       console.warn('[claude-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
     }
 
-    // NOTE: for Bedrock Opus 4.7 we pass the model via the ANTHROPIC_MODEL
-    // env var instead of --model flag. The --model flag path sets legacy
-    // `thinking.type.enabled` which Opus 4.7 rejects; the env-var path uses
-    // the new adaptive thinking format expected by Bedrock. See env setup below.
-    const resolvedModel = model ? (MODEL_MAP[model] || model) : null;
+    if (model) args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
 
-    // --effort controls adaptive thinking budget (low|medium|high|max).
-    // Default medium matches Bedrock output_config.effort requirements.
-    args.push('--effort', process.env.CLAUDE_EFFORT || 'medium');
+    // --effort controls adaptive thinking budget on Opus 4.7 / Sonnet 4.6+.
+    // Valid levels: low, medium, high, xhigh (Opus 4.7 only), max.
+    // Default 'high' — docs say "Claude almost always thinks" at this level.
+    // Override via CLAUDE_EFFORT env var (e.g. 'low' for simple chat, 'xhigh'
+    // for complex implementation tasks, 'max' for research).
+    args.push('--effort', process.env.CLAUDE_EFFORT || 'high');
     // Don't pass --system-prompt when resuming a session — the system prompt is
     // already baked into the session history. Changing it invalidates cryptographic
     // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
@@ -228,21 +227,19 @@ class ClaudeCLI {
     delete env.ANTHROPIC_API_KEY;
 
     // Route Claude Code CLI through AWS Bedrock for all model calls.
-    // This gives us access to Opus 4.7 (not yet on the Max subscription) and
+    // Gives us access to Opus 4.7 (not yet on the Max subscription alias) and
     // ensures consistent model routing with OpenClaw's main session.
     // AWS credentials resolve from the standard chain (~/.aws/credentials, IAM
-    // role, env vars). Set CLAUDE_CODE_DISABLE_BEDROCK=1 to opt out.
+    // role, env vars, or ~/.claude/settings.json env block).
+    // Set CLAUDE_CODE_DISABLE_BEDROCK=1 to opt out.
+    //
+    // IMPORTANT: Requires Claude Code CLI >= 2.1.114 for proper Opus 4.7
+    // adaptive-thinking support. Older versions (<= 2.1.96) send legacy
+    // `thinking.type.enabled` which Opus 4.7 rejects with a 400 error.
     if (process.env.CLAUDE_CODE_DISABLE_BEDROCK !== '1') {
       env.CLAUDE_CODE_USE_BEDROCK = '1';
       env.AWS_REGION = BEDROCK_REGION;
       if (!env.AWS_DEFAULT_REGION) env.AWS_DEFAULT_REGION = BEDROCK_REGION;
-      // Pass model via env var (not --model flag) so the CLI uses the new
-      // adaptive thinking format. The --model flag path forces legacy
-      // thinking.type.enabled which Opus 4.7 rejects.
-      if (resolvedModel) env.ANTHROPIC_MODEL = resolvedModel;
-    } else if (resolvedModel) {
-      // Non-Bedrock fallback: pass model via flag (original behavior).
-      args.push('--model', resolvedModel);
     }
 
     // On Windows .cmd/.bat files require cmd.exe (shell:true) to execute.
