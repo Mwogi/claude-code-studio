@@ -48,7 +48,7 @@ const BMAD_PHASE_MODEL_MAP = {
   'bmad_brainstorm': 'opus',
   'bmad_prd': 'opus',
   'bmad_architecture': 'opus',
-  'bmad_implementation': 'sonnet',
+  'bmad_implementation': 'opus',
   'bmad_qa': 'opus',
 };
 
@@ -150,14 +150,14 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     label: '⚡ Quick Spec',
     agent: 'architect',
     skills: ['bmad-master'],
-    model: 'sonnet',
+    model: 'opus',
     prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-spec workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-spec/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
   },
   'quick-dev': {
     label: '⚡ Quick Dev',
     agent: 'developer',
     skills: ['bmad-master'],
-    model: 'sonnet',
+    model: 'opus',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
   },
@@ -165,7 +165,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     label: '🚀 Quick Dev (New Preview)',
     agent: 'developer',
     skills: ['bmad-quick-dev-new-preview'],
-    model: 'sonnet',
+    model: 'opus',
     maxTurns: 100,
     prompt: (title, workdir) => `Read the bmad-quick-dev-new-preview skill from ${workdir}/.claude/skills/bmad-quick-dev-new-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the user request using the new preview quick-dev workflow. Read the task description for the requirement.`
   },
@@ -173,7 +173,7 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     label: '🎯 Quick Flow Solo Dev',
     agent: 'developer',
     skills: ['bmad-quick-flow-solo-dev'],
-    model: 'sonnet',
+    model: 'opus',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/quick-flow-solo-dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
   },
@@ -223,14 +223,14 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     label: '📝 Create Story',
     agent: 'product-manager',
     skills: ['bmad-master'],
-    model: 'sonnet',
+    model: 'opus',
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
   },
   'dev-story': {
     label: '💻 Dev Story (Implement)',
     agent: 'developer',
     skills: ['bmad-master'],
-    model: 'sonnet',
+    model: 'opus',
     maxTurns: 100,
     prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story workflow and checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
   },
@@ -1343,6 +1343,35 @@ async function startTask(task) {
           'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
         };
         const phase = WORKFLOW_TO_PHASE[wfType] || 'bmad_implementation';
+        // Auto-enhance title with BMAD phase label for kanban readability
+        const WORKFLOW_TO_LABEL = {
+          'domain-research': 'Domain Research', 'market-research': 'Market Research',
+          'technical-research': 'Technical Research', 'analysis': 'Analysis',
+          'brainstorming': 'Brainstorming', 'product-brief-preview': 'Product Brief',
+          'planning': 'PRD', 'edit-prd': 'Edit PRD', 'validate-prd': 'Validate PRD',
+          'ux-design': 'UX Design', 'solutioning': 'Architecture & Epics',
+          'readiness-check': 'Readiness Check', 'sprint-planning': 'Sprint Planning',
+          'create-story': 'Story', 'dev-story': 'Dev',
+          'code-review': 'Code Review', 'e2e-tests': 'QA Tests',
+          'playwright-qa': 'QA', 'quick-dev': 'Quick Dev', 'quick-spec': 'Quick Spec',
+          'quick-dev-new-preview': 'Quick Dev', 'quick-flow-solo-dev': 'Solo Dev',
+          'retrospective': 'Retro', 'correct-course': 'Course Correction',
+          'sprint-status': 'Sprint Status', 'generate-context': 'Gen Context',
+          'document-project': 'Docs', 'adversarial-review': 'Adversarial Review',
+          'edge-case-review': 'Edge Case Review', 'distillator': 'Distill',
+          'advanced-elicitation': 'Elicitation',
+        };
+        const phaseLabel = WORKFLOW_TO_LABEL[wfType];
+        if (phaseLabel && !task.title.toLowerCase().startsWith(phaseLabel.toLowerCase())) {
+          // Only prepend if not already prefixed (e.g. by auto-pipeline)
+          const hasAnyPrefix = Object.values(WORKFLOW_TO_LABEL).some(l => task.title.toLowerCase().startsWith(l.toLowerCase() + ':') || task.title.toLowerCase().startsWith(l.toLowerCase() + ' —'));
+          if (!hasAnyPrefix) {
+            const newTitle = `${phaseLabel}: ${task.title}`.substring(0, 200);
+            db.prepare(`UPDATE tasks SET title=?, updated_at=datetime('now') WHERE id=?`).run(newTitle, task.id);
+            task.title = newTitle;
+            log.info(`[taskWorker] Enhanced title: "${newTitle}"`);
+          }
+        }
         log.info(`[taskWorker] Setting BMAD phase: ${task.id} ("${task.title}") workflow=${wfType} → status=${phase}`);
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
         // Notify kanban immediately so the card moves to the correct column
