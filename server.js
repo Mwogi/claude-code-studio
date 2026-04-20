@@ -1382,16 +1382,18 @@ async function startTask(task) {
       db.prepare(`UPDATE sessions SET model=?, updated_at=datetime('now') WHERE id=?`).run(task.model, task.session_id);
     }
   }
-  // Override model and skills based on BMAD workflow tag
+  // Override model and skills based on BMAD workflow tag.
+  // NOTE: we deliberately skip copying wf.model onto task.model here. The runtime
+  // config (Settings dialog) is the source of truth for per-phase model/effort;
+  // see the resolver in the auto-continue loop below (_modelFromPhase wins).
+  // wf.model/wf.effort remain available via task._bmadWorkflow for workflows that
+  // genuinely require a specific model (none do currently).
   const bmadWorkflowTagMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
   if (bmadWorkflowTagMatch && BMAD_WORKFLOWS[bmadWorkflowTagMatch[1]]) {
     const wf = BMAD_WORKFLOWS[bmadWorkflowTagMatch[1]];
-    task.model = wf.model;
+    // task.model = wf.model;  // DISABLED: phase config wins over workflow defaults
     task._bmadWorkflow = wf;
     task._bmadWorkflowType = bmadWorkflowTagMatch[1];
-    if (task.session_id) {
-      db.prepare(`UPDATE sessions SET model=?, updated_at=datetime('now') WHERE id=?`).run(task.model, task.session_id);
-    }
   }
   try {
     // Create session + link task + mark in_progress — all atomic
@@ -1646,19 +1648,49 @@ async function startTask(task) {
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
-      // Resolve effort level: workflow-specific > phase map > global default (high).
-      // xhigh is Opus 4.7 only; falls back to high on other models.
-      // Phase map is now RUNTIME-CONFIGURABLE via the Settings dialog (GET/PUT /api/config/bmad).
+      // Resolve effort level: runtime phase config > workflow default > undefined.
+      // Live config (Settings dialog) wins over workflow hardcoded values so changes
+      // take effect immediately on subsequent dispatches.
       const _liveBmadCfg = getBmadConfig();
       const _bmadPhaseTag = (task.notes || '').match(/\[bmad-phase:(\w+)\]/);
-      const _effortFromWorkflow = task._bmadWorkflow?.effort;
-      const _effortFromPhase = _bmadPhaseTag && _liveBmadCfg.efforts[_bmadPhaseTag[1]];
-      const _resolvedEffort = _effortFromWorkflow || _effortFromPhase || undefined;
-      // Resolve model: session override > task model > phase-based model > workflow default
-      const _modelFromPhase = _bmadPhaseTag && _liveBmadCfg.models[_bmadPhaseTag[1]];
-      const _resolvedModel = session?.model || task.model || _modelFromPhase || 'sonnet';
+      // Derive phase from workflow type if no explicit phase tag (most BMAD tasks)
+      const _phaseFromWorkflow = task._bmadWorkflowType ? ({
+        'create-story': 'bmad_implementation', 'dev-story': 'bmad_implementation',
+        'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
+        'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
+        'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'playwright-qa': 'bmad_qa',
+        'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+        'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
+        'sprint-planning': 'bmad_architecture',
+        'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
+        'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
+        'domain-research': 'bmad_brainstorm', 'market-research': 'bmad_brainstorm',
+        'technical-research': 'bmad_brainstorm', 'product-brief-preview': 'bmad_brainstorm',
+      })[task._bmadWorkflowType] : null;
+      const _phaseKey = (_bmadPhaseTag && _bmadPhaseTag[1]) || _phaseFromWorkflow;
+      const _resolvedEffort = (_phaseKey && _liveBmadCfg.efforts[_phaseKey])
+        || task._bmadWorkflow?.effort
+        || undefined;
+      // Resolve model: runtime phase config > task model > session model > workflow default > sonnet
+      const _resolvedModel = (_phaseKey && _liveBmadCfg.models[_phaseKey])
+        || task.model
+        || session?.model
+        || task._bmadWorkflow?.model
+        || 'sonnet';
       const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: _resolvedModel, maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
       if (_resolvedEffort) _sendOpts.effort = _resolvedEffort;
+
+      // Sync session.model + task.model to the resolved model so the kanban UI shows
+      // the actual model being used (not a stale value from when the session/task was
+      // originally created under different settings).
+      try {
+        if (sessionId && session && session.model !== _resolvedModel) {
+          db.prepare(`UPDATE sessions SET model=? WHERE id=?`).run(_resolvedModel, sessionId);
+        }
+        if (task.model !== _resolvedModel) {
+          db.prepare(`UPDATE tasks SET model=? WHERE id=?`).run(_resolvedModel, task.id);
+        }
+      } catch (e) { /* non-fatal */ }
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
       // MCP servers: disabled for --print mode (Claude CLI ignores --mcp-config in --print mode).
       // QA browser testing uses Playwright via Bash scripts instead.
