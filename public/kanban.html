@@ -1337,6 +1337,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <span id="userInfoBadge" style="font-size:12px;color:var(--muted);margin-right:6px"></span>
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
+    <button class="hb" onclick="openBmadConfig()" id="bmadConfigBtn" title="BMAD Settings (model/effort/Playwright)">⚙️</button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
     <a class="hb" href="https://github.com/Mwogi/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
@@ -1411,6 +1412,23 @@ textarea.inp{ resize:vertical; min-height:80px; }
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- BMAD Config modal -->
+<div class="ov hidden" id="bmadCfgOv" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">⚙️ BMAD Configuration</span>
+      <button class="modal-close" onclick="$i('bmadCfgOv').classList.add('hidden')">×</button>
+    </div>
+    <div class="modal-body" id="bmadCfgBody" style="gap:8px;max-height:70vh;overflow-y:auto"></div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost btn-sm" onclick="resetBmadConfig()">Reset to defaults</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" onclick="$i('bmadCfgOv').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveBmadConfig()">Save</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
@@ -2744,6 +2762,117 @@ function confirmDelete(id){
   $i('confirmOv').classList.remove('hidden');
 }
 function closeConfirm(){$i('confirmOv').classList.add('hidden');}
+
+// ─── BMAD Settings Dialog ──────────────────────────────────────────────
+async function openBmadConfig() {
+  const ov = $i('bmadCfgOv');
+  if (!ov) return;
+  ov.classList.remove('hidden');
+  // Fetch current + defaults
+  try {
+    const r = await apiFetch('/api/config/bmad');
+    const d = await r.json();
+    const cfg = d.config;
+    const PHASES = [
+      ['bmad_brainstorm', '🧠 Brainstorm'],
+      ['bmad_prd',        '📋 PRD'],
+      ['bmad_architecture','🏗️ Architecture'],
+      ['bmad_implementation','💻 Implementation'],
+      ['bmad_qa',         '🧪 QA'],
+    ];
+    const MODELS = ['haiku', 'sonnet', 'opus'];
+    const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+    const rows = PHASES.map(([id, label]) => `
+      <tr>
+        <td style="padding:8px;color:var(--fg);font-size:13px">${label}</td>
+        <td style="padding:8px">
+          <select id="cfg_model_${id}" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--fg);font-size:12px;width:100%">
+            ${MODELS.map(m => `<option value="${m}" ${cfg.models[id]===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </td>
+        <td style="padding:8px">
+          <select id="cfg_effort_${id}" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--fg);font-size:12px;width:100%">
+            ${EFFORTS.map(e => `<option value="${e}" ${cfg.efforts[id]===e?'selected':''}>${e}</option>`).join('')}
+          </select>
+        </td>
+      </tr>`).join('');
+    $i('bmadCfgBody').innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+        Configure per-phase model and thinking effort. Higher effort (xhigh, max) gives better quality but is slower and more expensive. 
+        <strong>xhigh</strong> is Opus 4.7 only — other models fall back to high.
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Phase</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Model</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Effort</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">🎭 Playwright Enforcement</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="cfg_pw_impl" ${cfg.playwright.enforceForImplementation?'checked':''}>
+          Require Playwright on frontend dev/implementation tasks
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);cursor:pointer">
+          <input type="checkbox" id="cfg_pw_qa" ${cfg.playwright.enforceForQA?'checked':''}>
+          Require Playwright on QA tasks
+        </label>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4">
+          When enabled, tasks that touch frontend files must run real Playwright browser tests. curl / HTTP 200 / "MCP not available" are rejected and the task is requeued.
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    $i('bmadCfgBody').innerHTML = `<div style="color:var(--red);padding:20px">Failed to load config: ${escH(e.message)}</div>`;
+  }
+}
+
+async function saveBmadConfig() {
+  const PHASES = ['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
+  const body = { models: {}, efforts: {}, playwright: {} };
+  for (const p of PHASES) {
+    body.models[p]  = $i('cfg_model_'+p)?.value;
+    body.efforts[p] = $i('cfg_effort_'+p)?.value;
+  }
+  body.playwright.enforceForImplementation = $i('cfg_pw_impl')?.checked;
+  body.playwright.enforceForQA             = $i('cfg_pw_qa')?.checked;
+  try {
+    const r = await apiFetch('/api/config/bmad', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + d.error, true); return; }
+    toast('✓ BMAD config saved');
+    $i('bmadCfgOv').classList.add('hidden');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+async function resetBmadConfig() {
+  if (!confirm('Reset all BMAD config to defaults?')) return;
+  try {
+    // Re-fetch to get defaults
+    const r = await apiFetch('/api/config/bmad');
+    const d = await r.json();
+    const body = { models: d.defaults.models, efforts: d.defaults.efforts, playwright: d.defaults.playwright };
+    await apiFetch('/api/config/bmad', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    toast('✓ Reset to defaults');
+    openBmadConfig(); // reload the dialog
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  }
+}
 function closeModal(){if(window._chatRefreshTimer)clearInterval(window._chatRefreshTimer);if(window._kanbanWs){try{window._kanbanWs.close();}catch{}window._kanbanWs=null;}$i('taskOv').classList.add('hidden');}
 
 document.addEventListener('keydown',e=>{

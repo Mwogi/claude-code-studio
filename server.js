@@ -44,6 +44,31 @@ const openclawNotify = require('./openclaw-notify');
 // Reads LOG_LEVEL + NODE_ENV from process.env (already populated from .env above).
 // Production: emits newline-delimited JSON for log aggregators (Loki, Datadog, etc.)
 // Development: human-readable output with icons.
+// ---- Runtime-editable BMAD config (persisted in DB) -----------------------
+// These constants define the DEFAULTS. Actual runtime values come from the
+// `studio_config` table via getBmadConfig() below. Users can override them via
+// the Settings dialog on the kanban (GET/PUT /api/config/bmad).
+const BMAD_CONFIG_DEFAULTS = {
+  models: {
+    bmad_brainstorm:     'opus',
+    bmad_prd:            'opus',
+    bmad_architecture:   'opus',
+    bmad_implementation: 'opus',
+    bmad_qa:             'opus',
+  },
+  efforts: {
+    bmad_brainstorm:     'high',
+    bmad_prd:            'high',
+    bmad_architecture:   'xhigh',
+    bmad_implementation: 'xhigh',
+    bmad_qa:             'xhigh',
+  },
+  playwright: {
+    enforceForImplementation: true,  // require Playwright on frontend dev-story/quick-dev tasks
+    enforceForQA:             true,  // require Playwright on QA tasks
+  },
+};
+
 const BMAD_PHASE_MODEL_MAP = {
   'bmad_brainstorm': 'opus',
   'bmad_prd': 'opus',
@@ -729,6 +754,45 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_shared_docs_project ON shared_docs(project_id);
 `);
+
+// Studio-wide runtime config (key/value JSON store).
+// Used by BMAD config dialog for per-phase model/effort/Playwright settings.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS studio_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// ---- BMAD runtime config helpers ----
+function getBmadConfig() {
+  try {
+    const row = db.prepare(`SELECT value FROM studio_config WHERE key='bmad_config'`).get();
+    if (!row) return JSON.parse(JSON.stringify(BMAD_CONFIG_DEFAULTS));
+    const stored = JSON.parse(row.value);
+    // Deep-merge with defaults so new keys auto-appear
+    return {
+      models:     { ...BMAD_CONFIG_DEFAULTS.models,     ...(stored.models || {}) },
+      efforts:    { ...BMAD_CONFIG_DEFAULTS.efforts,    ...(stored.efforts || {}) },
+      playwright: { ...BMAD_CONFIG_DEFAULTS.playwright, ...(stored.playwright || {}) },
+    };
+  } catch (e) {
+    log.warn('getBmadConfig: failed to read/parse, returning defaults', { err: e.message });
+    return JSON.parse(JSON.stringify(BMAD_CONFIG_DEFAULTS));
+  }
+}
+
+function setBmadConfig(cfg) {
+  const merged = {
+    models:     { ...BMAD_CONFIG_DEFAULTS.models,     ...(cfg.models || {}) },
+    efforts:    { ...BMAD_CONFIG_DEFAULTS.efforts,    ...(cfg.efforts || {}) },
+    playwright: { ...BMAD_CONFIG_DEFAULTS.playwright, ...(cfg.playwright || {}) },
+  };
+  db.prepare(`INSERT OR REPLACE INTO studio_config (key, value, updated_at) VALUES ('bmad_config', ?, datetime('now'))`)
+    .run(JSON.stringify(merged));
+  return merged;
+}
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -1584,11 +1648,16 @@ async function startTask(task) {
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
       // Resolve effort level: workflow-specific > phase map > global default (high).
       // xhigh is Opus 4.7 only; falls back to high on other models.
+      // Phase map is now RUNTIME-CONFIGURABLE via the Settings dialog (GET/PUT /api/config/bmad).
+      const _liveBmadCfg = getBmadConfig();
       const _bmadPhaseTag = (task.notes || '').match(/\[bmad-phase:(\w+)\]/);
       const _effortFromWorkflow = task._bmadWorkflow?.effort;
-      const _effortFromPhase = _bmadPhaseTag && BMAD_PHASE_EFFORT_MAP[_bmadPhaseTag[1]];
+      const _effortFromPhase = _bmadPhaseTag && _liveBmadCfg.efforts[_bmadPhaseTag[1]];
       const _resolvedEffort = _effortFromWorkflow || _effortFromPhase || undefined;
-      const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
+      // Resolve model: session override > task model > phase-based model > workflow default
+      const _modelFromPhase = _bmadPhaseTag && _liveBmadCfg.models[_bmadPhaseTag[1]];
+      const _resolvedModel = session?.model || task.model || _modelFromPhase || 'sonnet';
+      const _sendOpts = { prompt: currentTaskPrompt, sessionId: currentTaskCid, model: _resolvedModel, maxTurns: effectiveTaskMaxTurns, abortController: taskAbort };
       if (_resolvedEffort) _sendOpts.effort = _resolvedEffort;
       if (taskSystemPrompt) _sendOpts.systemPrompt = taskSystemPrompt;
       // MCP servers: disabled for --print mode (Claude CLI ignores --mcp-config in --print mode).
@@ -1807,8 +1876,12 @@ async function startTask(task) {
           // Playwright browser testing.
           const _hasEvasion = /mcp.*not.*available|playwright.*mcp.*not|fallback.*curl|as\s+(?:a\s+)?fallback.*curl|using\s+curl.*instead|curl.*instead.*of.*playwright|http\s+200.*instead/i.test(fullText || '');
 
-          // Enforce for: (a) QA tasks (existing behavior) OR (b) impl tasks with frontend file changes
-          const _mustVerifyBrowser = (_isQaTask && !_isBackendQa) || (_isImplWorkflow && _touchedFrontend);
+          // Enforce for: (a) QA tasks (existing behavior) OR (b) impl tasks with frontend file changes.
+          // Both enforcement flags are runtime-configurable via the Settings dialog.
+          const _bmadCfgLive = getBmadConfig();
+          const _enforceQA = _bmadCfgLive.playwright.enforceForQA !== false;
+          const _enforceImpl = _bmadCfgLive.playwright.enforceForImplementation !== false;
+          const _mustVerifyBrowser = (_isQaTask && !_isBackendQa && _enforceQA) || (_isImplWorkflow && _touchedFrontend && _enforceImpl);
           if (_mustVerifyBrowser && fullText && (!_usedPlaywright || _hasEvasion)) {
             const _reason = _hasEvasion
               ? 'QA_PLAYWRIGHT_EVASION: Task attempted to bypass Playwright (curl fallback / MCP-not-available excuse). Real browser testing is mandatory.'
@@ -4890,6 +4963,47 @@ app.get('/chat', (_,res) => res.sendFile(path.join(__dirname,'public','index.htm
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Language ─────────────────────────────────────────────────────────────────
+// ---- BMAD runtime config (Settings dialog) ----
+app.get('/api/config/bmad', (req, res) => {
+  try {
+    res.json({ ok: true, config: getBmadConfig(), defaults: BMAD_CONFIG_DEFAULTS });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.put('/api/config/bmad', (req, res) => {
+  try {
+    const body = req.body || {};
+    // Basic validation
+    const VALID_MODELS = ['opus','sonnet','haiku'];
+    const VALID_EFFORTS = ['low','medium','high','xhigh','max'];
+    const VALID_PHASES = Object.keys(BMAD_CONFIG_DEFAULTS.models);
+    if (body.models) {
+      for (const [phase, model] of Object.entries(body.models)) {
+        if (!VALID_PHASES.includes(phase)) return res.status(400).json({ ok: false, error: `invalid phase: ${phase}` });
+        if (!VALID_MODELS.includes(model)) return res.status(400).json({ ok: false, error: `invalid model: ${model}` });
+      }
+    }
+    if (body.efforts) {
+      for (const [phase, effort] of Object.entries(body.efforts)) {
+        if (!VALID_PHASES.includes(phase)) return res.status(400).json({ ok: false, error: `invalid phase: ${phase}` });
+        if (!VALID_EFFORTS.includes(effort)) return res.status(400).json({ ok: false, error: `invalid effort: ${effort}` });
+      }
+    }
+    if (body.playwright) {
+      for (const key of Object.keys(body.playwright)) {
+        if (!['enforceForImplementation','enforceForQA'].includes(key)) return res.status(400).json({ ok: false, error: `invalid playwright key: ${key}` });
+      }
+    }
+    const saved = setBmadConfig(body);
+    log.info('BMAD config updated', saved);
+    res.json({ ok: true, config: saved });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/lang', (req, res) => {
   const c = loadConfig();
   res.json({ lang: c.lang || 'en' });
