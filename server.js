@@ -1521,7 +1521,11 @@ async function startTask(task) {
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
-    let fullText = '', newCid = claudeSessionId, hasError = false;
+      let fullText = '', newCid = claudeSessionId, hasError = false;
+      // Capture bash command bodies so the Playwright enforcement can see scripts
+      // the agent wrote via `cat > file.mjs <<SCRIPT ... SCRIPT` heredocs.
+      // These don't appear in fullText (which is only natural-language assistant text).
+      let toolCommandBodies = '';
     taskBuffers.set(task.id, '');
     // Notify watchers — use task_retrying for restarts, task_started for first run
     // Include prompt so client can show user message bubble during live streaming
@@ -1608,6 +1612,12 @@ async function startTask(task) {
           })
           .onTool((name, inp) => {
             try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (inp || '').substring(0, 500), name, null, null, null); } catch {}
+            // Capture Bash/Read/Write tool inputs so Playwright enforcement can see
+            // scripts written via heredoc (cat > file <<SCRIPT ...). These don't
+            // show up in fullText which only contains natural-language text.
+            if (name === 'Bash' || name === 'Write' || name === 'Edit') {
+              toolCommandBodies += '\n' + String(inp || '').slice(0, 20000);
+            }
             if (name !== 'ask_user' && name !== 'notify_user' && name !== 'set_ui_state') {
               broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
             }
@@ -1777,18 +1787,24 @@ async function startTask(task) {
           const _isImplWorkflow = ['dev-story', 'quick-dev', 'quick-dev-new-preview', 'quick-flow-solo-dev', 'quick-spec', 'code-review'].includes(_wfTypeNow);
 
           // Strict Playwright-execution regex: require TWO distinct evidence markers
-          // (just mentioning "playwright" in text is not enough; we need real execution)
-          const _playwrightExec = fullText ? (
-            /chromium\.launch\s*\(/.test(fullText) +
-            /browser\.newPage\s*\(/.test(fullText) +
-            /page\.goto\s*\(/.test(fullText) +
-            /page\.screenshot\s*\(/.test(fullText) +
-            /from\s+['"]playwright['"]/.test(fullText) +
-            /require\s*\(\s*['"]playwright['"]\s*\)/.test(fullText)
+          // across BOTH fullText AND tool call bodies (Bash/Write commands). Agents
+          // typically write Playwright scripts via `cat > file.mjs <<SCRIPT` heredocs
+          // which live in tool call inputs, not in natural-language output.
+          const _scanText = (fullText || '') + '\n' + (toolCommandBodies || '');
+          const _playwrightExec = _scanText ? (
+            /chromium\.launch\s*\(/.test(_scanText) +
+            /browser\.newPage\s*\(/.test(_scanText) +
+            /page\.goto\s*\(/.test(_scanText) +
+            /page\.screenshot\s*\(/.test(_scanText) +
+            /from\s+['"]playwright['"]/.test(_scanText) +
+            /require\s*\(\s*['"]playwright['"]\s*\)/.test(_scanText)
           ) : 0;
           const _usedPlaywright = _playwrightExec >= 2;
 
-          // Evasion markers: these indicate the agent tried to sidestep Playwright
+          // Evasion markers: these indicate the agent tried to sidestep Playwright.
+          // Only check fullText (natural-language output) — tool command bodies may
+          // legitimately contain the word 'curl' for real API testing alongside
+          // Playwright browser testing.
           const _hasEvasion = /mcp.*not.*available|playwright.*mcp.*not|fallback.*curl|as\s+(?:a\s+)?fallback.*curl|using\s+curl.*instead|curl.*instead.*of.*playwright|http\s+200.*instead/i.test(fullText || '');
 
           // Enforce for: (a) QA tasks (existing behavior) OR (b) impl tasks with frontend file changes
@@ -1797,7 +1813,7 @@ async function startTask(task) {
             const _reason = _hasEvasion
               ? 'QA_PLAYWRIGHT_EVASION: Task attempted to bypass Playwright (curl fallback / MCP-not-available excuse). Real browser testing is mandatory.'
               : 'QA_NO_PLAYWRIGHT: Real Playwright execution not detected (need chromium.launch + page.goto + page.screenshot). curl / HTTP checks are not acceptable.';
-            log.warn(`[taskWorker] task ${task.id} ("${task.title}") FAILED Playwright enforcement: evasion=${_hasEvasion} execMarkers=${_playwrightExec}`);
+            log.warn(`[taskWorker] task ${task.id} ("${task.title}") FAILED Playwright enforcement: evasion=${_hasEvasion} execMarkers=${_playwrightExec} fullTextLen=${(fullText||'').length} toolBodiesLen=${toolCommandBodies.length}`);
             db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(_reason, task.id);
             wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
