@@ -2015,8 +2015,10 @@ function makeCard(tk){
       ${schedBadge}${wfBadge}${chainBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
-        <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
-        <button class="cbtn" title="${t('modal.delete')}" onclick="event.stopPropagation();confirmDelete('${tk.id}')">✕</button>
+        <button class="cbtn" title="Edit" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
+        <button class="cbtn" title="Move to another column" onclick="event.stopPropagation();openMoveMenu(event,'${tk.id}')">→</button>
+        <button class="cbtn" title="Restart task (re-queue with current settings)" onclick="event.stopPropagation();confirmRestart('${tk.id}')">↻</button>
+        <button class="cbtn" title="Cancel task" onclick="event.stopPropagation();confirmCancel('${tk.id}')">⏹</button>
       </span>
     </div>`;
   el.onclick=()=>openEditModal(tk.id);
@@ -2227,7 +2229,8 @@ async function openEditModal(id){
   $i('modalBody').innerHTML=buildForm(tk);
   setTimeout(()=>{renderAttPreviews();renderNotesTags(tk.notes||'',$i('fWorkflow')?.value||'');},0);
   $i('modalFt').innerHTML=`
-    <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
+    <button class="btn btn-ghost btn-sm" onclick="confirmCancel('${id}');closeModal()" title="Cancel task and kill worker">⏹ Cancel task</button>
+    <button class="btn btn-ghost btn-sm" onclick="confirmRestart('${id}');closeModal()" title="Re-queue with current settings">↻ Restart</button>
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
@@ -2760,6 +2763,100 @@ async function saveTask(){
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────
+// Restart / Cancel / Move actions
+async function confirmRestart(id) {
+  const tk = tasks.find(x => x.id === id);
+  if (!tk) return;
+  const active = ['bmad_implementation', 'bmad_qa', 'in_progress', 'bmad_brainstorm', 'bmad_prd', 'bmad_architecture'].includes(tk.status);
+  const msg = active
+    ? `Restart «${tk.title}»?\n\nThis will KILL the running worker and re-queue the task with current BMAD settings.`
+    : `Restart «${tk.title}»?\n\nThis re-queues it with current BMAD settings.`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch(`/api/tasks/${id}/restart`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { toast('Restart failed: ' + (d.error || 'unknown'), true); return; }
+    toast(d.killed ? '↻ Killed worker and re-queued' : '↻ Re-queued');
+    await refresh(true);
+  } catch (e) {
+    if (e.message !== '401') toast('Error: ' + e.message, true);
+  }
+}
+
+async function confirmCancel(id) {
+  const tk = tasks.find(x => x.id === id);
+  if (!tk) return;
+  const active = ['bmad_implementation', 'bmad_qa', 'in_progress', 'bmad_brainstorm', 'bmad_prd', 'bmad_architecture'].includes(tk.status);
+  const msg = active
+    ? `Cancel «${tk.title}»?\n\nThe running worker will be killed. Artifacts (commits, screenshots) will be preserved.`
+    : `Cancel «${tk.title}»?`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch(`/api/tasks/${id}/cancel`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { toast('Cancel failed: ' + (d.error || 'unknown'), true); return; }
+    toast(d.killed ? '⏹ Killed worker and cancelled' : '⏹ Cancelled');
+    await refresh(true);
+  } catch (e) {
+    if (e.message !== '401') toast('Error: ' + e.message, true);
+  }
+}
+
+function openMoveMenu(evt, id) {
+  const tk = tasks.find(x => x.id === id);
+  if (!tk) return;
+  const TARGETS = [
+    { col: 'backlog',              label: '📋 Backlog' },
+    { col: 'bmad_workflow',        label: '📥 BMAD Queue' },
+    { col: 'bmad_brainstorm',      label: '🧠 Brainstorm' },
+    { col: 'bmad_prd',             label: '📋 PRD' },
+    { col: 'bmad_architecture',    label: '🏗️ Architecture' },
+    { col: 'bmad_implementation',  label: '💻 Implementation' },
+    { col: 'bmad_qa',              label: '🧪 QA' },
+    { col: 'done_review',          label: '👀 Done (review)' },
+    { col: 'done',                 label: '✅ Done' },
+    { col: 'cancelled',            label: '⏹ Cancelled' },
+    { col: 'archived',             label: '📁 Archived' },
+  ].filter(x => x.col !== tk.status);
+  document.querySelectorAll('.move-popover').forEach(e => e.remove());
+  const pop = document.createElement('div');
+  pop.className = 'move-popover';
+  pop.style.cssText = 'position:fixed;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:4px;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:9999;min-width:180px;font-size:13px';
+  pop.innerHTML = TARGETS.map(t => `
+    <div class="move-opt" data-col="${t.col}" style="padding:6px 12px;cursor:pointer;border-radius:4px;color:var(--fg)"
+         onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
+      ${t.label}
+    </div>`).join('');
+  const rect = evt.target.getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  pop.style.top = (rect.bottom + 4) + 'px';
+  document.body.appendChild(pop);
+  pop.addEventListener('click', async (e) => {
+    const opt = e.target.closest('.move-opt');
+    if (!opt) return;
+    const targetCol = opt.dataset.col;
+    pop.remove();
+    try {
+      const r = await apiFetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: targetCol })
+      });
+      if (!r.ok) { toast('Move failed', true); return; }
+      toast(`→ Moved to ${opt.textContent.trim()}`);
+      await refresh(true);
+    } catch (ex) {
+      if (ex.message !== '401') toast('Error: ' + ex.message, true);
+    }
+  });
+  setTimeout(() => {
+    const closer = (ev) => {
+      if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', closer); }
+    };
+    document.addEventListener('click', closer);
+  }, 0);
+}
+
 function confirmDelete(id){
   const tk=tasks.find(x=>x.id===id);
   $i('confirmTitle').textContent=t('confirm.title');

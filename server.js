@@ -5650,6 +5650,82 @@ app.get('/api/tasks/:id/result', (req, res) => {
 });
 
 // POST /api/tasks/:id/run — trigger a task to start immediately (set status to 'todo')
+// POST /api/tasks/:id/restart — kill worker if running, reset to queue with fresh state.
+// Use this after changing BMAD settings (model/effort) to re-run a task with new params.
+// Preserves: title, description, attachments, retry_count (bumped).
+// Clears: session_id, worker_pid, failure_reason.
+app.post('/api/tasks/:id/restart', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+
+  // Kill any running worker for this task
+  let killed = false;
+  const ctrl = runningTaskAborts.get(req.params.id);
+  if (ctrl) {
+    stoppingTasks.add(req.params.id);
+    ctrl.abort();
+    killed = true;
+  }
+  if (task.worker_pid) {
+    try { killByPid(task.worker_pid); killed = true; } catch {}
+  }
+
+  // Reset task state — put back into queue for re-dispatch
+  db.prepare(`UPDATE tasks SET 
+      status='bmad_workflow', 
+      session_id=NULL, 
+      worker_pid=NULL, 
+      failure_reason=NULL, 
+      task_retry_count=COALESCE(task_retry_count,0)+1, 
+      updated_at=datetime('now') 
+    WHERE id=?`).run(req.params.id);
+
+  // Allow stoppingTasks to clear naturally (worker loop checks it), but remove
+  // from runningTaskAborts immediately so queue can re-dispatch
+  runningTaskAborts.delete(req.params.id);
+
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  setImmediate(processQueue);
+
+  const updated = stmts.getTask.get(req.params.id);
+  log.info(`[restart] task ${req.params.id} ("${task.title}") reset to bmad_workflow (killed=${killed})`);
+  res.json({ ok: true, killed, task: updated });
+});
+
+// POST /api/tasks/:id/cancel — kill worker if running, mark cancelled.
+// Artifacts (story file, screenshots, commits) are preserved.
+app.post('/api/tasks/:id/cancel', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  if (task.status === 'cancelled') return res.json({ ok: true, task, already: true });
+
+  let killed = false;
+  const ctrl = runningTaskAborts.get(req.params.id);
+  if (ctrl) {
+    stoppingTasks.add(req.params.id);
+    ctrl.abort();
+    killed = true;
+  }
+  if (task.worker_pid) {
+    try { killByPid(task.worker_pid); killed = true; } catch {}
+  }
+
+  db.prepare(`UPDATE tasks SET 
+      status='cancelled', 
+      worker_pid=NULL, 
+      failure_reason='cancelled_by_user', 
+      updated_at=datetime('now') 
+    WHERE id=?`).run(req.params.id);
+
+  runningTaskAborts.delete(req.params.id);
+
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+
+  const updated = stmts.getTask.get(req.params.id);
+  log.info(`[cancel] task ${req.params.id} ("${task.title}") cancelled (killed=${killed})`);
+  res.json({ ok: true, killed, task: updated });
+});
+
 app.post('/api/tasks/:id/run', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
