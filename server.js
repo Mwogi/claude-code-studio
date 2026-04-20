@@ -1365,6 +1365,7 @@ const MAX_PER_WORKDIR = Math.max(1, parseInt(process.env.MAX_PER_WORKDIR || '8',
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
+const restartingTasks = new Set();    // task IDs being restarted (worker exit must NOT set status=cancelled)
 
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
@@ -2122,10 +2123,17 @@ async function startTask(task) {
           // Cascade cancel of dependents happens in next processQueue() run
         }
       } else {
-        // User manually stopped — mark as user_cancelled, cascade will follow
-        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='user_cancelled', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-          .run(task.id);
-        log.info(`[taskWorker] task ${task.id}: stopped by user`);
+        // User manually stopped — mark as user_cancelled, cascade will follow.
+        // EXCEPTION: if the task is being restarted, DON'T overwrite the status
+        // (the /restart endpoint has already set it to bmad_workflow).
+        if (restartingTasks.has(task.id)) {
+          restartingTasks.delete(task.id);
+          log.info(`[taskWorker] task ${task.id}: worker exited for restart — status untouched`);
+        } else {
+          db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='user_cancelled', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(task.id);
+          log.info(`[taskWorker] task ${task.id}: stopped by user`);
+        }
       }
     } catch (e) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
@@ -5665,6 +5673,7 @@ app.post('/api/tasks/:id/restart', (req, res) => {
 
   // Kill any running worker for this task
   let killed = false;
+  restartingTasks.add(req.params.id); // signal worker exit handler: DO NOT set status=cancelled
   const ctrl = runningTaskAborts.get(req.params.id);
   if (ctrl) {
     stoppingTasks.add(req.params.id);
