@@ -3679,56 +3679,67 @@ const BROWSER_TESTING_INSTRUCTION = `
 
 BROWSER TESTING POLICY (STRICT):
 
-**FOR FRONTEND DEV/IMPLEMENTATION TASKS (quick-dev, dev-story, quick-spec):** If you modified any .vue/.tsx/.jsx/.ts/.js/.css/.scss/.html file, you MUST verify your changes by running Playwright scripts via Bash. This is NON-NEGOTIABLE. The server rejects tasks that skip browser verification.
+**PLAYWRIGHT IS INSTALLED AND AVAILABLE.** Do NOT claim otherwise.
+- hmis-lite has \`@playwright/test\` in package.json (verified).
+- Browsers are pre-installed at \`~/.cache/ms-playwright/\`.
+- From ANY project workdir, \`node -e "require('playwright')"\` works.
+- The \`playwright\` npm package is resolvable via Bash + node.
+- MCP servers are NOT used in --print mode \u2014 this is expected, NOT a reason to skip testing.
 
-**FOR QA TASKS:** Playwright browser testing is mandatory for every acceptance criterion. Write a structured QA report. Do NOT modify source code.
+**RULES:**
 
-**FOR BACKEND-ONLY TASKS (.py files only):** No Playwright required. Focus on unit tests via \`bench --site execute\`.
+1. **Frontend dev/implementation tasks (quick-dev, dev-story, quick-spec, code-review):** If you modified any .vue/.tsx/.jsx/.ts/.js/.css/.scss/.html file, you MUST run a Playwright script via Bash. NO EXCEPTIONS.
 
-**NO FALLBACKS ACCEPTED:**
-- curl/HTTP checks are NOT browser tests — the server will fail the task
-- "Playwright MCP not available" is NOT a valid excuse — use the \`playwright\` npm package via Bash
-- "Dev server returns HTTP 200" is NOT verification — you must launch a real browser
-- The server scans your output for chromium.launch + page.goto + page.screenshot. Missing any two = automatic task failure and requeue.
+2. **QA tasks:** Playwright browser testing is mandatory for every acceptance criterion. Write a structured QA report. Do NOT modify source code.
 
-**HOW TO RUN PLAYWRIGHT (via Bash):**
+3. **Backend-only tasks (.py only):** Playwright not required. Use \`bench --site execute\`.
 
-\`\`\`bash
-cat > /tmp/verify-task.mjs << 'SCRIPT'
-import { chromium } from "playwright";
-const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage();
-// Read test URL from docs/testing-info.md first!
-await page.goto("<URL from docs/testing-info.md>");
-await page.screenshot({ path: "test-screenshots/task-<N>-01-feature.png" });
-// Login, navigate, interact, verify...
-await browser.close();
-SCRIPT
-node /tmp/verify-task.mjs
-\`\`\`
+**FORBIDDEN FALLBACKS (the server will FAIL your task):**
+- curl / wget HTTP checks (even if they return 200)
+- "Playwright MCP not available" \u2014 MCP is never available in --print mode; use Bash + npm package
+- "Dev server is working" \u2014 not a substitute for real browser verification
+- "Files compile cleanly" \u2014 compilation \u2260 functional verification
+- "require('playwright') fails in my eval" \u2014 run it from the project workdir, not from a random path
 
-**Playwright is always installed globally.** Use \`chromium.launch({ headless: true })\`. MCP servers are NOT used in --print mode — always use Bash + the \`playwright\` package directly.
+**EXACT RECIPE \u2014 copy-paste this, adapting the URL/interactions:**
 
-**First step in every UI-touching task:** Read docs/testing-info.md to get the correct test URL and credentials. NEVER assume or hardcode a URL.
+    cat > /tmp/verify-task.mjs << 'SCRIPT'
+    import { chromium } from 'playwright';
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto('<URL from docs/testing-info.md>');
+    await page.screenshot({ path: 'test-screenshots/task-<N>-01-initial.png', fullPage: true });
+    // Login if needed, navigate, interact, take more screenshots...
+    await browser.close();
+    console.log('playwright-ok');
+    SCRIPT
+    node /tmp/verify-task.mjs
+
+**TROUBLESHOOTING:**
+- If \`Cannot find module 'playwright'\`: you are running from the wrong cwd. \`cd\` to the project workdir first, OR use \`NODE_PATH=$(npm root -g) node /tmp/verify-task.mjs\`.
+- If \`Executable doesn't exist\`: run \`npx playwright install chromium\` first. Browsers at ~/.cache/ms-playwright/ should already cover this.
+- If page.goto hangs: the dev server URL is wrong. Re-read docs/testing-info.md.
+
+**SERVER ENFORCEMENT:** Your output is scanned for >=2 of these execution markers: \`chromium.launch(\`, \`browser.newPage(\`, \`page.goto(\`, \`page.screenshot(\`, \`from 'playwright'\`, \`require('playwright')\`. Missing 2+ markers = automatic task failure and requeue. Mentioning evasion phrases ("MCP not available", "fallback curl", "HTTP 200 instead") triggers immediate failure.
+
+**First step in every UI-touching task:** Read docs/testing-info.md to get the correct test URL and credentials.
 
 QA-SPECIFIC RULES:
-1. Write and run Playwright scripts via Bash for EVERY test step — do NOT skip browser testing
-2. Login, navigate to pages, interact with features, take screenshots, check console errors
-3. Read docs/testing-info.md for test credentials and dev server info
-4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder
-5. DO NOT modify any source code — QA tasks are READ-ONLY for code
-6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference
+1. Write and run Playwright scripts via Bash for EVERY test step
+2. Login, navigate, interact, screenshot, check console errors
+3. Read docs/testing-info.md for credentials
+4. Produce a STRUCTURED QA REPORT as a markdown file in docs/
+5. DO NOT modify source code
+6. Document findings: severity (P0-P3), description, repro steps, expected vs actual, screenshot ref
 7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)
-   - ONE task only, never multiple
-   - Include exact file paths + line numbers
-   - Include before/after code snippets
-   - Include verification commands for each fix
-   - Include a done checklist where every item is independently verifiable
-   - P2/P3 issues go in the report only, no fix task
+   - ONE task only
+   - Exact file paths + line numbers
+   - Before/after code snippets
+   - Verification commands
+   - Done checklist with independently verifiable items
+   - P2/P3 issues go in the report only
 
-**IF YOUR OUTPUT DOES NOT SHOW chromium.launch + page.goto + page.screenshot FOR A UI-TOUCHING TASK, THE SERVER WILL FAIL IT AUTOMATICALLY AND REQUEUE IT. NO EXCEPTIONS.**
-
-SCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_NUMBER}-{NN}-{description}.png\` where TASK_NUMBER is this task's numeric task number (e.g. 78, 161 — shown in the task title as #N), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: task-78-01-login-page.png, task-78-02-modal-open.png. NEVER use the task ID string — always use the numeric task number.`;
+SCREENSHOT NAMING: Save all screenshots to \`test-screenshots/\` with pattern \`task-{TASK_NUMBER}-{NN}-{description}.png\` where TASK_NUMBER is the numeric task number from the task title (#N), NN is zero-padded (01, 02), and description is kebab-case. Example: task-467-01-initial.png, task-467-02-after-scroll.png.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.

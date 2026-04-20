@@ -246,7 +246,15 @@ class ClaudeCLI {
     const needsShell = process.platform === 'win32' &&
       /\.(cmd|bat)$/i.test(this.claudeBin);
     // Cap each Claude process memory to 8GB to prevent OOM
-    const spawnEnv = { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS || ''} --max-old-space-size=8192`.trim() };
+    // Set NODE_PATH so subprocess Bash `node` invocations can require('playwright')
+    // regardless of cwd. The global modules path has @playwright/test and playwright.
+    const globalNodeModules = '/home/ubuntu/.nvm/versions/node/v24.14.1/lib/node_modules';
+    const existingNodePath = env.NODE_PATH || '';
+    const spawnEnv = {
+      ...env,
+      NODE_OPTIONS: `${env.NODE_OPTIONS || ''} --max-old-space-size=8192`.trim(),
+      NODE_PATH: existingNodePath ? `${existingNodePath}:${globalNodeModules}` : globalNodeModules,
+    };
     const proc = spawn(this.claudeBin, args, {
       cwd: this.cwd,
       env: spawnEnv,
