@@ -1360,8 +1360,8 @@ function broadcastToSession(sessionId, data) {
 }
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
-const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '8', 10));
-const MAX_PER_WORKDIR = Math.max(1, parseInt(process.env.MAX_PER_WORKDIR || '5', 10));
+const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '15', 10));
+const MAX_PER_WORKDIR = Math.max(1, parseInt(process.env.MAX_PER_WORKDIR || '8', 10));
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
@@ -2406,6 +2406,16 @@ function processQueue() {
   // Per-workdir running count (for MAX_PER_WORKDIR limit)
   const workdirCounts = new Map();
   inProg.forEach(t => { if (t.workdir) workdirCounts.set(t.workdir, (workdirCounts.get(t.workdir) || 0) + 1); });
+  // Per-project concurrency override: each project can set its own maxWorkers in projects.json
+  // (1-20). Falls back to global MAX_PER_WORKDIR when unset or invalid.
+  const _pqProjects = loadProjects();
+  const workdirLimitFor = (workdir) => {
+    if (!workdir) return MAX_PER_WORKDIR;
+    const proj = _pqProjects.find(p => p.workdir === workdir);
+    const n = proj?.maxWorkers;
+    if (typeof n === 'number' && n >= 1 && n <= 20) return n;
+    return MAX_PER_WORKDIR;
+  };
   // Count independent running tasks (null session_id)
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
@@ -2489,7 +2499,7 @@ function processQueue() {
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
         if (task.workdir) {
           const wdCount = (workdirCounts.get(task.workdir) || 0);
-          if (wdCount >= MAX_PER_WORKDIR) continue;
+          if (wdCount >= workdirLimitFor(task.workdir)) continue;
           workdirCounts.set(task.workdir, wdCount + 1);
         }
         if (indepRunning >= MAX_TASK_WORKERS) break;
@@ -2497,7 +2507,7 @@ function processQueue() {
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
         if (task.chain_id && task.workdir) startedWorkdirs.add(`${task.chain_id}:${task.workdir}`);
-        log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'}, session=${task.session_id.slice(0,8)})`);
+        log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + workdirLimitFor(task.workdir) : 'none'}, session=${task.session_id.slice(0,8)})`);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
@@ -2505,11 +2515,11 @@ function processQueue() {
       if (indepRunning >= MAX_TASK_WORKERS) break; // no more global slots
       if (task.workdir) {
         const wdCount = (workdirCounts.get(task.workdir) || 0);
-        if (wdCount >= MAX_PER_WORKDIR) continue; // skip this task, try next from different workdir
+        if (wdCount >= workdirLimitFor(task.workdir)) continue; // skip this task, try next from different workdir
         workdirCounts.set(task.workdir, wdCount + 1);
       }
       indepRunning++;
-      log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + MAX_PER_WORKDIR : 'none'})`);
+      log.info(`[processQueue] Starting task ${task.id} (${indepRunning}/${MAX_TASK_WORKERS} global, workdir=${task.workdir ? workdirCounts.get(task.workdir) + '/' + workdirLimitFor(task.workdir) : 'none'})`);
       startTask(task).catch(e => console.error('[taskWorker]', e));
     }
   }
@@ -6847,11 +6857,16 @@ app.post('/api/projects/reorder', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 app.patch('/api/projects/:id', requireAdmin, (req,res) => {
-  const { name, autoMode } = req.body;
+  const { name, autoMode, maxWorkers } = req.body;
   const projects = loadProjects();
   const p = projects.find(p => p.id === req.params.id);
   if (!p) return res.status(404).json({ error:'not found' });
   if (name !== undefined) p.name = String(name).trim();
+  if (maxWorkers !== undefined) {
+    const n = parseInt(maxWorkers, 10);
+    if (isNaN(n) || n < 1 || n > 20) return res.status(400).json({ error: 'maxWorkers must be 1-20' });
+    p.maxWorkers = n;
+  }
   if (autoMode !== undefined) {
     p.autoMode = !!autoMode;
     if (p.autoMode) {

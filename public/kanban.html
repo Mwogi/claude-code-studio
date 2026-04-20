@@ -1338,6 +1338,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
     <button class="hb" onclick="openBmadConfig()" id="bmadConfigBtn" title="BMAD Settings (model/effort/Playwright)">⚙️</button>
+    <button class="hb" onclick="openProjectSettings()" id="projectSettingsBtn" title="Project Settings (concurrency)">📁</button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
     <a class="hb" href="https://github.com/Mwogi/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
@@ -1412,6 +1413,22 @@ textarea.inp{ resize:vertical; min-height:80px; }
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Per-Project Settings modal -->
+<div class="ov hidden" id="projCfgOv" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">📁 Project Settings</span>
+      <button class="modal-close" onclick="$i('projCfgOv').classList.add('hidden')">×</button>
+    </div>
+    <div class="modal-body" id="projCfgBody" style="gap:8px;max-height:70vh;overflow-y:auto"></div>
+    <div class="modal-ft">
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" onclick="$i('projCfgOv').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveProjectSettings()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- BMAD Config modal -->
 <div class="ov hidden" id="bmadCfgOv" onclick="if(event.target===this)this.classList.add('hidden')">
@@ -2853,6 +2870,71 @@ async function saveBmadConfig() {
   } catch (e) {
     toast('Error: ' + e.message, true);
   }
+}
+
+// ─── Per-Project Settings Dialog (concurrency) ────────────────────────
+async function openProjectSettings() {
+  const ov = $i('projCfgOv');
+  if (!ov) return;
+  ov.classList.remove('hidden');
+  try {
+    const r = await apiFetch('/api/projects');
+    const projs = await r.json();
+    if (!projs.length) {
+      $i('projCfgBody').innerHTML = `<div style="color:var(--muted);padding:20px">No projects yet.</div>`;
+      return;
+    }
+    const rows = projs.map(p => `
+      <tr>
+        <td style="padding:10px 8px;color:var(--fg);font-size:13px">
+          <strong>${escH(p.name || '(unnamed)')}</strong>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${escH(p.workdir || '')}</div>
+        </td>
+        <td style="padding:10px 8px;width:120px">
+          <input type="number" id="proj_mw_${p.id}" min="1" max="20" value="${p.maxWorkers || 8}"
+                 style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--fg);font-size:13px;width:100%">
+        </td>
+      </tr>`).join('');
+    $i('projCfgBody').innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+        Set how many tasks can run concurrently per project (1–20). Higher values speed up active projects; lower values save resources for low-priority work. Global cap is set by <code>MAX_TASK_WORKERS</code> (default 15).
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Project</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase">Max workers</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    window._projSettingsIds = projs.map(p => p.id);
+  } catch (e) {
+    $i('projCfgBody').innerHTML = `<div style="color:var(--red);padding:20px">Failed to load projects: ${escH(e.message)}</div>`;
+  }
+}
+
+async function saveProjectSettings() {
+  const ids = window._projSettingsIds || [];
+  let saved = 0, errors = [];
+  for (const id of ids) {
+    const input = $i('proj_mw_' + id);
+    if (!input) continue;
+    const mw = parseInt(input.value, 10);
+    if (isNaN(mw) || mw < 1 || mw > 20) { errors.push(id); continue; }
+    try {
+      const r = await apiFetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxWorkers: mw })
+      });
+      if (r.ok) saved++;
+    } catch { errors.push(id); }
+  }
+  if (errors.length) toast(`Saved ${saved}, ${errors.length} failed`, true);
+  else toast(`✓ Saved ${saved} project setting${saved === 1 ? '' : 's'}`);
+  if (!errors.length) $i('projCfgOv').classList.add('hidden');
 }
 
 async function resetBmadConfig() {
