@@ -1763,20 +1763,46 @@ async function startTask(task) {
             const projName = getProjectName(task.workdir);
             openclawNotify.taskAwaitingInput(task, projName, contextSnippet);
           } else {
-          // 🎭 Server-enforced Playwright check: QA tasks MUST have used browser tools
+          // 🎭 Server-enforced Playwright check: ANY task that modified frontend files
+          // MUST have used real Playwright browser testing. No curl/HTTP fallback accepted.
           const _isQaTask = (task.title || '').startsWith('QA:') || ((task.notes || '').includes('[bmad-workflow:playwright-qa]'));
           const _isBackendQa = (task.notes || '').includes('[bmad-workflow:backend-qa]');
-          if (_isQaTask && !_isBackendQa && fullText) {
-            const usedPlaywright = /playwright|chromium\.launch|browser\.newPage|page\.goto|page\.screenshot/i.test(fullText);
-            if (!usedPlaywright) {
-              // QA task didn't use Playwright — FAIL it, don't mark as done
-              log.warn(`[taskWorker] QA task ${task.id} ("${task.title}") FAILED: no Playwright browser testing detected in output`);
-              db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason='QA_NO_PLAYWRIGHT: Browser testing was mandatory but Playwright MCP tools were never used. Task will be retried.', task_retry_count=COALESCE(task_retry_count,0)+1, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-                .run(task.id);
-              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
-              openclawNotify.taskFailed && openclawNotify.taskFailed(task, 'Playwright browser testing was mandatory but not performed', getProjectName(task.workdir));
-              return; // Don't proceed to done_review
-            }
+
+          // Detect frontend file changes in this task's output (for ALL workflows, not just QA)
+          const _fullOutLC = (fullText || '').toLowerCase();
+          const _touchedFrontend = /\.(vue|tsx?|jsx?|svelte)(\b|['"`,:\s])/i.test(fullText || '') ||
+                                  /\+\+\+\s+b\/[^\n]+\.(vue|tsx?|jsx?|css|scss|svelte|html)/i.test(fullText || '');
+          // Is this an implementation workflow that could produce frontend changes?
+          const _wfTypeNow = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]) || '';
+          const _isImplWorkflow = ['dev-story', 'quick-dev', 'quick-dev-new-preview', 'quick-flow-solo-dev', 'quick-spec', 'code-review'].includes(_wfTypeNow);
+
+          // Strict Playwright-execution regex: require TWO distinct evidence markers
+          // (just mentioning "playwright" in text is not enough; we need real execution)
+          const _playwrightExec = fullText ? (
+            /chromium\.launch\s*\(/.test(fullText) +
+            /browser\.newPage\s*\(/.test(fullText) +
+            /page\.goto\s*\(/.test(fullText) +
+            /page\.screenshot\s*\(/.test(fullText) +
+            /from\s+['"]playwright['"]/.test(fullText) +
+            /require\s*\(\s*['"]playwright['"]\s*\)/.test(fullText)
+          ) : 0;
+          const _usedPlaywright = _playwrightExec >= 2;
+
+          // Evasion markers: these indicate the agent tried to sidestep Playwright
+          const _hasEvasion = /mcp.*not.*available|playwright.*mcp.*not|fallback.*curl|as\s+(?:a\s+)?fallback.*curl|using\s+curl.*instead|curl.*instead.*of.*playwright|http\s+200.*instead/i.test(fullText || '');
+
+          // Enforce for: (a) QA tasks (existing behavior) OR (b) impl tasks with frontend file changes
+          const _mustVerifyBrowser = (_isQaTask && !_isBackendQa) || (_isImplWorkflow && _touchedFrontend);
+          if (_mustVerifyBrowser && fullText && (!_usedPlaywright || _hasEvasion)) {
+            const _reason = _hasEvasion
+              ? 'QA_PLAYWRIGHT_EVASION: Task attempted to bypass Playwright (curl fallback / MCP-not-available excuse). Real browser testing is mandatory.'
+              : 'QA_NO_PLAYWRIGHT: Real Playwright execution not detected (need chromium.launch + page.goto + page.screenshot). curl / HTTP checks are not acceptable.';
+            log.warn(`[taskWorker] task ${task.id} ("${task.title}") FAILED Playwright enforcement: evasion=${_hasEvasion} execMarkers=${_playwrightExec}`);
+            db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(_reason, task.id);
+            wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+            openclawNotify.taskFailed && openclawNotify.taskFailed(task, _reason, getProjectName(task.workdir));
+            return; // Don't proceed to done_review
           }
           // ✅ Success — AI-completed tasks go to done_review for user approval (auto-moves to done after 24h)
           db.prepare(`UPDATE tasks SET status='done_review', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
@@ -3649,7 +3675,60 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 - When you switch models: call set_ui_state({ model: "opus" }) or set_ui_state({ model: "haiku" })
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
-const BROWSER_TESTING_INSTRUCTION = `\n\nBROWSER TESTING POLICY: Playwright browser testing is ONLY for QA tasks. Do NOT run Playwright tests in implementation/dev tasks (quick-dev, dev-story, quick-spec). Instead, focus on writing clean code.\n\nQA TASK RULES: If this IS a QA task, you MUST write and run Playwright test scripts using the Bash tool.\n\n**HOW TO DO BROWSER TESTING (via Bash + Playwright scripts):**\n\nWrite a Node.js script that uses Playwright to test the feature. Example:\n\n\`\`\`bash\ncat > /tmp/qa-test.mjs << 'SCRIPT'\nimport { chromium } from "playwright";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// Read test URL from docs/testing-info.md first!\nawait page.goto("http://18.132.129.240:5173/");\nawait page.screenshot({ path: "test-screenshots/task-ID-01-login.png" });\n// Login, navigate, test...\nawait browser.close();\nSCRIPT\nnode /tmp/qa-test.mjs\n\`\`\`\n\n**IMPORTANT:** Playwright is installed globally (npx playwright). Use \`chromium.launch({ headless: true })\`.\n\n**First step in every QA task:** Read docs/testing-info.md to get the correct test URL and credentials. NEVER assume or hardcode a URL.\n\nQA RULES:\n1. Write and run Playwright scripts via Bash for EVERY test step — do NOT skip browser testing\n2. Login, navigate to pages, interact with features, take screenshots, check console errors\n3. Read docs/testing-info.md for test credentials and dev server info\n4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder\n5. DO NOT modify any source code — QA tasks are READ-ONLY for code\n6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference\n7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)\n   - ONE task only, never multiple\n   - Include exact file paths + line numbers\n   - Include before/after code snippets\n   - Include verification commands for each fix\n   - Include a done checklist where every item is independently verifiable\n   - P2/P3 issues go in the report only, no fix task\n\n**IF YOUR OUTPUT DOES NOT CONTAIN \"playwright\" AND \"screenshot\" THE QA TASK IS FAILED.**\n\nSCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_NUMBER}-{NN}-{description}.png\` where TASK_NUMBER is this task's numeric task number (e.g. 78, 161 — shown in the task title as #N), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: task-78-01-login-page.png, task-78-02-modal-open.png. NEVER use the task ID string — always use the numeric task number.`;
+const BROWSER_TESTING_INSTRUCTION = `
+
+BROWSER TESTING POLICY (STRICT):
+
+**FOR FRONTEND DEV/IMPLEMENTATION TASKS (quick-dev, dev-story, quick-spec):** If you modified any .vue/.tsx/.jsx/.ts/.js/.css/.scss/.html file, you MUST verify your changes by running Playwright scripts via Bash. This is NON-NEGOTIABLE. The server rejects tasks that skip browser verification.
+
+**FOR QA TASKS:** Playwright browser testing is mandatory for every acceptance criterion. Write a structured QA report. Do NOT modify source code.
+
+**FOR BACKEND-ONLY TASKS (.py files only):** No Playwright required. Focus on unit tests via \`bench --site execute\`.
+
+**NO FALLBACKS ACCEPTED:**
+- curl/HTTP checks are NOT browser tests — the server will fail the task
+- "Playwright MCP not available" is NOT a valid excuse — use the \`playwright\` npm package via Bash
+- "Dev server returns HTTP 200" is NOT verification — you must launch a real browser
+- The server scans your output for chromium.launch + page.goto + page.screenshot. Missing any two = automatic task failure and requeue.
+
+**HOW TO RUN PLAYWRIGHT (via Bash):**
+
+\`\`\`bash
+cat > /tmp/verify-task.mjs << 'SCRIPT'
+import { chromium } from "playwright";
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+// Read test URL from docs/testing-info.md first!
+await page.goto("<URL from docs/testing-info.md>");
+await page.screenshot({ path: "test-screenshots/task-<N>-01-feature.png" });
+// Login, navigate, interact, verify...
+await browser.close();
+SCRIPT
+node /tmp/verify-task.mjs
+\`\`\`
+
+**Playwright is always installed globally.** Use \`chromium.launch({ headless: true })\`. MCP servers are NOT used in --print mode — always use Bash + the \`playwright\` package directly.
+
+**First step in every UI-touching task:** Read docs/testing-info.md to get the correct test URL and credentials. NEVER assume or hardcode a URL.
+
+QA-SPECIFIC RULES:
+1. Write and run Playwright scripts via Bash for EVERY test step — do NOT skip browser testing
+2. Login, navigate to pages, interact with features, take screenshots, check console errors
+3. Read docs/testing-info.md for test credentials and dev server info
+4. Produce a STRUCTURED QA REPORT as a markdown file in the project docs/ folder
+5. DO NOT modify any source code — QA tasks are READ-ONLY for code
+6. Document each finding with: severity (P0-P3), description, steps to reproduce, expected vs actual, screenshot reference
+7. For P0/P1 issues: create ONE consolidated fix task (see task description for curl template)
+   - ONE task only, never multiple
+   - Include exact file paths + line numbers
+   - Include before/after code snippets
+   - Include verification commands for each fix
+   - Include a done checklist where every item is independently verifiable
+   - P2/P3 issues go in the report only, no fix task
+
+**IF YOUR OUTPUT DOES NOT SHOW chromium.launch + page.goto + page.screenshot FOR A UI-TOUCHING TASK, THE SERVER WILL FAIL IT AUTOMATICALLY AND REQUEUE IT. NO EXCEPTIONS.**
+
+SCREENSHOT NAMING: All screenshots MUST be saved to \`test-screenshots/\` with the naming pattern: \`task-{TASK_NUMBER}-{NN}-{description}.png\` where TASK_NUMBER is this task's numeric task number (e.g. 78, 161 — shown in the task title as #N), NN is a zero-padded sequence number (01, 02, 03...), and description is a short kebab-case label. Example: task-78-01-login-page.png, task-78-02-modal-open.png. NEVER use the task ID string — always use the numeric task number.`;
 
 const AUTONOMOUS_INSTRUCTION = `\n\nCRITICAL — AUTONOMOUS MODE: You are running as an autonomous agent. DO NOT ask questions, present options, or wait for user input. Make decisions using your best professional judgment and IMPLEMENT them immediately.
 - If there are multiple valid approaches, pick the best one and execute it. Document your reasoning in a brief comment.
@@ -3692,18 +3771,27 @@ Re-read the task and list every requirement explicitly (numbered).
 For each requirement: run a command or inspect output that PROVES it is satisfied.
 Do NOT skip — execute actual commands and show the output.
 
-### Step 3 — Browser Testing (REQUIRED for UI/frontend tasks)
-If this task involves ANY frontend/UI changes:
+### Step 3 — Browser Testing (MANDATORY for ANY frontend/UI change)
+If this task modifies **any** .vue, .tsx, .jsx, .ts, .js, .css, .scss, or .html file in a frontend project, you MUST run Playwright browser tests via the Bash tool. There is NO fallback. curl is NOT an acceptable substitute.
+
 1. Read docs/testing-info.md for credentials and test URL
-2. Use the **Playwright MCP server** (mcp__playwright__*) to test in a real browser:
-   - Navigate to the dev server URL
-   - Log in with the credentials from testing-info.md
-   - Navigate to the relevant page/feature
-   - Take screenshots to verify the UI looks correct
-   - Test interactive features (click buttons, fill forms, etc.)
-   - Check the browser console for errors
-3. If Playwright MCP is not available, use curl to test API endpoints at minimum
-4. NO frontend task is complete until verified working in a real browser
+2. Write a Playwright script via the Bash tool (example):
+
+    cat > /tmp/verify-task.mjs << 'SCRIPT'
+    import { chromium } from 'playwright';
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.goto('<URL from docs/testing-info.md>');
+    // login, navigate, interact, screenshot
+    await page.screenshot({ path: 'test-screenshots/task-<N>-01-feature.png' });
+    await browser.close();
+    SCRIPT
+    node /tmp/verify-task.mjs
+
+3. Your output MUST show Playwright execution: chromium.launch + page.goto + page.screenshot with actual files written to test-screenshots/
+4. The server will FAIL this task if no Playwright evidence is detected in output. curl verification, HTTP 200 checks against dev server, or "MCP not available" excuses are NOT acceptable and the task will be retried.
+
+**Playwright is always available** via the playwright npm package (already installed globally). MCP servers are NOT used in --print mode — always use Bash + the playwright package directly.
 
 ### Step 4 — Fix & Re-verify
 If any check fails: fix it immediately, then re-run the exact check to confirm it passes.
