@@ -2018,16 +2018,21 @@ async function startTask(task) {
                       } else {
                         log.info(`[taskWorker] auto-commit: File List files not dirty for task ${task.id}, skipping`);
                       }
-                      _commitDone = true; // File List was used — don't fall through to git add -A
+                      // Do NOT set _commitDone=true here. The agent's File List may have
+                      // missed files it edited (e.g. i18n locale files). Let the pre-task
+                      // baseline fallback run AFTER the File List commit to catch leftovers.
                     }
                   } catch (_parseErr) {
                     log.warn(`[taskWorker] auto-commit File List parse error for task ${task.id}: ${_parseErr.message}`);
                   }
                 }
 
-                // Fallback: exclude files that were already dirty before this task started
+                // Sweep: pick up anything the File List missed (i18n files, config, etc.)
+                // Scoped by _preTaskDirtyFiles so unrelated pre-existing dirt is NOT staged.
                 if (!_commitDone && task._preTaskDirtyFiles) {
-                  const _newDirtyFiles = _dirtyOutput.split('\n')
+                  // Re-read dirty output (the File List commit above may have cleared some)
+                  const _dirtyNow = _exec('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+                  const _newDirtyFiles = _dirtyNow.split('\n')
                     .filter(l => l.trim())
                     .map(l => l.slice(3).trim())
                     .filter(f => !task._preTaskDirtyFiles.has(f));
@@ -2037,14 +2042,10 @@ async function startTask(task) {
                     }
                     const _staged2 = _exec('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
                     if (_staged2) {
-                      const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)}\n\nAutomated commit by Claude Studio`;
+                      const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)} (missed files)\n\nAutomated sweep commit — files not in story File List but modified during task.`;
                       _exec(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
-                      log.info(`[taskWorker] auto-committed ${_staged2.split('\n').length} task-scoped files for task ${task.id} (pre-task baseline)`);
-                    } else {
-                      log.info(`[taskWorker] auto-commit: nothing new to stage for task ${task.id}`);
+                      log.info(`[taskWorker] auto-committed ${_staged2.split('\n').length} missed files for task ${task.id} (sweep after File List)`);
                     }
-                  } else {
-                    log.info(`[taskWorker] auto-commit: no new dirty files since task start for task ${task.id}`);
                   }
                   _commitDone = true;
                 }
