@@ -66,10 +66,28 @@ const MAX_LINE_BUFFER = 10 * 1024 * 1024; // 10 MB
 // Map short aliases to Bedrock global inference profile model IDs.
 // Claude Code CLI routes through Bedrock when CLAUDE_CODE_USE_BEDROCK=1 is set
 // (see send() below). These IDs match OpenClaw's amazon-bedrock provider models.
+// Pin-to-version aliases (opus-4.7, sonnet-4.5) are also accepted so the Settings
+// dialog can offer specific versions, not just the float-to-latest aliases.
 const MODEL_MAP = {
-  'opus':   'global.anthropic.claude-opus-4-7',
-  'sonnet': 'global.anthropic.claude-sonnet-4-6',
-  'haiku':  'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+  // Float-to-latest (what the `opus` alias currently resolves to on Bedrock,
+  // controlled by ANTHROPIC_DEFAULT_OPUS_MODEL / ANTHROPIC_DEFAULT_SONNET_MODEL
+  // in ~/.claude/settings.json). Passed through as-is so the CLI honors those.
+  'opus':       'opus',
+  'sonnet':     'sonnet',
+  'haiku':      'haiku',
+  // Pinned Opus versions
+  'opus-4.7':   'global.anthropic.claude-opus-4-7',
+  'opus-4.6':   'global.anthropic.claude-opus-4-6-v1',
+  'opus-4.5':   'anthropic.claude-opus-4-5-20251101-v1:0',
+  'opus-4.1':   'anthropic.claude-opus-4-1-20250805-v1:0',
+  // Pinned Sonnet versions
+  'sonnet-4.6': 'global.anthropic.claude-sonnet-4-6',
+  'sonnet-4.5': 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+  'sonnet-4.0': 'global.anthropic.claude-sonnet-4-20250514-v1:0',
+  'sonnet-3.7': 'anthropic.claude-3-7-sonnet-20250219-v1:0',
+  // Pinned Haiku versions
+  'haiku-4.5':  'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+  'haiku-3.5':  'anthropic.claude-3-5-haiku-20241022-v1:0',
 };
 
 // AWS region for Bedrock. `global.*` inference profiles route cross-region

@@ -2894,7 +2894,11 @@ async function openBmadConfig() {
       ['bmad_implementation','💻 Implementation'],
       ['bmad_qa',         '🧪 QA'],
     ];
-    const MODELS = ['haiku', 'sonnet', 'opus'];
+    const MODELS = [
+      'haiku', 'haiku-4.5', 'haiku-3.5',
+      'sonnet', 'sonnet-4.6', 'sonnet-4.5', 'sonnet-4.0', 'sonnet-3.7',
+      'opus', 'opus-4.7', 'opus-4.6', 'opus-4.5', 'opus-4.1',
+    ];
     const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
     const rows = PHASES.map(([id, label]) => `
       <tr>

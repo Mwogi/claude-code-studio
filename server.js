@@ -5018,7 +5018,12 @@ app.put('/api/config/bmad', (req, res) => {
   try {
     const body = req.body || {};
     // Basic validation
-    const VALID_MODELS = ['opus','sonnet','haiku'];
+    const VALID_MODELS = [
+      'opus','sonnet','haiku',
+      'opus-4.7','opus-4.6','opus-4.5','opus-4.1',
+      'sonnet-4.6','sonnet-4.5','sonnet-4.0','sonnet-3.7',
+      'haiku-4.5','haiku-3.5',
+    ];
     const VALID_EFFORTS = ['low','medium','high','xhigh','max'];
     const VALID_PHASES = Object.keys(BMAD_CONFIG_DEFAULTS.models);
     if (body.models) {
