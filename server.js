@@ -2538,6 +2538,36 @@ function processQueue() {
 // Delay first processQueue by 5s to let orphan recovery finish first
 setTimeout(() => { processQueue(); setInterval(processQueue, 15000); }, 5000);
 
+// Periodic orphan reaper: a server crash/restart/network issue can leave tasks
+// marked 'running' in DB with worker_pid pointing at a dead process. The
+// startup recoverOrphanedTasks() handles boot time; this interval catches any
+// mid-flight orphans (e.g. if the onDone handler was killed before it could
+// finalize the task). Runs every 30s.
+setInterval(() => {
+  try {
+    const stuck = db.prepare(`
+      SELECT id, title, status, worker_pid FROM tasks
+      WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
+        AND worker_pid IS NOT NULL
+        AND status != 'awaiting_input'
+    `).all();
+    let reaped = 0;
+    for (const t of stuck) {
+      try { process.kill(t.worker_pid, 0); continue; /* alive */ } catch {}
+      // PID dead — reset to queue
+      db.prepare(`UPDATE tasks SET status='bmad_workflow', worker_pid=NULL, session_id=NULL, failure_reason='reaped_dead_worker', updated_at=datetime('now') WHERE id=?`).run(t.id);
+      log.info(`[ReapOrphans] Reset task ${t.id} ("${t.title.substring(0, 50)}") — dead pid ${t.worker_pid}, was ${t.status}`);
+      reaped++;
+    }
+    if (reaped > 0) {
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+      setImmediate(processQueue);
+    }
+  } catch (e) {
+    log.warn('[ReapOrphans] error:', e.message);
+  }
+}, 30000);
+
 // ── Orphaned task recovery on startup ──
 // Tasks stuck in active BMAD phases after a server restart have no Claude process.
 // Reset them to 'bmad_workflow' so processQueue picks them up again.
