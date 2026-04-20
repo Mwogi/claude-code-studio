@@ -330,23 +330,55 @@ function _taskTag(task) {
   return task.task_number ? `#${task.task_number} ` : '';
 }
 
+// Human-friendly labels for BMAD workflow types
+const _WORKFLOW_LABELS = {
+  'create-story':         'Plan',
+  'dev-story':            'Implement',
+  'quick-dev':            'Quick Dev',
+  'quick-spec':           'Quick Spec',
+  'quick-dev-new-preview':'Quick Dev (preview)',
+  'quick-flow-solo-dev':  'Solo Dev',
+  'playwright-qa':        'QA',
+  'code-review':          'Code Review',
+  'e2e-tests':            'E2E Tests',
+  'solutioning':          'Architecture',
+  'sprint-planning':      'Sprint Planning',
+  'planning':             'Planning',
+  'edit-prd':             'Edit PRD',
+  'validate-prd':         'Validate PRD',
+  'ux-design':            'UX Design',
+  'analysis':             'Analysis',
+  'research':             'Research',
+  'brainstorming':        'Brainstorm',
+  'domain-research':      'Domain Research',
+  'adversarial-review':   'Adversarial QA',
+  'edge-case-review':     'Edge Case QA',
+};
+
+function _workflowLabel(task) {
+  const m = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  if (!m) return '';
+  return _WORKFLOW_LABELS[m[1]] || m[1];
+}
+
 function taskStarted(task, projectName) {
   const model = task.model || 'sonnet';
-  const phase = (task.notes || '').match(/\[bmad-phase:(\w+)\]/)?.[1] || '';
-  const phaseLabel = phase ? ` → ${phase.replace('bmad_', '').toUpperCase()}` : '';
+  const effort = task.effort ? `/${task.effort}` : '';
+  const wfLabel = _workflowLabel(task);
+  const stageTag = wfLabel ? ` — ${wfLabel}` : '';
   notify(
-    `🚀 ${_projectTag(projectName)}${_taskTag(task)}Task Started${phaseLabel}: ${task.title}\nModel: ${model}`,
+    `🚀 ${_projectTag(projectName)}${_taskTag(task)}Task Started${stageTag}: ${task.title}\nModel: ${model}${effort}`,
     projectName, task.workdir
   );
 }
 
 function taskCompleted(task, durationMs, projectName, summary) {
   const mins = Math.round((durationMs || 0) / 60000);
-  const phase = (task.notes || '').match(/\[bmad-phase:(\w+)\]/)?.[1] || '';
-  const phaseLabel = phase ? ` (${phase.replace('bmad_', '')})` : '';
+  const wfLabel = _workflowLabel(task);
+  const stageTag = wfLabel ? ` — ${wfLabel}` : '';
   const summaryText = summary ? `\n\n${summary}` : '';
   notify(
-    `✅ ${_projectTag(projectName)}${_taskTag(task)}Task Done${phaseLabel}: ${task.title}\n⏱️ ${mins}min${summaryText}`,
+    `✅ ${_projectTag(projectName)}${_taskTag(task)}Task Done${stageTag}: ${task.title}\n⏱️ ${mins}min${summaryText}`,
     projectName, task.workdir
   );
 }
