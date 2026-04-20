@@ -44,6 +44,11 @@ failed_layers: '' # set at runtime: comma-separated list of layers that failed o
      - Field names that don't exist on the target doctype
      - Missing null checks before using fetched values in `set_value`
      - Linked record chains (e.g. Patient → Customer) where only one side is updated
+7. **Button Visibility Guardrail** (if any `.vue` files in the diff touch `<button>` markup):
+   - For every `<button class="... bg-<color>-<shade> ...">` introduced or modified in the diff, check that the corresponding `html button.bg-<color>-<shade> { background-color: ... }` line exists in `src/assets/styles/main.css` under the `[UI-btn-bg]` block.
+   - If missing, promote as a **P0 UI finding** — the button will render white-on-white against the modal/page background until the user hovers, effectively making the action invisible.
+   - This bug has recurred multiple times (Import button, Use This Drug button, Treatment Refusal primary action, Referral Selection modal). Treat missing entries as a hard-stop.
+   - Playwright browser tests covering the story MUST include at least one screenshot of the affected button at rest (no hover) showing a coloured fill, not white.
 
 
 ## NEXT

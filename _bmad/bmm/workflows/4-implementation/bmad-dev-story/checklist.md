@@ -71,6 +71,18 @@ validation-rules:
 - [ ] **No HALT Conditions:** No blocking issues or incomplete work remaining
 - [ ] **User Communication Ready:** Implementation summary prepared for user review
 
+## 🔘 Button Visibility Guardrail (frontend stories only)
+
+This app has a known CSS quirk: a global `button { background-color: white }` rule beats some Tailwind `.bg-*` utility classes via cascade order, so buttons render white-on-white until `:hover`. The fix lives in `src/assets/styles/main.css` under the `[UI-btn-bg]` comment block and re-declares each whitelisted Tailwind bg-* color at elevated specificity.
+
+Before marking a frontend story Ready for Review:
+
+- [ ] **Buttons visible at rest**: For every new or modified `<button class="bg-*">` in this story, verify the button is clearly visible (coloured, not white) WITHOUT hovering. Screenshot or describe the evidence.
+- [ ] **New bg-* shades registered**: If the story adds a `<button>` using a Tailwind `bg-<color>-<shade>` utility NOT already listed in `src/assets/styles/main.css` under the `[UI-btn-bg]` block, add the corresponding `html button.bg-<color>-<shade> { background-color: <hex>; }` line in the same block. Do NOT use `!important`.
+- [ ] **Prefer `<el-button>` for primary CTAs**: When introducing a new primary action, prefer `<el-button type="primary">` over raw `<button class="bg-*">`; el-button carries its own background handling and is immune to this bug.
+
+Failure to complete this section is treated as a P0 visual regression.
+
 ## 🎯 Final Validation Output
 
 ```
