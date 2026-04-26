@@ -2453,7 +2453,7 @@ function buildForm(tk={}){
       <div><label class="lbl">🔗 Run After</label>
         <select id="fAfter" class="sel fsel">
           <option value="">None</option>
-          ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled'].includes(t.status))
+          ${tasks.filter(t=>t.workdir===curWorkdir&&t.id!==tk.id&&!['done','cancelled','archived'].includes(t.status))
             .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
             .slice(0,30)
             .map(t=>{
