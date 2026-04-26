@@ -728,6 +728,8 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); 
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
+// Migrate any lingering 'todo' tasks to 'bmad_workflow' (column removed)
+try { db.exec(`UPDATE tasks SET status='bmad_workflow' WHERE status='todo'`); } catch {}
 // Telegram bot: telegram_devices table is created by TelegramBot constructor (single source of truth)
 // Telegram Phase 2: session persistence + message source tracking
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
@@ -2379,7 +2381,7 @@ function processQueue() {
           stmts.createTask.run(
           taskIds[i], st.title.substring(0, 200), st.description.substring(0, 2000),
           `[bmad:${storyId}] [bmad-phase:${st.bmadPhase}] Chain subtask ${i+1}/${subtasks.length}`,
-          'todo', st.sort,
+          'bmad_workflow', st.sort,
           chainSessionId, workdir,
           st.model || task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
           null, realDeps.length ? JSON.stringify(realDeps) : null,
@@ -3286,8 +3288,8 @@ setInterval(() => {
     for (const [projPath, tasks] of Object.entries(byProject)) {
       const projName = require('path').basename(projPath);
       const backlog = tasks.filter(t => t.status === 'backlog').length;
-      const todo = tasks.filter(t => t.status === 'todo').length;
-      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'done' && t.status !== 'done_review' && t.status !== 'archived' && t.status !== 'cancelled').length;
+      const todo = tasks.filter(t => t.status === 'bmad_workflow' || t.status === 'todo').length;
+      const active = tasks.filter(t => t.status !== 'backlog' && t.status !== 'todo' && t.status !== 'bmad_workflow' && t.status !== 'done' && t.status !== 'done_review' && t.status !== 'archived' && t.status !== 'cancelled').length;
       const done = tasks.filter(t => ['done','done_review','archived'].includes(t.status)).length;
       const total = tasks.filter(t => t.status !== 'cancelled').length;
       // Recently completed (last 2 hours)
@@ -3315,12 +3317,12 @@ setTimeout(() => {
     }
     // Step 2: Determine if the task actually completed.
     // Assistant text is only written to DB on onDone — so its presence means success.
-    let newStatus = 'todo'; // default: retry (task was interrupted)
+    let newStatus = 'bmad_workflow'; // default: retry (task was interrupted)
     if (task.chain_id) {
       // Chain task: ALWAYS retry. Shared session has messages from other tasks in the
       // chain, so the "has assistant message" heuristic gives false positives.
       // --resume will recover full context from the shared Claude session.
-      newStatus = 'todo';
+      newStatus = 'bmad_workflow';
     } else if (task.session_id) {
       const assistantMsg = db.prepare(
         `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
@@ -5379,13 +5381,17 @@ app.post('/api/tasks', (req, res) => {
   const taskNum = stmts.nextTaskNumber.get(sqlVal(workdir) || '').next_num;
   
   // Auto-correct status: if task has a BMAD workflow tag, it should be in bmad_workflow queue
-  if (notes && /\[bmad-workflow:[\w-]+\]/.test(notes) && (!status || status === 'backlog' || status === 'todo')) {
+  if (notes && /\[bmad-workflow:[\w-]+\]/.test(notes) && (!status || status === 'backlog' || status === 'todo' || status === 'bmad_workflow')) {
     status = 'bmad_workflow';
   }
   
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum, sqlVal(dep_group)||null);
   const task = stmts.getTask.get(id);
   if (['todo', 'bmad_workflow'].includes(status)) setImmediate(processQueue);
+  // Remap any incoming 'todo' to 'bmad_workflow' (column removed)
+  if (status === 'todo') {
+    db.prepare(`UPDATE tasks SET status='bmad_workflow', updated_at=datetime('now') WHERE id=?`).run(id);
+  }
   res.json(task);
 });
 
@@ -5493,7 +5499,7 @@ app.post('/api/tasks/:id/reply', (req, res) => {
   // Trigger queue processing
   setTimeout(processQueue, 500);
   
-  res.json({ ok: true, status: 'todo' });
+  res.json({ ok: true, status: 'bmad_workflow' });
 });
 
 app.put('/api/tasks/:id', (req, res) => {
@@ -5531,7 +5537,7 @@ app.put('/api/tasks/:id', (req, res) => {
   );
   const updated = stmts.getTask.get(req.params.id);
   // Trigger queue whenever status is todo (covers "Run now" on scheduled tasks too)
-  if (status === 'todo') setImmediate(processQueue);
+  if (status === 'todo' || status === 'bmad_workflow') setImmediate(processQueue);
 
   // ── Screenshot cleanup on status transitions (PUT — used by Kanban drag) ──
   if (status !== task.status && ['done', 'archived'].includes(status)) {
@@ -5588,7 +5594,7 @@ app.post('/api/tasks/bulk-move', express.json(), (req, res) => {
     } catch (e) { log.warn('[bulk-move] screenshot cleanup error', { error: e.message }); }
   }
   // Trigger queue if moving to todo
-  if (to_status === 'todo') setImmediate(processQueue);
+  if (to_status === 'todo' || to_status === 'bmad_workflow') setImmediate(processQueue);
   wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
   res.json({ moved: result.changes });
 });
@@ -5624,12 +5630,12 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
     sqlVal(merged.dep_group)||null,
     req.params.id
   );
-  if (merged.status === 'todo') setImmediate(processQueue);
+  if (merged.status === 'todo' || merged.status === 'bmad_workflow') setImmediate(processQueue);
   // ── BMAD reverse sync: update sprint-status.yaml when Kanban status changes ──
   if (updates.status && merged.notes) {
     const bmadMatch = (merged.notes || '').match(/\[bmad:([^\]]+)\]/);
     if (bmadMatch) {
-      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','in_progress':'in-progress','done':'done','done_review':'done','archived':'done','cancelled':'backlog' };
+      const REVERSE_MAP = { 'backlog':'backlog','todo':'ready-for-dev','bmad_workflow':'ready-for-dev','in_progress':'in-progress','done':'done','done_review':'done','archived':'done','cancelled':'backlog' };
       const bmadStatus = REVERSE_MAP[merged.status];
       if (bmadStatus) {
         const wd = merged.workdir || WORKDIR;
@@ -5685,7 +5691,7 @@ app.get('/api/tasks/:id/result', (req, res) => {
   });
 });
 
-// POST /api/tasks/:id/run — trigger a task to start immediately (set status to 'todo')
+// POST /api/tasks/:id/run — trigger a task to start immediately (set status to 'bmad_workflow')
 // POST /api/tasks/:id/restart — kill worker if running, reset to queue with fresh state.
 // Use this after changing BMAD settings (model/effort) to re-run a task with new params.
 // Preserves: title, description, attachments, retry_count (bumped).
@@ -5843,7 +5849,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         (t.title || t.role || 'Subtask').substring(0, 200),
         (t.description || t.task || '').substring(0, 2000),
         '',            // notes
-        'todo',
+        'bmad_workflow',
         i,             // sort_order preserves plan ordering
         chainSessionId,
         sqlVal(workdir) || null,
@@ -5918,7 +5924,7 @@ app.get('/api/bmad/templates', (req, res) => {
 
 const BMAD_STATUS_MAP = {
   'backlog':       'backlog',
-  'ready-for-dev': 'todo',
+  'ready-for-dev': 'bmad_workflow',
   'in-progress':   'in_progress',
   'review':        'in_progress',
   'needs-revision':'in_progress',
@@ -8413,7 +8419,7 @@ wss.on('connection', (ws) => {
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
-                '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
+                '', 'bmad_workflow', i, chainSessionId, sqlVal(workdir) || null,
                 sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,

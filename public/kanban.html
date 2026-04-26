@@ -1842,7 +1842,7 @@ async function refresh(force=false){
 }
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
-  const hasActive=tasks.some(t=>isTaskActive(t.status)||t.status==='todo');
+  const hasActive=tasks.some(t=>isTaskActive(t.status)||t.status==='bmad_workflow');
   const delay=hasActive?5000:30000;
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
@@ -1851,8 +1851,8 @@ function startAutoRefresh(){
 function updateStats(){
   const el=$i('kbStats');
   if(!el)return;
-  const counts={backlog:0,todo:0,in_progress:0,done:0,done_review:0,archived:0,cancelled:0};
-  for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
+  const counts={backlog:0,in_progress:0,done:0,done_review:0,archived:0,cancelled:0,bmad_workflow:0};
+  for(const tk of tasks){ const st=(tk.status==='todo')?'bmad_workflow':tk.status; if(isTaskActive(st)) counts.in_progress++; else counts[st]=(counts[st]||0)+1; }
   const total=tasks.length;
   const completed=(counts.done||0)+(counts.done_review||0)+(counts.archived||0);
   const active=(counts.bmad_workflow||0)+(counts.in_progress||0);
@@ -1870,7 +1870,7 @@ function updateStats(){
       <span class="kb-stat-lbl">${t('col.backlog')}</span>
     </div>
     <div class="kb-stat">
-      <div class="kb-stat-dot dot-todo"></div>
+      <div class="kb-stat-dot dot-bmad_workflow"></div>
       <span class="kb-stat-num">${counts.bmad_workflow||0}</span>
       <span class="kb-stat-lbl">${t('col.bmad_workflow')}</span>
     </div>
@@ -1976,7 +1976,7 @@ function makeCard(tk){
   }
   const modelBadge=tk.sess_model?`<span class="badge ${tk.sess_model==='opus'?'badge-purple':tk.sess_model==='haiku'?'badge-green':'badge-blue'}">${escH(tk.sess_model)}</span>`:'';
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
-  const schedBadge=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
+  const schedBadge=(tk.scheduled_at&&(tk.status==='bmad_workflow'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
   const wfTagM=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
   const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard'};
   const wfBadge=wfTagM?`<span class="badge badge-purple" style="background:rgba(147,51,234,.18);color:#c084fc">${escH(wfLabels[wfTagM[1]]||wfTagM[1])}</span>`:'';
@@ -1988,7 +1988,7 @@ function makeCard(tk){
     const total=chainTasks.length;
     const earlierPending=chainTasks.some(t=>(t.sort_order||0)<(tk.sort_order||0)&&!['done','done_review','archived','cancelled'].includes(t.status));
     if(total>1){
-      const waitIcon=earlierPending&&tk.status==='todo'?'⏳':'🔗';
+      const waitIcon=earlierPending&&tk.status==='bmad_workflow'?'⏳':'🔗';
       const waitTip=earlierPending?' (waiting for previous task)':'';
       chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}${waitTip}">${waitIcon} ${idx+1}/${total}</span>`;
     }
@@ -2062,7 +2062,7 @@ function showMoveMenu(btn,fromStatus,colTasks){
   if(colTasks.length===0){toast('No tasks to move');return;}
   const menu=document.createElement('div');menu.className='col-move-menu';
   menu.onclick=e=>e.stopPropagation();
-  const allCols=[{id:'backlog'},{id:'bmad_workflow'},{id:'todo'},{id:'in_progress'},{id:'done_review'},{id:'done'},{id:'cancelled'},{id:'archived'}];
+  const allCols=[{id:'backlog'},{id:'bmad_workflow'},{id:'in_progress'},{id:'done_review'},{id:'done'},{id:'cancelled'},{id:'archived'}];
   for(const c of allCols){
     if(c.id===fromStatus)continue;
     const destCount=tasks.filter(tk=>tk.status===c.id).length;
@@ -2135,7 +2135,7 @@ function setupDropZone(el){
       let session_id=task?.session_id||null;
       if(newStatus==='in_progress'&&!session_id){
         const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({title:task?.title||t('col.todo'),workdir:curWorkdir||null,
+          body:JSON.stringify({title:task?.title||t('col.bmad_workflow'),workdir:curWorkdir||null,
             model:task?.model||kbSettings.model,mode:task?.mode||kbSettings.mode,agentMode:task?.agent_mode||kbSettings.agent_mode})});
         const sess=await sessR.json();
         session_id=sess.id;
@@ -2378,7 +2378,7 @@ function buildForm(tk={}){
   const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
     sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
   const visClass=!tk.session_id?' visible':'';
-  const schedInfoHtml=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`
+  const schedInfoHtml=(tk.scheduled_at&&(tk.status==='bmad_workflow'||tk.status==='backlog'))?`
     <div class="sched-info">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>
       <span>${escH(t('modal.sched_wait'))} <strong>${escH(fmtScheduledAt(tk.scheduled_at))}</strong></span>
@@ -3163,7 +3163,7 @@ async function renderKbSidebar() {
     for (const proj of projRes) {
       const isActive = proj.workdir === curWorkdir;
       const projTasks = taskRes.filter(t => t.workdir === proj.workdir);
-      const active = projTasks.filter(t => !['done','cancelled','backlog','todo'].includes(t.status)).length;
+      const active = projTasks.filter(t => !['done','cancelled','backlog'].includes(t.status)).length;
       const done = projTasks.filter(t => t.status === 'done').length;
       const total = projTasks.length;
       

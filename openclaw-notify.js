@@ -393,7 +393,7 @@ function taskFailed(task, reason, projectName) {
 function progressSummary(projectName, stats) {
   const lines = [
     `📊 **Sprint Progress — ${projectName}**`,
-    `Backlog: ${stats.backlog} · Todo: ${stats.todo} · Active: ${stats.active} · Done: ${stats.done}`,
+    `Backlog: ${stats.backlog} · Queue: ${stats.todo} · Active: ${stats.active} · Done: ${stats.done}`,
     `Progress: ${stats.done}/${stats.total} (${Math.round(stats.done/Math.max(stats.total,1)*100)}%)`,
   ];
   if (stats.recentlyCompleted?.length) {
