@@ -1977,7 +1977,7 @@ async function startTask(task) {
           openclawNotify.taskCompleted(task, Date.now() - _taskStartedAt, getProjectName(task.workdir), _summary);
           
           // Auto-commit for implementation tasks (scope-aware: stages only story File List files)
-          const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec']);
+          const AUTO_COMMIT_WORKFLOWS = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-flow-solo-dev', 'correct-course']);
           const _wfType = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]);
           const _hasBmadPhase = (task.notes || '').match(/\[bmad-phase:(implementation|qa)\]/);
           if ((_wfType && AUTO_COMMIT_WORKFLOWS.has(_wfType)) || _hasBmadPhase) {
@@ -2053,7 +2053,37 @@ async function startTask(task) {
                 }
               }
             } catch (e) {
-              log.warn(`[taskWorker] auto-commit failed for task ${task.id}: ${e.message}`);
+              log.warn(`[taskWorker] auto-commit (primary) failed for task ${task.id}: ${e.message}`);
+            }
+
+            // Safety net: if primary commit failed or missed files, try git add -A as last resort
+            try {
+              const { execSync: _exec2 } = require('child_process');
+              const _stillDirty = _exec2('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
+              if (_stillDirty) {
+                // Filter to only task-related files if we have a baseline
+                const _taskFiles = task._preTaskDirtyFiles
+                  ? _stillDirty.split('\n').filter(l => l.trim()).map(l => l.slice(3).trim()).filter(f => !task._preTaskDirtyFiles.has(f))
+                  : null;
+                if (!_taskFiles || _taskFiles.length > 0) {
+                  if (_taskFiles && _taskFiles.length <= 50) {
+                    // Targeted add of new files only
+                    for (const f of _taskFiles) {
+                      try { _exec2(`git add -- ${JSON.stringify(f)}`, { cwd, timeout: 5000 }); } catch {}
+                    }
+                  } else {
+                    _exec2('git add -A', { cwd, timeout: 10000 });
+                  }
+                  const _finalStaged = _exec2('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                  if (_finalStaged) {
+                    const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)} (safety-net)\n\nAutomated safety-net commit by Claude Studio`;
+                    _exec2(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                    log.info(`[taskWorker] auto-committed ${_finalStaged.split('\n').length} files for task ${task.id} (safety-net)`);
+                  }
+                }
+              }
+            } catch (e2) {
+              log.warn(`[taskWorker] auto-commit safety-net also failed for task ${task.id}: ${e2.message}`);
             }
           }
           
