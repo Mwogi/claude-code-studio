@@ -117,3 +117,61 @@ Daily automated sync log tracking BMAD METHOD repository updates.
 - Docs-only changes (zh-cn translations, tutorial fixes)
 
 ---
+
+## 2026-04-26 — BMM 6.2.0 → 6.5.0
+
+### Version
+- **Previous:** BMad Core 6.5.0 (no change), BMM 6.2.0
+- **Updated to:** BMM 6.5.0
+- 42 skills installed to `.claude/skills`
+
+### New Skills (10 added, 4 removed)
+
+**Added:**
+- `bmad-customize` (core) — Customization overrides for installed skills
+- `bmad-agent-analyst` (bmm) — Agent: Mary the business analyst
+- `bmad-agent-tech-writer` (bmm) — Agent: Paige the tech writer
+- `bmad-agent-pm` (bmm) — Agent: John the product manager
+- `bmad-agent-ux-designer` (bmm) — Agent: Sally the UX designer
+- `bmad-agent-architect` (bmm) — Agent: Winston the system architect
+- `bmad-agent-dev` (bmm) — Agent: Amelia the developer
+- `bmad-prfaq` (bmm) — Working Backwards PRFAQ challenge
+- `bmad-product-brief` (bmm) — Replaces `bmad-create-product-brief` + `bmad-product-brief-preview`
+- `bmad-checkpoint-preview` (bmm) — Human-in-the-loop review checkpoints
+
+**Removed (merged/renamed):**
+- `bmad-create-product-brief` → merged into `bmad-product-brief`
+- `bmad-product-brief-preview` → merged into `bmad-product-brief`
+- `bmad-quick-dev-new-preview` → removed
+- `bmad-quick-spec` → removed
+
+### Structural Changes
+- Skill paths restructured: `_bmad/core/skills/X/` → `_bmad/core/X/`, `_bmad/bmm/workflows/` → `_bmad/bmm/`
+- `install_to_bmad` column removed from manifests
+- Agent and workflow manifests: unchanged
+
+### server.js Integration Recommendations
+
+1. **`BMAD_WORKFLOWS` updates needed:**
+   - `product-brief-preview` — skill `bmad-product-brief-preview` no longer exists; replace with `bmad-product-brief`
+   - `quick-dev-new-preview` — skill `bmad-quick-dev-new-preview` removed; consider removing or mapping to `bmad-agent-dev`
+   - `analysis` — prompt references old path `workflows/1-analysis/create-product-brief/`; may need path update to `1-analysis/bmad-product-brief/`
+   - **New workflow candidates:**
+     - `prfaq` — map to `bmad-prfaq` skill (analyst agent)
+     - `checkpoint` — map to `bmad-checkpoint-preview` skill (review agent)
+   - **Agent skills** (`bmad-agent-*`) are persona skills, not workflow skills — no BMAD_WORKFLOWS entries needed
+
+2. **`public/kanban.html` dropdown:**
+   - Consider adding `prfaq` (📝 PRFAQ Challenge) to Analysis group
+   - `product-brief-preview` label could be updated to just "Product Brief" since it's now the only one
+   - `quick-dev-new-preview` dropdown entry references removed skill
+
+### Project Installations Updated
+- ✅ `/home/ubuntu/claude-code-studio/` (main)
+- ✅ `/home/ubuntu/frappe-bench/apps/hmis_frontend/`
+- ✅ `/home/ubuntu/.openclaw/workspace/vue-apps/hmis-lite/`
+- ⚠️ `/home/ubuntu/frappe-bench/apps/golf_casino/` — directory not found
+- ⚠️ `/home/ubuntu/flutter/` — directory not found
+- ⚠️ `/home/ubuntu/frappe-bench/apps/hmis_setup/` — directory not found
+
+---

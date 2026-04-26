@@ -94,143 +94,134 @@ const BMAD_WORKFLOWS = {
     agent: 'analyst',
     skills: ['bmad-brainstorming', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/create-product-brief/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief skill from ${workdir}/.claude/skills/bmad-product-brief/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
   },
   research: {
     label: '🔬 Research (Domain/Market/Tech)',
     agent: 'analyst',
     skills: ['bmad-brainstorming'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/analyst.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the research workflow from ${workdir}/_bmad/bmm/workflows/1-analysis/research/\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain research, market research, and technical research. Save findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nConduct domain research (${workdir}/.claude/skills/bmad-domain-research/SKILL.md), market research (${workdir}/.claude/skills/bmad-market-research/SKILL.md), and technical research (${workdir}/.claude/skills/bmad-technical-research/SKILL.md).\n\nProject: ${title}\nDirectory: ${workdir}\n\nSave findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
   },
   'domain-research': {
     label: '🌐 Domain Research',
     agent: 'analyst',
     skills: ['bmad-domain-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-domain-research skill from ${workdir}/_bmad/core/skills/bmad-domain-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research.md`
+    prompt: (title, workdir) => `Read the bmad-domain-research skill from ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research.md`
   },
   'market-research': {
     label: '📊 Market Research',
     agent: 'analyst',
     skills: ['bmad-market-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-market-research skill from ${workdir}/_bmad/core/skills/bmad-market-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research.md`
+    prompt: (title, workdir) => `Read the bmad-market-research skill from ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research.md`
   },
   'technical-research': {
     label: '🔭 Technical Research',
     agent: 'analyst',
     skills: ['bmad-technical-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-technical-research skill from ${workdir}/_bmad/core/skills/bmad-technical-research/SKILL.md if it exists, otherwise use ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research.md`
+    prompt: (title, workdir) => `Read the bmad-technical-research skill from ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research.md`
   },
-  'product-brief-preview': {
-    label: '📄 Product Brief (Preview)',
+  prfaq: {
+    label: '📝 PRFAQ Challenge (Working Backwards)',
     agent: 'analyst',
-    skills: ['bmad-product-brief-preview'],
+    skills: ['bmad-prfaq'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-product-brief-preview skill from ${workdir}/.claude/skills/bmad-product-brief-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate or update the product brief through guided discovery. Save output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+    prompt: (title, workdir) => `Read the bmad-prfaq skill from ${workdir}/.claude/skills/bmad-prfaq/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the Working Backwards PRFAQ challenge. Save output to ${workdir}/_bmad-output/planning-artifacts/prfaq.md`
   },
   planning: {
     label: '📋 Planning → PRD',
     agent: 'product-manager',
     skills: ['bmad-create-prd', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/prd.md`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation skill from ${workdir}/.claude/skills/bmad-create-prd/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/prd.md`
   },
   'edit-prd': {
     label: '✏️ Edit PRD',
     agent: 'product-manager',
-    skills: ['bmad-create-prd'],
+    skills: ['bmad-edit-prd'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD edit workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nEdit the existing PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md based on the task description.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD edit skill from ${workdir}/.claude/skills/bmad-edit-prd/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nEdit the existing PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md based on the task description.`
   },
   'validate-prd': {
     label: '🔎 Validate PRD',
     agent: 'product-manager',
-    skills: ['bmad-create-prd'],
+    skills: ['bmad-validate-prd'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD validation workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-prd/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md against standards. Report issues and recommendations.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD validation skill from ${workdir}/.claude/skills/bmad-validate-prd/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the PRD at ${workdir}/_bmad-output/planning-artifacts/prd.md against standards. Report issues and recommendations.`
   },
   'ux-design': {
     label: '🎨 UX Design',
     agent: 'ux-designer',
-    skills: ['bmad-party-mode'],
+    skills: ['bmad-create-ux-design', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/ux-designer.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design workflow from ${workdir}/_bmad/bmm/workflows/2-plan-workflows/create-ux-design/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/ux-design-specification.md`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-ux-designer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design skill from ${workdir}/.claude/skills/bmad-create-ux-design/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/ux-design-specification.md`
   },
   solutioning: {
     label: '🏗️ Solutioning → Architecture + Epics',
     agent: 'architect',
-    skills: ['bmad-create-architecture', 'bmad-create-epics', 'bmad-party-mode'],
+    skills: ['bmad-create-architecture', 'bmad-create-epics-and-stories', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. Run the architecture workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-architecture/ and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Run the epics workflow from ${workdir}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/ and save to ${workdir}/_bmad-output/planning-artifacts/epics.md`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. Run the architecture skill from ${workdir}/.claude/skills/bmad-create-architecture/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Run the epics skill from ${workdir}/.claude/skills/bmad-create-epics-and-stories/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/epics.md`
   },
   'readiness-check': {
     label: '✅ Implementation Readiness Check',
     agent: 'architect',
-    skills: ['bmad-master'],
+    skills: ['bmad-check-implementation-readiness'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/architect.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the implementation readiness check from ${workdir}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness/\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate that PRD, UX, Architecture, and Epics are complete and ready for implementation. Report any gaps.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the implementation readiness skill from ${workdir}/.claude/skills/bmad-check-implementation-readiness/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate that PRD, UX, Architecture, and Epics are complete and ready for implementation. Report any gaps.`
   },
   'sprint-planning': {
     label: '📐 Sprint Planning → sprint-status.yaml',
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture from ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning skill from ${workdir}/.claude/skills/bmad-sprint-planning/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture from ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
 
-Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n- dep_group: the story ID e.g. "S1.1", "S1.2", "S2.1" (Epic.Story format). This groups a dev task with its auto-spawned QA and Fix tasks so dependent stories can wait for the entire group to complete.\n- depends_on: JSON array of group dependencies e.g. ["group:S1.1"] means this story waits until ALL tasks in dep_group S1.1 (dev+QA+fix) are done. Use this for stories that depend on prior stories. Stories within the same epic that can run in parallel should NOT have depends_on. Only add depends_on when there is a real dependency (e.g. story 1.3 needs story 1.2 complete). First story in each epic has no depends_on.\n\nDEPENDENCY RULES:\n- Independent stories (no cross-story dependency) → set dep_group only, no depends_on → they run in parallel\n- Sequential stories → set dep_group AND depends_on with group refs → they wait for prior groups\n- Cross-epic dependencies → use depends_on: ["group:S1.3"] to depend on stories from other epics\n- The server auto-inherits dep_group to QA and Fix tasks, so only set it on the create-story task\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N,"dep_group":"S1.1","depends_on":"[\\"group:S1.0\\"]"}'`
+Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/bmad-sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n- dep_group: the story ID e.g. "S1.1", "S1.2", "S2.1" (Epic.Story format). This groups a dev task with its auto-spawned QA and Fix tasks so dependent stories can wait for the entire group to complete.\n- depends_on: JSON array of group dependencies e.g. ["group:S1.1"] means this story waits until ALL tasks in dep_group S1.1 (dev+QA+fix) are done. Use this for stories that depend on prior stories. Stories within the same epic that can run in parallel should NOT have depends_on. Only add depends_on when there is a real dependency (e.g. story 1.3 needs story 1.2 complete). First story in each epic has no depends_on.\n\nDEPENDENCY RULES:\n- Independent stories (no cross-story dependency) → set dep_group only, no depends_on → they run in parallel\n- Sequential stories → set dep_group AND depends_on with group refs → they wait for prior groups\n- Cross-epic dependencies → use depends_on: ["group:S1.3"] to depend on stories from other epics\n- The server auto-inherits dep_group to QA and Fix tasks, so only set it on the create-story task\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N,"dep_group":"S1.1","depends_on":"[\\"group:S1.0\\"]"}'`
   },
   'quick-spec': {
     label: '⚡ Quick Spec',
     agent: 'architect',
-    skills: ['bmad-master'],
+    skills: ['bmad-quick-dev'],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-spec workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-spec/\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev skill (spec route) from ${workdir}/.claude/skills/bmad-quick-dev/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nCreate a quick implementation-ready spec for this change. Save to ${workdir}/_bmad-output/implementation-artifacts/quick-spec-${Date.now()}.md`
   },
   'quick-dev': {
     label: '⚡ Quick Dev',
     agent: 'developer',
-    skills: ['bmad-master'],
+    skills: ['bmad-quick-dev'],
     model: 'opus',
     effort: 'xhigh',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev workflow from ${workdir}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev/\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
-  },
-  'quick-dev-new-preview': {
-    label: '🚀 Quick Dev (New Preview)',
-    agent: 'developer',
-    skills: ['bmad-quick-dev-new-preview'],
-    model: 'opus',
-    effort: 'xhigh',
-    maxTurns: 100,
-    prompt: (title, workdir) => `Read the bmad-quick-dev-new-preview skill from ${workdir}/.claude/skills/bmad-quick-dev-new-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the user request using the new preview quick-dev workflow. Read the task description for the requirement.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev skill from ${workdir}/.claude/skills/bmad-quick-dev/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nImplement the quick spec. Read any existing spec from the task description.`
   },
   'quick-flow-solo-dev': {
     label: '🎯 Quick Flow Solo Dev',
     agent: 'developer',
-    skills: ['bmad-quick-flow-solo-dev'],
+    skills: ['bmad-quick-dev'],
     model: 'opus',
     effort: 'xhigh',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/quick-flow-solo-dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the quick-dev skill (solo dev route) from ${workdir}/.claude/skills/bmad-quick-dev/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the quick flow solo dev workflow. Read the task description for context.`
   },
   'generate-context': {
     label: '📑 Generate Project Context',
     agent: 'master',
-    skills: ['bmad-master'],
+    skills: ['bmad-generate-project-context'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context workflow from ${workdir}/_bmad/bmm/workflows/generate-project-context/\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/_bmad-output/project-context.md`
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the generate-project-context skill from ${workdir}/.claude/skills/bmad-generate-project-context/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nAnalyze the codebase and create project-context.md with AI rules and project structure. Save to ${workdir}/_bmad-output/project-context.md`
   },
   'e2e-tests': {
     label: '🧪 Generate E2E Tests',
     agent: 'qa',
-    skills: ['bmad-master'],
+    skills: ['bmad-qa-generate-e2e-tests'],
     model: 'sonnet',
     effort: 'xhigh',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/qa.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the QA E2E test generation workflow from ${workdir}/_bmad/bmm/workflows/qa-generate-e2e-tests/\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate end-to-end automated tests for existing features.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the QA E2E test skill from ${workdir}/.claude/skills/bmad-qa-generate-e2e-tests/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate end-to-end automated tests for existing features.`
   },
   shard: {
     label: '✂️ Shard Document',
@@ -242,55 +233,55 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
   'document-project': {
     label: '📚 Document Project',
     agent: 'master',
-    skills: ['bmad-master'],
+    skills: ['bmad-document-project'],
     model: 'opus',
-    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the document-project workflow from ${workdir}/_bmad/bmm/workflows/document-project/\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project codebase and generate comprehensive documentation. Save output to ${workdir}/docs/`
+    prompt: (title, workdir) => `Read config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the document-project skill from ${workdir}/.claude/skills/bmad-document-project/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project codebase and generate comprehensive documentation. Save output to ${workdir}/docs/`
   },
   'code-review': {
     label: '🔍 Code Review',
     agent: 'developer',
-    skills: ['bmad-master'],
+    skills: ['bmad-code-review'],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/code-review/\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review skill from ${workdir}/.claude/skills/bmad-code-review/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
   },
   'correct-course': {
     label: '🔄 Correct Course',
     agent: 'scrum-master',
     skills: ['bmad-master'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the correct-course workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/correct-course/\n\nProject: ${title}\nDirectory: ${workdir}\n\nNavigate the sprint change. Ask what issue or change requires course correction.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the correct-course skill from ${workdir}/.claude/skills/bmad-correct-course/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nNavigate the sprint change. Ask what issue or change requires course correction.`
   },
   'create-story': {
     label: '📝 Create Story',
     agent: 'product-manager',
-    skills: ['bmad-master'],
+    skills: ['bmad-create-story'],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/pm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/\nUse the story template from ${workdir}/_bmad/bmm/workflows/4-implementation/create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story skill from ${workdir}/.claude/skills/bmad-create-story/SKILL.md\nUse the story template from ${workdir}/.claude/skills/bmad-create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
   },
   'dev-story': {
     label: '💻 Dev Story (Implement)',
     agent: 'developer',
-    skills: ['bmad-master'],
+    skills: ['bmad-dev-story'],
     model: 'opus',
     effort: 'xhigh',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/dev.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story workflow and checklist from ${workdir}/_bmad/bmm/workflows/4-implementation/dev-story/\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story skill from ${workdir}/.claude/skills/bmad-dev-story/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.`
   },
   'retrospective': {
     label: '🔮 Retrospective',
     agent: 'scrum-master',
-    skills: ['bmad-master'],
+    skills: ['bmad-retrospective'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the retrospective workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/retrospective/\n\nProject: ${title}\nDirectory: ${workdir}\n\nFacilitate an epic completion retrospective. No blame, no time estimates. Focus on lessons learned and action items.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the retrospective skill from ${workdir}/.claude/skills/bmad-retrospective/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nFacilitate an epic completion retrospective. No blame, no time estimates. Focus on lessons learned and action items.`
   },
   'sprint-status': {
     label: '📊 Sprint Status',
     agent: 'scrum-master',
-    skills: ['bmad-master'],
+    skills: ['bmad-sprint-status'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/sm.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status workflow from ${workdir}/_bmad/bmm/workflows/4-implementation/sprint-status/\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint-status skill from ${workdir}/.claude/skills/bmad-sprint-status/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nProvide interactive sprint status review. No time estimates.`
   },
   // ── Core Tools ──
   'distillator': {
@@ -298,21 +289,21 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'master',
     skills: ['bmad-distillator'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-distillator skill from ${workdir}/_bmad/core/skills/bmad-distillator/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCompress the document(s) described in the task into a lossless, LLM-optimized distillate. Save output to ${workdir}/_bmad-output/planning-artifacts/`
+    prompt: (title, workdir) => `Read the bmad-distillator skill from ${workdir}/_bmad/core/bmad-distillator/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nCompress the document(s) described in the task into a lossless, LLM-optimized distillate. Save output to ${workdir}/_bmad-output/planning-artifacts/`
   },
   'advanced-elicitation': {
     label: '🧠 Advanced Elicitation (Refine Content)',
     agent: 'master',
     skills: ['bmad-advanced-elicitation'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/_bmad/core/skills/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
+    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/_bmad/core/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
   },
   'adversarial-review': {
     label: '😈 Adversarial Review (Find Problems)',
     agent: 'master',
     skills: ['bmad-review-adversarial-general'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/skills/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
+    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
   },
   'playwright-qa': {
     label: '🎭 Playwright QA (Browser Testing)',
@@ -327,64 +318,64 @@ Generate sprint-status.yaml following the template at ${workdir}/_bmad/bmm/workf
     agent: 'master',
     skills: ['bmad-review-edge-case-hunter'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/_bmad/core/skills/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
+    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/_bmad/core/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
   },
   'editorial-prose': {
     label: '✍️ Editorial Review — Prose',
     agent: 'master',
     skills: ['bmad-editorial-review-prose'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
+    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/_bmad/core/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
   },
   'editorial-structure': {
     label: '🏗️ Editorial Review — Structure',
     agent: 'master',
     skills: ['bmad-editorial-review-structure'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/_bmad/core/skills/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
+    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/_bmad/core/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
   },
   'index-docs': {
     label: '📇 Index Documents',
     agent: 'master',
     skills: ['bmad-index-docs'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/_bmad/core/skills/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
+    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/_bmad/core/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
   },
   // ── Technical Writer Agent Workflows ──
   'write-document': {
     label: '📝 Write Document (Tech Writer)',
     agent: 'tech-writer',
-    skills: ['bmad-master'],
+    skills: ['bmad-agent-tech-writer'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWrite the document described in the task. Follow the tech writer agent's WD trigger workflow. Save output to ${workdir}/docs/`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-tech-writer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWrite the document described in the task. Follow the tech writer agent's WD trigger workflow. Save output to ${workdir}/docs/`
   },
   'validate-doc': {
     label: '✅ Validate Document (Tech Writer)',
     agent: 'tech-writer',
-    skills: ['bmad-master'],
+    skills: ['bmad-agent-tech-writer'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the document described in the task using the tech writer VD trigger. Check for completeness, accuracy, and consistency.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-tech-writer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nValidate the document described in the task using the tech writer VD trigger. Check for completeness, accuracy, and consistency.`
   },
   'mermaid-generate': {
     label: '🧜 Generate Mermaid Diagram',
     agent: 'tech-writer',
-    skills: ['bmad-master'],
+    skills: ['bmad-agent-tech-writer'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate a Mermaid diagram as described in the task using the tech writer MG trigger. Output valid Mermaid syntax.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-tech-writer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nGenerate a Mermaid diagram as described in the task using the tech writer MG trigger. Output valid Mermaid syntax.`
   },
   'explain-concept': {
     label: '💡 Explain Concept (Tech Writer)',
     agent: 'tech-writer',
-    skills: ['bmad-master'],
+    skills: ['bmad-agent-tech-writer'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read your agent definition from ${workdir}/_bmad/bmm/agents/tech-writer/agent.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nExplain the concept described in the task using the tech writer EC trigger. Make it clear and accessible.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-tech-writer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nExplain the concept described in the task using the tech writer EC trigger. Make it clear and accessible.`
   },
   'bmad-help': {
     label: '❓ BMAD Help (What\'s Next?)',
     agent: 'master',
     skills: ['bmad-help'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/_bmad/core/skills/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
+    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/_bmad/core/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
   }
 };
 
@@ -1414,12 +1405,13 @@ async function startTask(task) {
         const WORKFLOW_TO_PHASE = {
           'analysis': 'bmad_brainstorm', 'research': 'bmad_brainstorm', 'brainstorming': 'bmad_brainstorm',
           'domain-research': 'bmad_brainstorm', 'market-research': 'bmad_brainstorm', 'technical-research': 'bmad_brainstorm',
-          'product-brief-preview': 'bmad_brainstorm',
+          'prfaq': 'bmad_brainstorm',
           'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
           'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
           'sprint-planning': 'bmad_architecture', 'create-story': 'bmad_implementation',
           'dev-story': 'bmad_implementation', 'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
-          'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
+          'quick-dev-new-preview': 'bmad_implementation',  // legacy alias
+          'quick-flow-solo-dev': 'bmad_implementation',
           'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'retrospective': 'bmad_qa',
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
@@ -1441,7 +1433,7 @@ async function startTask(task) {
           'create-story': 'Story', 'dev-story': 'Dev',
           'code-review': 'Code Review', 'e2e-tests': 'QA Tests',
           'playwright-qa': 'QA', 'quick-dev': 'Quick Dev', 'quick-spec': 'Quick Spec',
-          'quick-dev-new-preview': 'Quick Dev', 'quick-flow-solo-dev': 'Solo Dev',
+          'quick-flow-solo-dev': 'Solo Dev', 'prfaq': 'PRFAQ',
           'retrospective': 'Retro', 'correct-course': 'Course Correction',
           'sprint-status': 'Sprint Status', 'generate-context': 'Gen Context',
           'document-project': 'Docs', 'adversarial-review': 'Adversarial Review',
@@ -1473,7 +1465,7 @@ async function startTask(task) {
     // For BMAD workflow tasks, create output directory and use workflow-specific prompt
     // Also generate story file for implementation/QA workflows
     let storyPath = null;
-    const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev',
+    const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-flow-solo-dev',
       'code-review', 'adversarial-review', 'playwright-qa', 'e2e-tests', 'edge-case-review', 'correct-course'];
     if (task._bmadWorkflow) {
       const wf = task._bmadWorkflow;
@@ -1658,7 +1650,7 @@ async function startTask(task) {
       const _phaseFromWorkflow = task._bmadWorkflowType ? ({
         'create-story': 'bmad_implementation', 'dev-story': 'bmad_implementation',
         'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
-        'quick-dev-new-preview': 'bmad_implementation', 'quick-flow-solo-dev': 'bmad_implementation',
+        'quick-flow-solo-dev': 'bmad_implementation',
         'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'playwright-qa': 'bmad_qa',
         'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
         'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
@@ -1886,7 +1878,7 @@ async function startTask(task) {
                                   /\+\+\+\s+b\/[^\n]+\.(vue|tsx?|jsx?|css|scss|svelte|html)/i.test(fullText || '');
           // Is this an implementation workflow that could produce frontend changes?
           const _wfTypeNow = task._bmadWorkflowType || ((task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/)?.[1]) || '';
-          const _isImplWorkflow = ['dev-story', 'quick-dev', 'quick-dev-new-preview', 'quick-flow-solo-dev', 'quick-spec', 'code-review'].includes(_wfTypeNow);
+          const _isImplWorkflow = ['dev-story', 'quick-dev', 'quick-flow-solo-dev', 'quick-spec', 'code-review'].includes(_wfTypeNow);
 
           // Strict Playwright-execution regex: require TWO distinct evidence markers
           // across BOTH fullText AND tool call bodies (Bash/Write commands). Agents
@@ -2770,7 +2762,7 @@ function purgeOldScreenshots() {
  * - Reference the dev task's story file and output
  * - If issues found, chain a fix task after
  */
-const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-dev-new-preview', 'quick-flow-solo-dev']);
+const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-flow-solo-dev']);
 
 /**
  * Auto-chain: When a create-story task completes, automatically transition it to dev-story
