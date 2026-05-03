@@ -175,3 +175,52 @@ Daily automated sync log tracking BMAD METHOD repository updates.
 - ⚠️ `/home/ubuntu/frappe-bench/apps/hmis_setup/` — directory not found
 
 ---
+
+## 2026-04-27 — No update needed
+
+- **Installed:** 6.5.0
+- **Latest:** 6.5.0
+- No action taken.
+
+---
+
+## 2026-04-28 03:00 UTC — Daily Sync Check
+- **Installed version:** 6.5.0
+- **Latest npm version:** 6.5.0
+- **Result:** No update needed — versions match
+- **Projects checked:** N/A (no upgrade required)
+
+## 2026-04-29 03:00 UTC — Daily Sync Check
+- **Installed version:** 6.5.0
+- **Latest npm version:** 6.5.0
+- **Result:** No update needed. Versions match.
+
+## 2026-04-30 03:00 UTC — Daily Sync Check
+- **Previous version:** 6.5.0
+- **Upgraded to:** 6.6.0
+- **New agents/workflows/skills:** None (manifests unchanged — bugfix/infra release)
+- **Path changes:** None (42 skills in `.claude/skills/`, structure unchanged)
+- **Broken path references in server.js:** None detected
+- **Projects upgraded:**
+  - `/home/ubuntu/claude-code-studio` ✓
+  - `/home/ubuntu/frappe-bench/apps/hmis_frontend` ✓
+  - `/home/ubuntu/frappe-bench/apps/hmis` ✓
+  - `/home/ubuntu/frappe-bench/apps/helpdesk` ✓
+  - `/home/ubuntu/projects/devbox` ✓
+  - `/home/ubuntu/projects/hmis-lite` ✓
+- **server.js integration recommendations:** None — no new workflows to add
+
+## 2026-05-01 (03:00 UTC)
+- **Version check:** installed 6.6.0, latest 6.6.0
+- **Result:** No update needed
+- **Projects:** N/A (no upgrade required)
+
+## 2026-05-02 03:00 UTC
+- **Installed:** 6.6.0 | **Latest:** 6.6.0
+- No update needed
+
+## 2026-05-03 (03:00 UTC) - Daily Sync Check
+- **Latest npm version:** 6.6.0
+- **Installed version:** 6.6.0
+- **Result:** No update needed
+- **Projects checked:** N/A (no upgrade required)
