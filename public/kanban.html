@@ -1978,7 +1978,7 @@ function makeCard(tk){
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   const schedBadge=(tk.scheduled_at&&(tk.status==='bmad_workflow'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
   const wfTagM=(tk.notes||'').match(/\[bmad-workflow:([\w-]+)\]/);
-  const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard'};
+  const wfLabels={analysis:'🔍 Analysis',planning:'📋 Planning',solutioning:'🏗️ Solutioning','sprint-planning':'📐 Sprint Planning',shard:'✂️ Shard','playwright-qa':'🎭 QA','backend-qa':'🔧 Backend QA','dev-story':'💻 Dev','create-story':'📝 Story','quick-dev':'⚡ Quick Dev','code-review':'🔍 Code Review'};
   const wfBadge=wfTagM?`<span class="badge badge-purple" style="background:rgba(147,51,234,.18);color:#c084fc">${escH(wfLabels[wfTagM[1]]||wfTagM[1])}</span>`:'';
   // Chain badge
   let chainBadge='';

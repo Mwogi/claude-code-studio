@@ -313,6 +313,14 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     effort: 'xhigh',
     prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\nExample: cat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// ... test code ...\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Write a Playwright script that navigates to the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\n## SCREENSHOT RULES — FOCUSED SCREENSHOTS ONLY\nDo NOT screenshot login, OTP, sidebar navigation, or loading states.\nOnly screenshot what directly verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page, OTP screen, navigation steps, spinners\nAim for 2-5 focused screenshots per task. Save to test-screenshots/ with descriptive names.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
   },
+  'backend-qa': {
+    label: '🔧 Backend QA (Non-Browser Testing)',
+    agent: 'qa',
+    skills: [],
+    model: 'opus',
+    effort: 'xhigh',
+    prompt: (title, workdir) => `You are a QA engineer testing backend-only changes. No browser testing is needed for this task.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## YOUR FIRST ACTION:\n1. Read docs/testing-info.md to get the test URL and credentials\n2. Read the QA report/task description to understand what was changed\n\n## TESTING APPROACH FOR BACKEND-ONLY CHANGES:\n- Review the code changes (git diff) for correctness\n- Use curl/httpie to test API endpoints directly\n- Verify data integrity with database queries where appropriate\n- Check error handling and edge cases\n- Verify type safety and input validation\n- Run any existing test suites (pytest, jest, etc.)\n\nDo NOT use Playwright for backend-only stories. Use direct API testing.\n\nRead the task description for the full QA checklist.`
+  },
   'edge-case-review': {
     label: '🔬 Edge Case Hunter',
     agent: 'master',
@@ -1418,7 +1426,7 @@ async function startTask(task) {
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
           'distillator': 'bmad_implementation', 'advanced-elicitation': 'bmad_brainstorm',
-          'adversarial-review': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+          'adversarial-review': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'backend-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
           'editorial-prose': 'bmad_qa', 'editorial-structure': 'bmad_qa', 'index-docs': 'bmad_implementation',
           'write-document': 'bmad_implementation', 'validate-doc': 'bmad_qa', 'mermaid-generate': 'bmad_implementation',
           'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
@@ -1434,7 +1442,7 @@ async function startTask(task) {
           'readiness-check': 'Readiness Check', 'sprint-planning': 'Sprint Planning',
           'create-story': 'Story', 'dev-story': 'Dev',
           'code-review': 'Code Review', 'e2e-tests': 'QA Tests',
-          'playwright-qa': 'QA', 'quick-dev': 'Quick Dev', 'quick-spec': 'Quick Spec',
+          'playwright-qa': 'QA', 'backend-qa': 'QA', 'quick-dev': 'Quick Dev', 'quick-spec': 'Quick Spec',
           'quick-flow-solo-dev': 'Solo Dev', 'prfaq': 'PRFAQ',
           'retrospective': 'Retro', 'correct-course': 'Course Correction',
           'sprint-status': 'Sprint Status', 'generate-context': 'Gen Context',
@@ -1459,6 +1467,19 @@ async function startTask(task) {
         log.info(`[taskWorker] Setting BMAD phase: ${task.id} ("${task.title}") workflow=${wfType} → status=${phase}`);
         db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(phase, task.id);
         // Notify kanban immediately so the card moves to the correct column
+        wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+      } else if (bmadWorkflowTagMatch) {
+        // Fallback: workflow tag present but not in BMAD_WORKFLOWS — still map to a phase
+        // so the task doesn't become invisible on the kanban (no 'in_progress' column)
+        const unknownWfType = bmadWorkflowTagMatch[1];
+        const FALLBACK_PHASE_MAP = {
+          'backend-qa': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'code-review': 'bmad_qa',
+          'dev-story': 'bmad_implementation', 'create-story': 'bmad_implementation',
+          'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
+        };
+        const fallbackPhase = FALLBACK_PHASE_MAP[unknownWfType] || (unknownWfType.includes('qa') ? 'bmad_qa' : 'bmad_implementation');
+        log.warn(`[taskWorker] Unknown BMAD workflow '${unknownWfType}' — falling back to phase ${fallbackPhase}`);
+        db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`).run(fallbackPhase, task.id);
         wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
       } else {
         stmts.setTaskInProgress.run(task.id);
@@ -1653,7 +1674,7 @@ async function startTask(task) {
         'create-story': 'bmad_implementation', 'dev-story': 'bmad_implementation',
         'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
         'quick-flow-solo-dev': 'bmad_implementation',
-        'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'playwright-qa': 'bmad_qa',
+        'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'backend-qa': 'bmad_qa',
         'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
         'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
         'sprint-planning': 'bmad_architecture',
