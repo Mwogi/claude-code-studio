@@ -1993,6 +1993,55 @@ function makeCard(tk){
       chainBadge=`<span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;font-size:10px" title="Chain: ${escH(tk.chain_id)}&#10;Step ${idx+1} of ${total}${waitTip}">${waitIcon} ${idx+1}/${total}</span>`;
     }
   }
+  // Dependency badge — shows what this task is waiting on
+  let depBadge='';
+  if(tk.depends_on && tk.status==='bmad_workflow'){
+    try{
+      const deps=JSON.parse(tk.depends_on);
+      const depParts=deps.map(depId=>{
+        if(typeof depId==='string'&&depId.startsWith('group:')){
+          const gn=depId.slice(6);
+          // Find tasks in the group to determine status
+          const grpTasks=tasks.filter(t=>t.dep_group===gn&&t.id!==tk.id&&!['archived','backlog'].includes(t.status));
+          if(!grpTasks.length) return {label:gn,status:'done',icon:'✅'};
+          const allDone=grpTasks.every(t=>['done','done_review'].includes(t.status));
+          const anyRunning=grpTasks.some(t=>isTaskActive(t.status));
+          const icon=allDone?'✅':anyRunning?'🔄':'⏳';
+          const status=allDone?'done':anyRunning?'running':'queued';
+          // Find a human-readable title from a create-story or dev-story task in the group
+          const rep=grpTasks.find(t=>(t.notes||'').includes('[bmad-workflow:'))||grpTasks[0];
+          const shortTitle=rep?rep.title.replace(/^(Story:|QA:|Fix:|Quick Dev:)\s*/,'').substring(0,35):gn;
+          return {label:gn,status,icon,shortTitle};
+        }
+        // Direct task ID dependency
+        const dep=tasks.find(t=>t.id===depId);
+        if(!dep) return {label:depId.substring(0,8),status:'unknown',icon:'❓'};
+        const done=['done','done_review','archived'].includes(dep.status);
+        return {label:dep.task_number?'#'+dep.task_number:depId.substring(0,8),status:done?'done':'pending',icon:done?'✅':isTaskActive(dep.status)?'🔄':'⏳'};
+      });
+      const pending=depParts.filter(d=>d.status!=='done');
+      if(pending.length){
+        const tipLines=depParts.map(d=>`${d.icon} ${d.label}${d.shortTitle?' — '+d.shortTitle:''} (${d.status})`).join('\n');
+        const summary=pending.map(d=>d.label).join(', ');
+        depBadge=`<span class="badge" style="background:rgba(251,146,60,.15);color:#fb923c;font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Waiting on:\n${escH(tipLines)}">⏳ ${escH(summary)}</span>`;
+      }
+    }catch(e){}
+  }
+  // dep_group identity + dependents badge — shows who is waiting on THIS task's group
+  let groupBadge='';
+  if(tk.dep_group){
+    const waitingOn=tasks.filter(t=>{
+      if(!t.depends_on||t.id===tk.id) return false;
+      try{ return JSON.parse(t.depends_on).includes('group:'+tk.dep_group); }catch{return false;}
+    });
+    const waitingPending=waitingOn.filter(t=>!['done','done_review','archived','cancelled'].includes(t.status));
+    if(waitingPending.length){
+      const names=waitingPending.map(t=>t.dep_group||t.title.substring(0,30)).join(', ');
+      groupBadge=`<span class="badge" style="background:rgba(34,197,94,.15);color:#4ade80;font-size:10px" title="Group: ${escH(tk.dep_group)}\n${waitingPending.length} task(s) waiting on this group:\n${escH(names)}">📦 ${escH(tk.dep_group)} → ${waitingPending.length}</span>`;
+    } else {
+      groupBadge=`<span class="badge" style="background:rgba(100,116,139,.15);color:#94a3b8;font-size:10px" title="Group: ${escH(tk.dep_group)}">📦 ${escH(tk.dep_group)}</span>`;
+    }
+  }
   // Activity badge for running tasks — shows elapsed runtime (not time since last event)
   let activityBadge='';
   const _startTs = tk.started_at || activityCache.get(tk.id+'_start') || tk.updated_at;
@@ -2012,7 +2061,7 @@ function makeCard(tk){
     <div class="card-title">${tk.task_number ? `<span style="color:var(--muted);font-size:11px;font-weight:500">#${tk.task_number}</span> ` : ''}${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${wfBadge}${chainBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${schedBadge}${wfBadge}${chainBadge}${depBadge}${groupBadge}${activityBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="Edit" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
@@ -2383,8 +2432,61 @@ function buildForm(tk={}){
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>
       <span>${escH(t('modal.sched_wait'))} <strong>${escH(fmtScheduledAt(tk.scheduled_at))}</strong></span>
     </div>`:'';
+  // Dependency tree info for the edit modal
+  let depTreeHtml='';
+  if(tk.depends_on||tk.dep_group){
+    let lines=[];
+    // What this task depends on
+    if(tk.depends_on){
+      try{
+        const deps=JSON.parse(tk.depends_on);
+        deps.forEach(depId=>{
+          if(typeof depId==='string'&&depId.startsWith('group:')){
+            const gn=depId.slice(6);
+            const grpTasks=tasks.filter(t=>t.dep_group===gn&&t.id!==tk.id&&!['archived','backlog'].includes(t.status));
+            if(!grpTasks.length){ lines.push(`<div style="padding:3px 0">✅ <strong>${escH(gn)}</strong> — all done</div>`); return; }
+            const allDone=grpTasks.every(t=>['done','done_review'].includes(t.status));
+            const icon=allDone?'✅':'⏳';
+            lines.push(`<div style="padding:3px 0">${icon} <strong>Depends on group ${escH(gn)}</strong>${allDone?' — <span style="color:#4ade80">ready</span>':' — <span style="color:#fb923c">waiting</span>'}</div>`);
+            grpTasks.forEach(gt=>{
+              const st=gt.status;
+              const stIcon=['done','done_review'].includes(st)?'✅':isTaskActive(st)?'🔄':'⏳';
+              const stColor=['done','done_review'].includes(st)?'#4ade80':isTaskActive(st)?'#60a5fa':'#94a3b8';
+              lines.push(`<div style="padding:2px 0 2px 16px;font-size:12px">${stIcon} <span style="color:${stColor}">${escH(st)}</span> — ${gt.task_number?'#'+gt.task_number+' ':''}${escH(gt.title.substring(0,60))}</div>`);
+            });
+          } else {
+            const dep=tasks.find(t=>t.id===depId);
+            if(dep){
+              const done=['done','done_review','archived'].includes(dep.status);
+              lines.push(`<div style="padding:3px 0">${done?'✅':'⏳'} Depends on ${dep.task_number?'#'+dep.task_number+' ':''}${escH(dep.title.substring(0,50))} <span style="color:${done?'#4ade80':'#fb923c'}">(${escH(dep.status)})</span></div>`);
+            }
+          }
+        });
+      }catch{}
+    }
+    // Who depends on this task's group
+    if(tk.dep_group){
+      const waiters=tasks.filter(t=>{
+        if(!t.depends_on||t.id===tk.id) return false;
+        try{return JSON.parse(t.depends_on).includes('group:'+tk.dep_group);}catch{return false;}
+      }).filter(t=>!['archived','cancelled'].includes(t.status));
+      if(waiters.length){
+        lines.push(`<div style="padding:3px 0;margin-top:4px">📦 <strong>Group ${escH(tk.dep_group)}</strong> — ${waiters.length} task(s) waiting:</div>`);
+        waiters.forEach(w=>{
+          lines.push(`<div style="padding:2px 0 2px 16px;font-size:12px">⏳ ${w.task_number?'#'+w.task_number+' ':''}${escH(w.title.substring(0,60))} <span style="color:#94a3b8">(${escH(w.status)})</span></div>`);
+        });
+      }
+    }
+    if(lines.length){
+      depTreeHtml=`<div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.2);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px">
+        <div style="font-weight:600;margin-bottom:4px;color:#fb923c">📊 Dependency Tree</div>
+        ${lines.join('')}
+      </div>`;
+    }
+  }
   return `
     ${schedInfoHtml}
+    ${depTreeHtml}
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
