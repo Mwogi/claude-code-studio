@@ -2486,10 +2486,13 @@ function processQueue() {
             // Support group dependencies: "group:S1.1" means all tasks with dep_group="S1.1" must be done
             if (typeof depId === 'string' && depId.startsWith('group:')) {
               const groupName = depId.slice(6);
-              // Exclude self from group check to prevent deadlock (task in its own dep_group)
-              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
-              if (groupTasks.length === 0) return true; // no tasks in group yet — treat as satisfied
-              return groupTasks.every(gt => ['done', 'done_review', 'archived'].includes(gt.status));
+              // Scope group check to same workdir to prevent cross-project dep_group collisions
+              // (e.g. old backlog tasks from a different epic sharing the same "S3.2" dep_group)
+              const groupTasks = task.workdir
+                ? db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND workdir=? AND status NOT IN ('backlog','archived')`).all(groupName, task.id, task.workdir)
+                : db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND status NOT IN ('backlog','archived')`).all(groupName, task.id);
+              if (groupTasks.length === 0) return true; // no tasks in group yet (or all archived/backlog) — treat as satisfied
+              return groupTasks.every(gt => ['done', 'done_review'].includes(gt.status));
             }
             const dep = stmts.getTask.get(depId);
             return dep && ['done', 'done_review', 'archived'].includes(dep.status);
@@ -2500,8 +2503,10 @@ function processQueue() {
           const hasFailedGroup = deps.some(depId => {
             if (typeof depId === 'string' && depId.startsWith('group:')) {
               const groupName = depId.slice(6);
-              // Exclude self from group check
-              const groupTasks = db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
+              // Scope to same workdir to match allDone check
+              const groupTasks = task.workdir
+                ? db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND workdir=?`).all(groupName, task.id, task.workdir)
+                : db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
               return groupTasks.some(gt => gt.status === 'cancelled');
             }
             return false;
@@ -2515,9 +2520,12 @@ function processQueue() {
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
-    // Chain sequencing: tasks in the same chain must run in sort_order.
-    // Block this task if any earlier task in the same chain is not yet done/cancelled.
-    if (task.chain_id) {
+    // Chain sequencing: tasks in the same chain run in sort_order UNLESS they have
+    // explicit depends_on (group deps).  When depends_on is set the dependency DAG
+    // already expresses ordering — chain sort_order is redundant and would prevent
+    // parallel execution of independent stories within the same epic (e.g. S4.2,
+    // S4.3, S4.4 all depend on group:S4.1, not on each other).
+    if (task.chain_id && !task.depends_on) {
       const chainTasks = stmts.getTasksByChain.all(task.chain_id);
       const earlierPending = chainTasks.some(t =>
         (t.sort_order || 0) < (task.sort_order || 0) &&
