@@ -5666,6 +5666,18 @@ app.post('/api/tasks/bulk-move', express.json(), (req, res) => {
     result = db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE status=?`).run(to_status, from_status);
   }
   log.info(`[bulk-move] Moved ${result.changes} tasks from ${from_status} → ${to_status}${wd ? ` (workdir=${wd})` : ''}`);
+  // Kill running agents when bulk-moving to archived/cancelled
+  if (['archived', 'cancelled'].includes(to_status)) {
+    const affected = wd
+      ? db.prepare(`SELECT id, worker_pid FROM tasks WHERE status=? AND workdir=?`).all(to_status, wd)
+      : db.prepare(`SELECT id, worker_pid FROM tasks WHERE status=?`).all(to_status);
+    for (const t of affected) {
+      const ctrl = runningTaskAborts.get(t.id);
+      if (ctrl) { stoppingTasks.add(t.id); ctrl.abort(); runningTaskAborts.delete(t.id); }
+      if (t.worker_pid) { try { killByPid(t.worker_pid); } catch {} }
+    }
+    if (affected.length) log.info(`[bulk-move] Killed ${affected.length} running agents`);
+  }
   // Clean up screenshots when bulk-moving to done/archived
   if (['done', 'archived'].includes(to_status) && wd) {
     try {
@@ -5700,11 +5712,23 @@ app.patch('/api/tasks/:id', express.json(), (req, res) => {
   if (updates.status === 'open') updates.status = 'backlog';
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields provided' });
   const merged = { ...task, ...updates };
-  // Stop task if being moved away from in_progress
-  if (task.status === 'in_progress' && merged.status && merged.status !== 'in_progress') {
+  // Stop task if being moved to archived/cancelled OR away from any running state
+  const TERMINAL_STATUSES = new Set(['archived', 'cancelled']);
+  const RUNNING_STATUSES = new Set(['in_progress', 'bmad_implementation', 'bmad_brainstorm', 'bmad_prd', 'bmad_architecture', 'bmad_qa']);
+  const wasRunning = RUNNING_STATUSES.has(task.status) || runningTaskAborts.has(req.params.id);
+  const movingToTerminal = TERMINAL_STATUSES.has(merged.status);
+  if (wasRunning && merged.status && (merged.status !== task.status || movingToTerminal)) {
     const ctrl = runningTaskAborts.get(req.params.id);
-    if (ctrl) { stoppingTasks.add(req.params.id); ctrl.abort(); }
-    else if (task.worker_pid) { stoppingTasks.add(req.params.id); killByPid(task.worker_pid); }
+    if (ctrl) { stoppingTasks.add(req.params.id); ctrl.abort(); log.info('Task aborted via status change', { id: req.params.id, from: task.status, to: merged.status }); }
+    if (task.worker_pid) { try { killByPid(task.worker_pid); } catch {} }
+    runningTaskAborts.delete(req.params.id);
+  }
+  // Also kill if moving ANY task to archived/cancelled even if we don't think it's running
+  // (handles race where status was updated but abort map wasn't cleared)
+  if (movingToTerminal && !wasRunning) {
+    const ctrl = runningTaskAborts.get(req.params.id);
+    if (ctrl) { stoppingTasks.add(req.params.id); ctrl.abort(); runningTaskAborts.delete(req.params.id); }
+    if (task.worker_pid) { try { killByPid(task.worker_pid); } catch {} }
   }
   stmts.updateTask.run(
     String(merged.title).substring(0,200), String(merged.description||'').substring(0,2000),
