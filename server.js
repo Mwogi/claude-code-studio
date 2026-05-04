@@ -77,6 +77,29 @@ const BMAD_PHASE_MODEL_MAP = {
   'bmad_qa': 'opus',
 };
 
+/**
+ * Derive a short domain slug from a task title for use in output filenames.
+ * E.g., "PRD: SHA Cancer Benefits" → "sha-cancer-benefits"
+ * E.g., "Domain Research: Oncology Module" → "oncology-module"
+ * Falls back to a timestamp slug if title is too generic.
+ */
+function deriveDomainSlug(title) {
+  // Strip common prefixes (workflow labels)
+  let slug = title
+    .replace(/^(PRD|Architecture|Epics|Domain Research|Planning|Solutioning|UX Design|Sprint Planning):\s*/i, '')
+    .replace(/^(Domain Research:|Market Research:|Technical Research:)\s*/i, '')
+    .trim();
+  // Convert to kebab-case slug
+  slug = slug
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 50);
+  // Fallback if too short
+  if (slug.length < 3) slug = `task-${Date.now()}`;
+  return slug;
+}
+
 // Per-phase thinking effort level (adaptive thinking on Opus 4.7 / Sonnet 4.6+).
 // xhigh = Opus 4.7 only (between high and max). Falls back to high on Opus 4.6 / Sonnet.
 // Coding and QA phases get xhigh because they benefit most from deeper reasoning.
@@ -94,49 +117,49 @@ const BMAD_WORKFLOWS = {
     agent: 'analyst',
     skills: ['bmad-brainstorming', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief skill from ${workdir}/.claude/skills/bmad-product-brief/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/product-brief.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the product brief skill from ${workdir}/.claude/skills/bmad-product-brief/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nPARTY MODE ACTIVE: Facilitate a multi-agent discussion.\n\nIMPORTANT: NEVER overwrite existing files. Save output to ${workdir}/_bmad-output/planning-artifacts/product-brief-${slug}.md`; }
   },
   research: {
     label: '🔬 Research (Domain/Market/Tech)',
     agent: 'analyst',
     skills: ['bmad-brainstorming'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nConduct domain research (${workdir}/.claude/skills/bmad-domain-research/SKILL.md), market research (${workdir}/.claude/skills/bmad-market-research/SKILL.md), and technical research (${workdir}/.claude/skills/bmad-technical-research/SKILL.md).\n\nProject: ${title}\nDirectory: ${workdir}\n\nSave findings to ${workdir}/_bmad-output/planning-artifacts/research.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-analyst/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nConduct domain research (${workdir}/.claude/skills/bmad-domain-research/SKILL.md), market research (${workdir}/.claude/skills/bmad-market-research/SKILL.md), and technical research (${workdir}/.claude/skills/bmad-technical-research/SKILL.md).\n\nProject: ${title}\nDirectory: ${workdir}\n\nIMPORTANT: NEVER overwrite existing files. Save findings to ${workdir}/_bmad-output/planning-artifacts/research-${slug}.md`; }
   },
   'domain-research': {
     label: '🌐 Domain Research',
     agent: 'analyst',
     skills: ['bmad-domain-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-domain-research skill from ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read the bmad-domain-research skill from ${workdir}/.claude/skills/bmad-domain-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct domain and industry research. IMPORTANT: NEVER overwrite existing files. Save findings to ${workdir}/_bmad-output/planning-artifacts/domain-research-${slug}.md`; }
   },
   'market-research': {
     label: '📊 Market Research',
     agent: 'analyst',
     skills: ['bmad-market-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-market-research skill from ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read the bmad-market-research skill from ${workdir}/.claude/skills/bmad-market-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct market research on competition and customers. IMPORTANT: NEVER overwrite existing files. Save findings to ${workdir}/_bmad-output/planning-artifacts/market-research-${slug}.md`; }
   },
   'technical-research': {
     label: '🔭 Technical Research',
     agent: 'analyst',
     skills: ['bmad-technical-research'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-technical-research skill from ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read the bmad-technical-research skill from ${workdir}/.claude/skills/bmad-technical-research/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nConduct technical research on technologies and architecture. IMPORTANT: NEVER overwrite existing files. Save findings to ${workdir}/_bmad-output/planning-artifacts/technical-research-${slug}.md`; }
   },
   prfaq: {
     label: '📝 PRFAQ Challenge (Working Backwards)',
     agent: 'analyst',
     skills: ['bmad-prfaq'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-prfaq skill from ${workdir}/.claude/skills/bmad-prfaq/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the Working Backwards PRFAQ challenge. Save output to ${workdir}/_bmad-output/planning-artifacts/prfaq.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read the bmad-prfaq skill from ${workdir}/.claude/skills/bmad-prfaq/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRun the Working Backwards PRFAQ challenge. IMPORTANT: NEVER overwrite existing files. Save output to ${workdir}/_bmad-output/planning-artifacts/prfaq-${slug}.md`; }
   },
   planning: {
     label: '📋 Planning → PRD',
     agent: 'product-manager',
     skills: ['bmad-create-prd', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation skill from ${workdir}/.claude/skills/bmad-create-prd/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/prd.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the PRD creation skill from ${workdir}/.claude/skills/bmad-create-prd/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the product brief from ${workdir}/_bmad-output/planning-artifacts/product-brief.md if it exists.\n\nIMPORTANT: NEVER overwrite an existing file. Save output to ${workdir}/_bmad-output/planning-artifacts/prd-${slug}.md\nIf that file already exists, append a timestamp suffix.`; }
   },
   'edit-prd': {
     label: '✏️ Edit PRD',
@@ -157,14 +180,14 @@ const BMAD_WORKFLOWS = {
     agent: 'ux-designer',
     skills: ['bmad-create-ux-design', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-ux-designer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design skill from ${workdir}/.claude/skills/bmad-create-ux-design/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\nSave output to ${workdir}/_bmad-output/planning-artifacts/ux-design-specification.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-ux-designer/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the UX design skill from ${workdir}/.claude/skills/bmad-create-ux-design/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd-${slug}.md if it exists. If not found, try ${workdir}/_bmad-output/planning-artifacts/prd.md as fallback.\n\nIMPORTANT: NEVER overwrite existing files. Save output to ${workdir}/_bmad-output/planning-artifacts/ux-design-${slug}.md`; }
   },
   solutioning: {
     label: '🏗️ Solutioning → Architecture + Epics',
     agent: 'architect',
     skills: ['bmad-create-architecture', 'bmad-create-epics-and-stories', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md if it exists.\n\n1. Run the architecture skill from ${workdir}/.claude/skills/bmad-create-architecture/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/architecture.md\n2. Run the epics skill from ${workdir}/.claude/skills/bmad-create-epics-and-stories/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/epics.md`
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd-${slug}.md if it exists. If not found, try ${workdir}/_bmad-output/planning-artifacts/prd.md as fallback.\n\nIMPORTANT: NEVER overwrite existing files.\n1. Run the architecture skill from ${workdir}/.claude/skills/bmad-create-architecture/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/architecture-${slug}.md\n2. Run the epics skill from ${workdir}/.claude/skills/bmad-create-epics-and-stories/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/epics-${slug}.md`; }
   },
   'readiness-check': {
     label: '✅ Implementation Readiness Check',
@@ -178,9 +201,10 @@ const BMAD_WORKFLOWS = {
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
     model: 'opus',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning skill from ${workdir}/.claude/skills/bmad-sprint-planning/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the epics from ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture from ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning skill from ${workdir}/.claude/skills/bmad-sprint-planning/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nFor epics, architecture, and PRD: look in ${workdir}/_bmad-output/planning-artifacts/ for the MOST RECENT file matching each pattern (ls -t):\n- Epics: epics-*.md (prefer epics-${slug}.md if it exists)\n- Architecture: architecture-*.md (prefer architecture-${slug}.md if it exists)\n- PRD: prd-*.md (prefer prd-${slug}.md if it exists)\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
 
 Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/bmad-sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n- dep_group: the story ID e.g. "S1.1", "S1.2", "S2.1" (Epic.Story format). This groups a dev task with its auto-spawned QA and Fix tasks so dependent stories can wait for the entire group to complete.\n- depends_on: JSON array of group dependencies e.g. ["group:S1.1"] means this story waits until ALL tasks in dep_group S1.1 (dev+QA+fix) are done. Use this for stories that depend on prior stories. Stories within the same epic that can run in parallel should NOT have depends_on. Only add depends_on when there is a real dependency (e.g. story 1.3 needs story 1.2 complete). First story in each epic has no depends_on.\n\nDEPENDENCY RULES:\n- Independent stories (no cross-story dependency) → set dep_group only, no depends_on → they run in parallel\n- Sequential stories → set dep_group AND depends_on with group refs → they wait for prior groups\n- Cross-epic dependencies → use depends_on: ["group:S1.3"] to depend on stories from other epics\n- The server auto-inherits dep_group to QA and Fix tasks, so only set it on the create-story task\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N,"dep_group":"S1.1","depends_on":"[\\"group:S1.0\\"]"}'`
+  ; }
   },
   'quick-spec': {
     label: '⚡ Quick Spec',
@@ -258,7 +282,7 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     skills: ['bmad-create-story'],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story skill from ${workdir}/.claude/skills/bmad-create-story/SKILL.md\nUse the story template from ${workdir}/.claude/skills/bmad-create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\nRead the epics: ${workdir}/_bmad-output/planning-artifacts/epics.md\nRead the architecture: ${workdir}/_bmad-output/planning-artifacts/architecture.md\nRead the PRD: ${workdir}/_bmad-output/planning-artifacts/prd.md\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-pm/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nUse the create-story skill from ${workdir}/.claude/skills/bmad-create-story/SKILL.md\nUse the story template from ${workdir}/.claude/skills/bmad-create-story/template.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the sprint status: ${workdir}/_bmad-output/sprint-status.yaml\n\nFor epics, architecture, and PRD: look in ${workdir}/_bmad-output/planning-artifacts/ for the MOST RECENT file matching each pattern (ls -t):\n- Epics: epics-*.md (e.g. epics-oncology-module.md, epics-sha-claims.md)\n- Architecture: architecture-*.md\n- PRD: prd-*.md\nIf the task description or chain_id hints at a specific domain, prefer that domain's files. Otherwise use the most recently modified.\n\nCreate a detailed story file for this task using the template. Include:\n- Acceptance criteria derived from epics and PRD\n- Subtasks with AC references\n- Dev notes with architecture patterns and file references\n- Project structure notes\n\nSave the story file to ${workdir}/_bmad-output/implementation-artifacts/\n\nDo NOT update this task's workflow or status via curl. The server automatically creates a dev-story implementation task when this create-story task completes. Just create the story file and finish.`
   },
   'dev-story': {
     label: '💻 Dev Story (Implement)',
@@ -3883,7 +3907,10 @@ const MAX_PROMPT_CACHE_SIZE = 32;
 // Base instructions (always included) — kept concise to save tokens
 const BASE_SYSTEM_INSTRUCTIONS = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:
 > <original question or task text>
-Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
+Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.
+
+## CRITICAL RULE: Never Overwrite BMAD Artifacts
+When saving to _bmad-output/planning-artifacts/, NEVER use generic filenames like prd.md, architecture.md, epics.md, domain-research.md, ux-design-specification.md, or research.md. These WILL overwrite other projects' work. Always use domain-slugged names (e.g. prd-oncology-module.md, architecture-sha-claims.md). If a skill instructs you to save to a generic name, derive a slug from the task title and use that instead. If the target file already exists, append a date suffix rather than overwriting.`;
 
 // Language names for UI language instruction
 const LANG_NAMES = { en: 'English', uk: 'Ukrainian', ru: 'Russian' };
