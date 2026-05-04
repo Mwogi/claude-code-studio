@@ -3910,7 +3910,15 @@ const BASE_SYSTEM_INSTRUCTIONS = `When you are answering a specific question or 
 Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.
 
 ## CRITICAL RULE: Never Overwrite BMAD Artifacts
-When saving to _bmad-output/planning-artifacts/, NEVER use generic filenames like prd.md, architecture.md, epics.md, domain-research.md, ux-design-specification.md, or research.md. These WILL overwrite other projects' work. Always use domain-slugged names (e.g. prd-oncology-module.md, architecture-sha-claims.md). If a skill instructs you to save to a generic name, derive a slug from the task title and use that instead. If the target file already exists, append a date suffix rather than overwriting.`;
+When saving to _bmad-output/planning-artifacts/, NEVER use generic filenames like prd.md, architecture.md, epics.md, domain-research.md, ux-design-specification.md, or research.md. These WILL overwrite other projects' work. Always use domain-slugged names (e.g. prd-oncology-module.md, architecture-sha-claims.md). If a skill instructs you to save to a generic name, derive a slug from the task title and use that instead. If the target file already exists, append a date suffix rather than overwriting.
+
+## CRITICAL RULE: No Dev Artifacts in User-Visible UI
+NEVER include Story IDs, Epic numbers, or internal dev references in user-rendered text. These are internal BMAD tracking IDs that mean nothing to end users.
+- ❌ "Oncology Module — Scaffold (Story S1.1)"
+- ❌ "Epic 13 / Story S13.2"
+- ❌ "will be added in subsequent stories"
+- ✅ Keep these ONLY in code comments (// or <!-- -->), never in rendered <p>, <span>, <h1-h6> text
+- ✅ Subtitles should describe the feature, not the dev ticket`;
 
 // Language names for UI language instruction
 const LANG_NAMES = { en: 'English', uk: 'Ukrainian', ru: 'Russian' };
