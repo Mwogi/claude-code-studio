@@ -335,7 +335,7 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     skills: [],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\nExample: cat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst page = await browser.newPage();\n// ... test code ...\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL and credentials for THIS project\n2. Write a Playwright script that navigates to the URL from testing-info.md\n\n⚠️ NEVER hardcode or assume a URL. ALWAYS read docs/testing-info.md first.\n\nDo this RIGHT NOW before reading any other files. If navigation fails, try again. If it truly fails after 3 attempts, document the error.\n\nAfter navigating, login with credentials from docs/testing-info.md.\n\nThen test each acceptance criterion from the story file by actually interacting with the UI.\n\n## SCREENSHOT RULES — FOCUSED SCREENSHOTS ONLY\nDo NOT screenshot login, OTP, sidebar navigation, or loading states.\nOnly screenshot what directly verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page, OTP screen, navigation steps, spinners\nAim for 2-5 focused screenshots per task. Save to test-screenshots/ with descriptive names.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright. Do NOT just review code.\n\nRead the task description for the full QA checklist.`
+    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL for THIS project\n2. Use the EXISTING auth storageState (e2e/.auth/user.json) — DO NOT write login code\n\n## AUTHENTICATION — USE STORAGE STATE (MANDATORY)\n\nThe project has a pre-authenticated browser state at e2e/.auth/user.json.\nYou MUST use it. NEVER write manual login/OTP code. NEVER screenshot login pages.\n\nCorrect pattern:\ncat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst context = await browser.newContext({ storageState: '${workdir}/e2e/.auth/user.json' });\nconst page = await context.newPage();\nawait page.goto('<URL from testing-info.md>/#/target-page');\n// Already authenticated! Test directly.\nawait page.screenshot({ path: 'test-screenshots/feature.png' });\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\nIf storageState gives 403/login redirect, regenerate: cd ${workdir} && npx playwright test --project=setup\n\n## SCREENSHOT RULES — ABSOLUTE RULES\n\n**Login/OTP screenshots = INSTANT TASK FAILURE. They are BANNED.**\n\nOnly screenshot what verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page — BANNED\n- ❌ OTP screen — BANNED\n- ❌ Sidebar navigation — BANNED\n- ❌ Loading spinners — BANNED\nAim for 2-5 focused screenshots per task.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright.\n\nRead the task description for the full QA checklist.`
   },
   'backend-qa': {
     label: '🔧 Backend QA (Non-Browser Testing)',
@@ -3122,7 +3122,7 @@ Aim for 2-5 focused screenshots per QA task, not 10+ routine ones.
 
 ### Test steps
 1. Read docs/testing-info.md for the correct test URL and credentials
-2. Write a Playwright script that logs in (no screenshot needed for login)
+2. Write a Playwright script using storageState (e2e/.auth/user.json) — NO manual login code
 3. Navigate to the relevant pages for this feature
 4. Test each acceptance criterion from the story file
 5. Take FOCUSED screenshots only for AC verification (see rules above)
@@ -4049,9 +4049,10 @@ If this task modifies **any** .vue, .tsx, .jsx, .ts, .js, .css, .scss, or .html 
     cat > /tmp/verify-task.mjs << 'SCRIPT'
     import { chromium } from 'playwright';
     const browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
-    await page.goto('<URL from docs/testing-info.md>');
-    // login, navigate, interact, screenshot
+    const context = await browser.newContext({ storageState: './e2e/.auth/user.json' });
+    const page = await context.newPage();
+    await page.goto('<URL from docs/testing-info.md>/#/target-page');
+    // Already authenticated via storageState — go directly to the feature
     await page.screenshot({ path: 'test-screenshots/task-<N>-01-feature.png' });
     await browser.close();
     SCRIPT
