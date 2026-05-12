@@ -34,6 +34,8 @@ const PROJECT_THREADS = {
   'HMIS Frontend':       '1476556097312522311',  // project name in DB
   'Golf Casino Backend': '1479043614628647074',  // existing Golf Project thread
   'Claude Code Studio':  '1479520243385765888',  // main thread
+  'NiMiMi Backend':      '1503011240774205553',  // consolidated thread
+  'NiMiMi-V2':           '1503011240774205553',  // same thread as NiMiMi Backend
 };
 
 /**
@@ -47,6 +49,7 @@ const WORKDIR_THREADS = {
   'projects/hmis-lite':          '1476556097312522311',
   'claude-code-studio':          '1479520243385765888',
   'golf_casino':                 '1479043614628647074',
+  'projects/nimimi':               '1503011240774205553',
 };
 
 // ---------------------------------------------------------------------------
@@ -104,13 +107,22 @@ const OPENCLAW_BIN = findOpenclawBin();
 // Thread resolution — check hardcoded → persisted → auto-create
 // ---------------------------------------------------------------------------
 
+/** Normalize project name for thread-map key (case-insensitive dedup). */
+function _normalizeKey(name) { return name ? name.toLowerCase().replace(/[\s_]+/g, '-') : ''; }
+
 /** Returns a known thread ID without triggering creation, or null if unknown. */
 function _getExistingThreadId(projectName, workdir) {
-  // 1. Hardcoded project mapping (highest priority)
+  // 1. Hardcoded project mapping (highest priority — exact match)
   if (projectName && PROJECT_THREADS[projectName]) return PROJECT_THREADS[projectName];
 
-  // 2. Persisted project mapping
-  if (projectName && _store.projects[projectName]) return _store.projects[projectName].threadId;
+  // 2. Persisted project mapping (normalized key)
+  const nk = _normalizeKey(projectName);
+  if (nk) {
+    // Check normalized key first, then scan existing keys for normalized match
+    for (const [key, data] of Object.entries(_store.projects)) {
+      if (_normalizeKey(key) === nk) return data.threadId;
+    }
+  }
 
   // 3. Hardcoded workdir substring match
   if (workdir) {
@@ -150,7 +162,11 @@ function _getDiscordToken() {
 }
 
 function _createThread(projectName) {
-  if (_pendingThreads.has(projectName)) return _pendingThreads.get(projectName);
+  // Check pending threads by normalized key to prevent concurrent duplicate creation
+  const nk = _normalizeKey(projectName);
+  for (const [key, promise] of _pendingThreads.entries()) {
+    if (_normalizeKey(key) === nk) return promise;
+  }
 
   const promise = (async () => {
     try {
@@ -268,6 +284,12 @@ function _createThread(projectName) {
       }
 
       // Persist
+      // Store under normalized key to prevent duplicates from name variants
+      const nk = _normalizeKey(projectName);
+      // Remove any existing entries that normalize to the same key
+      for (const key of Object.keys(_store.projects)) {
+        if (_normalizeKey(key) === nk && key !== projectName) delete _store.projects[key];
+      }
       _store.projects[projectName] = { threadId, createdAt: new Date().toISOString() };
       _saveThreads();
       console.log(`[openclaw-notify] Auto-created Discord thread for "${projectName}": ${threadId}`);

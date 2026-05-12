@@ -257,9 +257,9 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .col-move-btn{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:4px; opacity:0; transition:opacity .15s; }
 .col-head:hover .col-move-btn{ opacity:.7; }
 .col-move-btn:hover{ opacity:1!important; background:var(--abg); color:var(--text); }
-.col-move-menu{ position:absolute; right:0; top:100%; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:4px 0; z-index:100; min-width:160px; box-shadow:0 4px 12px rgba(0,0,0,.3); }
-.col-move-menu button{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--text); padding:6px 12px; font-size:12px; cursor:pointer; }
-.col-move-menu button:hover{ background:var(--abg); }
+.col-move-menu{ position:absolute; right:0; top:100%; background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:6px 0; z-index:1000; min-width:180px; box-shadow:0 8px 24px rgba(0,0,0,.6); backdrop-filter:blur(8px); }
+.col-move-menu button{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--text); padding:8px 14px; font-size:13px; cursor:pointer; white-space:nowrap; transition:background .1s; }
+.col-move-menu button:hover{ background:var(--s3); }
 .col-title{ font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.6px; flex:1; color:var(--muted); }
 .col-cnt{ background:var(--s3); color:var(--muted); font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
 .col-body{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; padding:2px; min-height:80px; border-radius:var(--r-md); transition:background .12s; }

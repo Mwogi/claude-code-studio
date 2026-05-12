@@ -201,7 +201,7 @@ const BMAD_WORKFLOWS = {
     agent: 'scrum-master',
     skills: ['bmad-sprint-planning'],
     model: 'opus',
-    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning skill from ${workdir}/.claude/skills/bmad-sprint-planning/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nFor epics, architecture, and PRD: look in ${workdir}/_bmad-output/planning-artifacts/ for the MOST RECENT file matching each pattern (ls -t):\n- Epics: epics-*.md (prefer epics-${slug}.md if it exists)\n- Architecture: architecture-*.md (prefer architecture-${slug}.md if it exists)\n- PRD: prd-*.md (prefer prd-${slug}.md if it exists)\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents, NOT human developers. AI agents complete a 3-point story in ~30-90 minutes (vs 1-2 days for humans). Sprint length = 1 day. Velocity = 30-50 points/sprint. Include both AI timeline (days) and human-equivalent (weeks) in the overview.
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the sprint planning skill from ${workdir}/.claude/skills/bmad-sprint-planning/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nFor epics, architecture, and PRD: look in ${workdir}/_bmad-output/planning-artifacts/ for the MOST RECENT file matching each pattern (ls -t):\n- Epics: epics-*.md (prefer epics-${slug}.md if it exists)\n- Architecture: architecture-*.md (prefer architecture-${slug}.md if it exists)\n- PRD: prd-*.md (prefer prd-${slug}.md if it exists)\n\nIMPORTANT CALIBRATION: All time estimates must be calibrated for AI dev agents based on OBSERVED performance, NOT human developers. Observed benchmarks from production runs:\n- 1-point story: 2-5 minutes (plan + implement + QA)\n- 3-point story: 5-15 minutes (plan + implement + QA + fix)\n- 5-point story: 15-30 minutes\n- 8-point story: 30-60 minutes\n- Full pipeline per story (create-story → dev → QA → fix): ~15-25 min average\n- Stories run in parallel where dependencies allow\n- A 14-story sprint typically completes in 2-4 HOURS, not days\n\nSprint length = 4 hours. Velocity = 80-120 points/sprint. Include both AI timeline (hours) and human-equivalent (weeks) in the overview. Be precise — the user relies on these estimates for planning.
 
 Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/bmad-sprint-planning/sprint-status-template.yaml\n\nSave to ${workdir}/_bmad-output/sprint-status.yaml\n\nIMPORTANT: For each story in sprint-status.yaml, also create a Kanban task via POST http://localhost:3000/api/tasks with:\n- title: story title\n- description: story acceptance criteria and tasks\n- workdir: "${workdir}"\n- status: "bmad_workflow"\n- notes: "[bmad-workflow:create-story]"\n- chain_id: the epic slug (e.g. "epic-1-authentication")\n- sort_order: story sequence number within the epic\n- dep_group: the story ID e.g. "S1.1", "S1.2", "S2.1" (Epic.Story format). This groups a dev task with its auto-spawned QA and Fix tasks so dependent stories can wait for the entire group to complete.\n- depends_on: JSON array of group dependencies e.g. ["group:S1.1"] means this story waits until ALL tasks in dep_group S1.1 (dev+QA+fix) are done. Use this for stories that depend on prior stories. Stories within the same epic that can run in parallel should NOT have depends_on. Only add depends_on when there is a real dependency (e.g. story 1.3 needs story 1.2 complete). First story in each epic has no depends_on.\n\nDEPENDENCY RULES:\n- Independent stories (no cross-story dependency) → set dep_group only, no depends_on → they run in parallel\n- Sequential stories → set dep_group AND depends_on with group refs → they wait for prior groups\n- Cross-epic dependencies → use depends_on: ["group:S1.3"] to depend on stories from other epics\n- The server auto-inherits dep_group to QA and Fix tasks, so only set it on the create-story task\n\nThis creates the Kanban board tasks that will be picked up for create-story → dev-story execution.\n\nUse curl to POST: curl -b /tmp/ccs.cookie -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" -d '{"title":"...","description":"...","workdir":"${workdir}","status":"bmad_workflow","notes":"[bmad-workflow:create-story]","chain_id":"...","sort_order":N,"dep_group":"S1.1","depends_on":"[\\"group:S1.0\\"]"}'`
   ; }
@@ -335,7 +335,7 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     skills: [],
     model: 'opus',
     effort: 'xhigh',
-    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL for THIS project\n2. Use the EXISTING auth storageState (e2e/.auth/user.json) — DO NOT write login code\n\n## AUTHENTICATION — USE STORAGE STATE (MANDATORY)\n\nThe project has a pre-authenticated browser state at e2e/.auth/user.json.\nYou MUST use it. NEVER write manual login/OTP code. NEVER screenshot login pages.\n\nCorrect pattern:\ncat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst context = await browser.newContext({ storageState: '${workdir}/e2e/.auth/user.json' });\nconst page = await context.newPage();\nawait page.goto('<URL from testing-info.md>/#/target-page');\n// Already authenticated! Test directly.\nawait page.screenshot({ path: 'test-screenshots/feature.png' });\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\nIf storageState gives 403/login redirect, regenerate: cd ${workdir} && npx playwright test --project=setup\n\n## SCREENSHOT RULES — ABSOLUTE RULES\n\n**Login/OTP screenshots = INSTANT TASK FAILURE. They are BANNED.**\n\nOnly screenshot what verifies acceptance criteria:\n- ✅ The feature UI after it loads\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page — BANNED\n- ❌ OTP screen — BANNED\n- ❌ Sidebar navigation — BANNED\n- ❌ Loading spinners — BANNED\nAim for 2-5 focused screenshots per task.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright.\n\nRead the task description for the full QA checklist.`
+    prompt: (title, workdir) => `You are a QA engineer. Your ONLY job is to test the application by writing and running Playwright test scripts via the Bash tool.\n\nProject: ${title}\nDirectory: ${workdir}\n\n## CRITICAL INSTRUCTIONS\n\nYou MUST write and execute Playwright scripts using the Bash tool. MCP tools are NOT available in --print mode.\n\n## YOUR FIRST ACTION MUST BE:\n1. Read docs/testing-info.md to get the CORRECT test URL for THIS project\n2. Use the EXISTING auth storageState (e2e/.auth/user.json) — DO NOT write login code\n\n## AUTHENTICATION — USE STORAGE STATE (MANDATORY)\n\nThe project has a pre-authenticated browser state at e2e/.auth/user.json.\nYou MUST use it. NEVER write manual login/OTP code. NEVER screenshot login pages.\n\nCorrect pattern:\ncat > /tmp/qa-test.mjs << 'S'\nimport { chromium } from \\"playwright\\";\nconst browser = await chromium.launch({ headless: true });\nconst context = await browser.newContext({ storageState: '${workdir}/e2e/.auth/user.json' });\nconst page = await context.newPage();\nawait page.goto('<URL from testing-info.md>/#/target-page');\n// Already authenticated! Test directly.\nawait page.screenshot({ path: 'test-screenshots/feature.png' });\nawait browser.close();\nS\nnode /tmp/qa-test.mjs\n\nIf storageState gives 403/login redirect, regenerate: cd ${workdir} && npx playwright test --project=setup\n\n## SCREENSHOT RULES — ABSOLUTE RULES\n\n**Login/OTP screenshots = INSTANT TASK FAILURE. They are BANNED.**\n**Generic page screenshots without feature verification = INSTANT TASK FAILURE.**\n\nEvery screenshot MUST prove a specific acceptance criterion. Before capturing, navigate to the EXACT feature, interact with it, and screenshot the RESULT.\n\nMandatory verification per screenshot:\n1. Navigate to the specific page/component changed by the task\n2. Interact with it (click, fill, scroll) to activate the feature\n3. Use page.evaluate() to extract and log text/data that proves the feature works\n4. ONLY THEN take the screenshot\n5. If the feature is not visible → your verification FAILED → investigate and fix\n\nOnly screenshot what verifies acceptance criteria:\n- ✅ The feature UI after it loads AND has been interacted with\n- ✅ Test results or data displayed by the feature\n- ✅ Error states being verified\n- ❌ Login page — BANNED\n- ❌ OTP screen — BANNED\n- ❌ Sidebar navigation — BANNED\n- ❌ Loading spinners — BANNED\n- ❌ Same screenshot as other tasks — BANNED\nAim for 2-5 focused screenshots per task.\n\nDo NOT skip browser testing. Do NOT substitute curl for Playwright.\n\nRead the task description for the full QA checklist.`
   },
   'backend-qa': {
     label: '🔧 Backend QA (Non-Browser Testing)',
@@ -2106,25 +2106,16 @@ async function startTask(task) {
               const { execSync: _exec2 } = require('child_process');
               const _stillDirty = _exec2('git status --porcelain', { cwd, timeout: 5000 }).toString().trim();
               if (_stillDirty) {
-                // Filter to only task-related files if we have a baseline
-                const _taskFiles = task._preTaskDirtyFiles
-                  ? _stillDirty.split('\n').filter(l => l.trim()).map(l => l.slice(3).trim()).filter(f => !task._preTaskDirtyFiles.has(f))
-                  : null;
-                if (!_taskFiles || _taskFiles.length > 0) {
-                  if (_taskFiles && _taskFiles.length <= 50) {
-                    // Targeted add of new files only
-                    for (const f of _taskFiles) {
-                      try { _exec2(`git add -- ${JSON.stringify(f)}`, { cwd, timeout: 5000 }); } catch {}
-                    }
-                  } else {
-                    _exec2('git add -A', { cwd, timeout: 10000 });
-                  }
-                  const _finalStaged = _exec2('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
-                  if (_finalStaged) {
-                    const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)} (safety-net)\n\nAutomated safety-net commit by Claude Studio`;
-                    _exec2(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
-                    log.info(`[taskWorker] auto-committed ${_finalStaged.split('\n').length} files for task ${task.id} (safety-net)`);
-                  }
+                // ALWAYS commit all dirty files as safety net.
+                // Previous approach filtered by _preTaskDirtyFiles but this caused
+                // files from prior tasks to accumulate as permanent uncommitted dirt,
+                // triggering "P0: Code not committed" on every QA task.
+                _exec2('git add -A', { cwd, timeout: 10000 });
+                const _finalStaged = _exec2('git diff --cached --name-only', { cwd, timeout: 5000 }).toString().trim();
+                if (_finalStaged) {
+                  const commitMsg = `feat(${_wfType || 'impl'}): ${task.title.substring(0, 72)} (safety-net)\n\nAutomated safety-net commit by Claude Studio`;
+                  _exec2(`git commit --no-verify -m ${JSON.stringify(commitMsg)}`, { cwd, timeout: 15000 });
+                  log.info(`[taskWorker] auto-committed ${_finalStaged.split('\n').length} files for task ${task.id} (safety-net)`);
                 }
               }
             } catch (e2) {
@@ -2868,10 +2859,21 @@ function autoBmadPipelineChain(task) {
   if (!wfMatch) return;
   const currentWf = wfMatch[1];
 
+  // Skip auto-pipeline if any task explicitly depends_on this task (user set up a custom chain).
+  // The depends_on tasks will be unblocked by the polling loop when this task's status becomes done/done_review.
+  const dependents = db.prepare(
+    `SELECT id FROM tasks WHERE depends_on LIKE ? AND status NOT IN ('done','done_review','cancelled','archived') LIMIT 1`
+  ).get(`%${task.id}%`);
+  if (dependents) {
+    log.info(`[auto-pipeline] Skipping ${currentWf} auto-chain: task ${dependents.id} has explicit depends_on targeting ${task.id}`);
+    return;
+  }
+
   // Define the pipeline sequence
   const PIPELINE = {
     'domain-research': { next: 'planning', model: 'opus', title: (t) => t.replace(/^Domain Research:?\s*/i, 'PRD: ').replace(/^PRD: PRD:/i, 'PRD:') },
     'planning':        { next: 'solutioning', model: 'opus', title: (t) => t.replace(/^PRD:?\s*/i, 'Architecture & Epics: ') },
+    'ux-design':       { next: 'solutioning', model: 'opus', title: (t) => t.replace(/^UX Design:?\s*/i, 'Architecture & Epics: ') },
     'solutioning':     { next: 'sprint-planning', model: 'opus',
     effort: 'xhigh', title: (t) => t.replace(/^Architecture & Epics:?\s*/i, 'Sprint Planning: ') },
   };
@@ -3005,15 +3007,23 @@ function autoCreateQATask(task, fullText) {
   // Detect backend-only vs frontend tasks based on files changed in output
   const _isBackendOnly = (() => {
     const output = fullText || '';
-    // Check for frontend file extensions in the changed files
-    const hasFrontendFiles = /\.(vue|tsx?|jsx?|css|scss|svelte|html)\b/i.test(
+    // Frontend file extensions — includes .dart for Flutter, .vue/.tsx/etc for web frontends
+    const frontendPattern = /\.(vue|tsx?|jsx?|css|scss|svelte|html|dart)\b/i;
+    // Check for frontend file extensions in the changed files section
+    const hasFrontendFiles = frontendPattern.test(
       (output.match(/files?\s*(?:changed|modified|created|updated)[:\s]*([^\n]+)/gi) || []).join(' ')
     );
-    // Also check git diff output for frontend files
-    const hasFrontendDiff = /\+\+\+.*\.(vue|tsx?|jsx?|css|scss|svelte|html)/i.test(output);
-    // If only .py files mentioned, it's backend-only
-    const hasOnlyPython = /\.(py)\b/i.test(output) && !hasFrontendFiles && !hasFrontendDiff;
-    return hasOnlyPython;
+    // Also check git diff output and File List sections for frontend files
+    const hasFrontendDiff = /\+\+\+.*\.(vue|tsx?|jsx?|css|scss|svelte|html|dart)/i.test(output);
+    // Check File List section (used in BMAD story files)
+    const hasFrontendInFileList = frontendPattern.test(
+      (output.match(/##\s*File\s*List[\s\S]*?(?=##|$)/i) || [''])[0]
+    );
+    // Backend-only extensions: Python, Rust, SQL, YAML/YML, shell scripts, Protobuf, TOML, JSON config
+    const hasBackendFiles = /\.(py|rs|sql|ya?ml|sh|proto|toml)\b/i.test(output);
+    // Is backend-only if: has backend files AND no frontend files detected anywhere
+    const isBackend = hasBackendFiles && !hasFrontendFiles && !hasFrontendDiff && !hasFrontendInFileList;
+    return isBackend;
   })();
 
   const qaTitle = `QA: ${task.title.substring(0, 80)}`;
@@ -3105,16 +3115,44 @@ Read the story file for acceptance criteria: \`${storyFile}\`
 ### Files changed
 ${fileList}
 
-### Screenshot Rules — FOCUSED SCREENSHOTS ONLY
+### Flutter Web Apps — Blank Page Detection (REQUIRED)
+If this is a Flutter project (contains \`.dart\` files), you MUST verify the app rendered before saving screenshots:
+\`\`\`javascript
+// Wait for Flutter to bootstrap
+await page.waitForTimeout(3000);
+// Verify Flutter rendered (not a blank white page)
+const flutterEl = await page.locator('flt-glass-pane, flt-scene-host, canvas').count();
+if (flutterEl === 0) {
+  throw new Error('FAIL: Flutter app did not load — blank white page. sqflite/plugin crash?');
+}
+\`\`\`
+A screenshot of a blank white page is useless. If the app doesn't load, report P0 immediately.
+
+### Screenshot Rules — MEANINGFUL VERIFICATION ONLY
+**Taking screenshots without verifying the actual feature = TASK FAILURE.**
 **Do NOT screenshot login, OTP, or navigation steps.** These waste time and add no value.
 
-Only take screenshots that directly verify acceptance criteria:
-- ✅ The feature UI after it loads (the component/page being tested)
-- ✅ Test results or data displayed by the feature
-- ✅ Error states being verified
+**BEFORE every screenshot, you MUST:**
+1. Navigate to the SPECIFIC page/component that was changed by the task
+2. INTERACT with it (click buttons, fill forms, trigger the feature)
+3. Use page.evaluate() to extract visible text and VERIFY it matches expectations
+4. Only THEN capture the screenshot as proof
+5. If the feature content is not visible in the screenshot, your QA FAILED — report it as P0
+
+**A screenshot that doesn't prove a specific acceptance criterion is WORTHLESS.**
+
+Acceptable screenshots:
+- ✅ The feature UI after interaction (clicked, data loaded, form submitted)
+- ✅ page.evaluate() output logged showing correct text/data
+- ✅ Error states being correctly handled
 - ✅ Before/after comparisons for visual changes
+
+Banned screenshots (instant task failure):
 - ❌ Login page, OTP screen, sidebar navigation, loading spinners
-- ❌ Generic homepage or dashboard unless that IS the feature
+- ❌ Generic homepage/dashboard unless that IS the feature being tested
+- ❌ Blank/white pages (report P0 instead of screenshotting)
+- ❌ Same screenshot appearing in multiple different tasks
+- ❌ Flutter web app showing ONLY the login screen for every task
 
 Save screenshots to \`test-screenshots/\` with descriptive names prefixed by task number: \`task-${task.task_number}-feature-name.png\`
 
@@ -4043,6 +4081,37 @@ Do NOT skip — execute actual commands and show the output.
 ### Step 3 — Browser Testing (MANDATORY for ANY frontend/UI change)
 If this task modifies **any** .vue, .tsx, .jsx, .ts, .js, .css, .scss, or .html file in a frontend project, you MUST run Playwright browser tests via the Bash tool. There is NO fallback. curl is NOT an acceptable substitute.
 
+**CRITICAL: SCREENSHOT VERIFICATION RULES**
+
+Every screenshot MUST directly prove a specific acceptance criterion was met. Taking screenshots of generic pages (login, dashboard, sidebar) without verifying the ACTUAL FEATURE is **task failure**.
+
+**Before taking ANY screenshot, ask yourself:**
+- "Does this screenshot show the specific feature/change I implemented?"
+- "Can someone looking at this screenshot verify the acceptance criterion is met?"
+- "Would I be embarrassed showing this to a code reviewer as proof of work?"
+
+**REQUIRED screenshot workflow:**
+1. Navigate to the SPECIFIC page/component that was changed
+2. Interact with it (click, type, scroll) to show the feature IN ACTION
+3. Screenshot the RESULT of the interaction — not just the page load
+4. Extract and log visible text/elements using page.evaluate() to PROVE content is correct
+5. If the feature is not visible in the screenshot, the verification FAILED — fix the issue
+
+**BANNED screenshots (instant task failure):**
+- ❌ Login page / auth screens
+- ❌ Generic dashboard without navigating to the changed feature
+- ❌ Loading spinners or blank pages
+- ❌ Sidebar/navigation only
+- ❌ Same screenshot across multiple tasks (copy-paste verification)
+- ❌ Screenshots where you cannot identify what feature was implemented
+
+**REQUIRED screenshots (2-5 per task):**
+- ✅ The specific UI component that was added/changed
+- ✅ Before/after states (e.g., form empty → form filled → result displayed)
+- ✅ Error states being correctly handled
+- ✅ Text content extracted via page.evaluate() confirming data is correct
+- ✅ Interactive elements responding to clicks/input
+
 1. Read docs/testing-info.md for credentials and test URL
 2. Write a Playwright script via the Bash tool (example):
 
@@ -4065,6 +4134,11 @@ If this task modifies **any** .vue, .tsx, .jsx, .ts, .js, .css, .scss, or .html 
 
 ### Step 4 — Fix & Re-verify
 If any check fails: fix it immediately, then re-run the exact check to confirm it passes.
+
+
+### Step 4b — COMMIT ALL CHANGES (MANDATORY)
+Before finishing, run: git add -A && git commit -m "feat: description"
+If you skip this, QA flags P0 and a fix task is created just to commit. COMMIT YOUR WORK.
 
 ### Step 5 — Self-Audit
 Ask: "If a senior engineer reviews this right now, would they approve without any changes?"
@@ -5478,6 +5552,18 @@ app.post('/api/tasks', (req, res) => {
   // Auto-correct status: if task has a BMAD workflow tag, it should be in bmad_workflow queue
   if (notes && /\[bmad-workflow:[\w-]+\]/.test(notes) && (!status || status === 'backlog' || status === 'todo' || status === 'bmad_workflow')) {
     status = 'bmad_workflow';
+  }
+
+  // Sanitize depends_on: remove empty strings, nullify if empty array
+  if (depends_on) {
+    try {
+      const deps = JSON.parse(depends_on);
+      const cleaned = Array.isArray(deps) ? deps.filter(d => typeof d === 'string' && d.trim().length > 0) : [];
+      depends_on = cleaned.length > 0 ? JSON.stringify(cleaned) : null;
+    } catch (e) {
+      log.warn(`[task-create] Invalid depends_on JSON, clearing: ${depends_on}`);
+      depends_on = null;
+    }
   }
   
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, taskNum, sqlVal(dep_group)||null);
