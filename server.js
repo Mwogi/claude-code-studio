@@ -1580,12 +1580,44 @@ async function startTask(task) {
       } catch (e) { console.error('[taskWorker] attachments write error:', e); }
     }
     // Chain task: add dependency context as safety net (primary context via --resume)
+    // Also copy cross-workdir artifacts when upstream tasks ran in a different workdir
     if (task.depends_on) {
       try {
         const deps = JSON.parse(task.depends_on);
-        const depNames = deps.map(depId => { const dep = stmts.getTask.get(depId); return dep ? dep.title : null; }).filter(Boolean);
+        const depTasks = deps.map(depId => stmts.getTask.get(depId)).filter(Boolean);
+        const depNames = depTasks.map(d => d.title).filter(Boolean);
         if (depNames.length) {
           parts.push(`---\nPrevious tasks completed: ${depNames.join(', ')}\nTheir results are in your session context via --resume.`);
+        }
+        // Cross-workdir artifact sync: if upstream task has a different workdir,
+        // copy its _bmad-output/planning-artifacts/ to this task's workdir so the
+        // agent has access to research docs, PRDs, etc.
+        for (const depTask of depTasks) {
+          if (depTask.workdir && task.workdir && depTask.workdir !== task.workdir) {
+            const srcArtifacts = path.join(depTask.workdir, '_bmad-output', 'planning-artifacts');
+            const dstArtifacts = path.join(task.workdir, '_bmad-output', 'planning-artifacts');
+            try {
+              if (fs.existsSync(srcArtifacts)) {
+                fs.mkdirSync(dstArtifacts, { recursive: true });
+                const files = fs.readdirSync(srcArtifacts);
+                let copied = 0;
+                for (const file of files) {
+                  const srcFile = path.join(srcArtifacts, file);
+                  const dstFile = path.join(dstArtifacts, file);
+                  if (!fs.existsSync(dstFile) && fs.statSync(srcFile).isFile()) {
+                    fs.copyFileSync(srcFile, dstFile);
+                    copied++;
+                  }
+                }
+                if (copied > 0) {
+                  log.info(`[cross-workdir] Copied ${copied} planning artifacts from ${depTask.workdir} to ${task.workdir}`);
+                  parts.push(`---\nCross-workdir artifacts: ${copied} planning artifact(s) copied from upstream task "${depTask.title}" (workdir: ${depTask.workdir}).\nCheck _bmad-output/planning-artifacts/ for research docs and other upstream outputs.`);
+                }
+              }
+            } catch (e) {
+              log.warn(`[cross-workdir] Failed to copy artifacts from ${srcArtifacts}: ${e.message}`);
+            }
+          }
         }
       } catch {}
     }
