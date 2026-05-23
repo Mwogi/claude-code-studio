@@ -2595,10 +2595,22 @@ function processQueue() {
     // S4.3, S4.4 all depend on group:S4.1, not on each other).
     if (task.chain_id && !task.depends_on) {
       const chainTasks = stmts.getTasksByChain.all(task.chain_id);
-      const earlierPending = chainTasks.some(t =>
-        (t.sort_order || 0) < (task.sort_order || 0) &&
-        !['done', 'done_review', 'archived', 'cancelled'].includes(t.status)
-      );
+      // FIX: Don't let earlier tasks block us if THEY depend on OUR dep_group
+      // (that would create a circular deadlock: A waits for B by sort_order,
+      // but B has depends_on:["group:A"] — neither can ever start).
+      const myDepGroup = task.dep_group;
+      const earlierPending = chainTasks.some(t => {
+        if ((t.sort_order || 0) >= (task.sort_order || 0)) return false;
+        if (['done', 'done_review', 'archived', 'cancelled'].includes(t.status)) return false;
+        // If the earlier task depends on our dep_group, it's not truly "earlier" — skip it
+        if (myDepGroup && t.depends_on) {
+          try {
+            const tDeps = JSON.parse(t.depends_on);
+            if (tDeps.some(d => d === `group:${myDepGroup}`)) return false;
+          } catch {}
+        }
+        return true;
+      });
       if (earlierPending) continue;
       // Also check if same-chain task was just started in this queue cycle
       if (task.workdir && [...startedWorkdirs].some(key => key === `${task.chain_id}:${task.workdir}`)) continue;
@@ -2667,6 +2679,74 @@ setInterval(() => {
     log.warn('[ReapOrphans] error:', e.message);
   }
 }, 30000);
+
+// ── Deadlock Detector ──
+// Detects tasks stuck in bmad_workflow for >10 minutes with no in_progress tasks
+// in the same workdir. This catches circular dependency deadlocks, sort_order
+// issues, and any other condition where processQueue skips all eligible tasks.
+// Runs every 5 minutes.
+setInterval(() => {
+  try {
+    const queued = db.prepare(`
+      SELECT id, title, workdir, chain_id, dep_group, depends_on, sort_order,
+             CAST((unixepoch() - unixepoch(updated_at)) AS INTEGER) AS stale_seconds
+      FROM tasks
+      WHERE status = 'bmad_workflow'
+        AND notes LIKE '%[bmad-workflow:%'
+        AND updated_at < datetime('now', '-10 minutes')
+    `).all();
+    if (!queued.length) return;
+
+    // Group by workdir and check if anything is actually running
+    const workdirs = [...new Set(queued.map(t => t.workdir).filter(Boolean))];
+    for (const wd of workdirs) {
+      const running = db.prepare(`
+        SELECT count(*) as cnt FROM tasks
+        WHERE workdir = ? AND status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
+      `).get(wd);
+      if (running.cnt > 0) continue; // something is running, not deadlocked
+
+      const stuckTasks = queued.filter(t => t.workdir === wd);
+      if (!stuckTasks.length) continue;
+
+      // Find tasks with no blocking dependencies that should be startable
+      const unblocked = stuckTasks.filter(t => {
+        if (!t.depends_on) return true;
+        try {
+          const deps = JSON.parse(t.depends_on);
+          return deps.every(depId => {
+            if (depId.startsWith('group:')) {
+              const groupName = depId.slice(6);
+              const groupTasks = db.prepare(
+                `SELECT status FROM tasks WHERE dep_group=? AND id!=? AND workdir=? AND status NOT IN ('backlog','archived')`
+              ).all(groupName, t.id, wd);
+              if (!groupTasks.length) return true;
+              return groupTasks.every(gt => ['done', 'done_review'].includes(gt.status));
+            }
+            const dep = db.prepare(`SELECT status FROM tasks WHERE id=?`).get(depId);
+            return dep && ['done', 'done_review', 'archived'].includes(dep.status);
+          });
+        } catch { return false; }
+      });
+
+      if (unblocked.length > 0) {
+        log.warn(`[DeadlockDetector] ${unblocked.length} tasks stuck in ${wd} with no running workers — attempting fix`);
+        // Fix: for tasks blocked only by chain sort_order, check for circular deps
+        for (const t of unblocked) {
+          if (t.chain_id) {
+            // Re-sort: set this task's sort_order to 0 so it runs next
+            db.prepare(`UPDATE tasks SET sort_order=0, updated_at=datetime('now') WHERE id=?`).run(t.id);
+            log.info(`[DeadlockDetector] Promoted task ${t.id} ("${t.title.substring(0, 50)}") to sort_order=0`);
+          }
+        }
+        // Trigger processQueue
+        setImmediate(processQueue);
+      }
+    }
+  } catch (e) {
+    log.warn('[DeadlockDetector] error:', e.message);
+  }
+}, 5 * 60 * 1000); // every 5 minutes
 
 // ── Orphaned task recovery on startup ──
 // Tasks stuck in active BMAD phases after a server restart have no Claude process.
