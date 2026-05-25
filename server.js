@@ -2567,15 +2567,19 @@ function processQueue() {
           });
           if (!allDone) continue; // deps not ready yet
 
-          // Check for cancelled group deps — cascade cancel
+          // Check for cancelled group deps — cascade cancel only if the PRIMARY task
+          // (not QA or Fix tasks) was cancelled. Cancelled Fix/QA tasks are normal
+          // (e.g. QA passed with no issues → Fix task auto-cancelled).
           const hasFailedGroup = deps.some(depId => {
             if (typeof depId === 'string' && depId.startsWith('group:')) {
               const groupName = depId.slice(6);
-              // Scope to same workdir to match allDone check
               const groupTasks = task.workdir
-                ? db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND workdir=?`).all(groupName, task.id, task.workdir)
-                : db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
-              return groupTasks.some(gt => gt.status === 'cancelled');
+                ? db.prepare(`SELECT id, status, title FROM tasks WHERE dep_group=? AND id!=? AND workdir=?`).all(groupName, task.id, task.workdir)
+                : db.prepare(`SELECT id, status, title FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
+              // Only cascade if a non-Fix, non-QA task is cancelled (primary dev task failure)
+              return groupTasks.some(gt => gt.status === 'cancelled' && 
+                !gt.title.startsWith('Fix:') && !gt.title.startsWith('QA:') && 
+                !gt.title.startsWith('Quick Dev: Fix:'));
             }
             return false;
           });
