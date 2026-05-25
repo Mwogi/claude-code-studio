@@ -2560,10 +2560,10 @@ function processQueue() {
                 ? db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND workdir=? AND status NOT IN ('backlog','archived')`).all(groupName, task.id, task.workdir)
                 : db.prepare(`SELECT id, status FROM tasks WHERE dep_group=? AND id!=? AND status NOT IN ('backlog','archived')`).all(groupName, task.id);
               if (groupTasks.length === 0) return true; // no tasks in group yet (or all archived/backlog) — treat as satisfied
-              return groupTasks.every(gt => ['done', 'done_review'].includes(gt.status));
+              return groupTasks.every(gt => ['done', 'done_review', 'archived', 'cancelled'].includes(gt.status));
             }
             const dep = stmts.getTask.get(depId);
-            return dep && ['done', 'done_review', 'archived'].includes(dep.status);
+            return dep && ['done', 'done_review', 'archived', 'cancelled'].includes(dep.status);
           });
           if (!allDone) continue; // deps not ready yet
 
@@ -2660,15 +2660,17 @@ setInterval(() => {
     const stuck = db.prepare(`
       SELECT id, title, status, worker_pid FROM tasks
       WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa')
-        AND worker_pid IS NOT NULL
+        AND (worker_pid IS NOT NULL OR (worker_pid IS NULL AND updated_at < datetime('now', '-5 minutes')))
         AND status != 'awaiting_input'
     `).all();
     let reaped = 0;
     for (const t of stuck) {
-      try { process.kill(t.worker_pid, 0); continue; /* alive */ } catch {}
-      // PID dead — reset to queue
+      if (t.worker_pid) {
+        try { process.kill(t.worker_pid, 0); continue; /* alive */ } catch {}
+      }
+      // PID dead or null (orphaned) — reset to queue
       db.prepare(`UPDATE tasks SET status='bmad_workflow', worker_pid=NULL, session_id=NULL, failure_reason='reaped_dead_worker', updated_at=datetime('now') WHERE id=?`).run(t.id);
-      log.info(`[ReapOrphans] Reset task ${t.id} ("${t.title.substring(0, 50)}") — dead pid ${t.worker_pid}, was ${t.status}`);
+      log.info(`[ReapOrphans] Reset task ${t.id} ("${t.title.substring(0, 50)}") — ${t.worker_pid ? 'dead pid ' + t.worker_pid : 'null pid'}, was ${t.status}`);
       reaped++;
     }
     if (reaped > 0) {
@@ -2721,10 +2723,10 @@ setInterval(() => {
                 `SELECT status FROM tasks WHERE dep_group=? AND id!=? AND workdir=? AND status NOT IN ('backlog','archived')`
               ).all(groupName, t.id, wd);
               if (!groupTasks.length) return true;
-              return groupTasks.every(gt => ['done', 'done_review'].includes(gt.status));
+              return groupTasks.every(gt => ['done', 'done_review', 'archived', 'cancelled'].includes(gt.status));
             }
             const dep = db.prepare(`SELECT status FROM tasks WHERE id=?`).get(depId);
-            return dep && ['done', 'done_review', 'archived'].includes(dep.status);
+            return dep && ['done', 'done_review', 'archived', 'cancelled'].includes(dep.status);
           });
         } catch { return false; }
       });
