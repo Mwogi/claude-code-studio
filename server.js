@@ -2567,28 +2567,16 @@ function processQueue() {
           });
           if (!allDone) continue; // deps not ready yet
 
-          // Check for cancelled group deps — cascade cancel only if the PRIMARY task
-          // (not QA or Fix tasks) was cancelled. Cancelled Fix/QA tasks are normal
-          // (e.g. QA passed with no issues → Fix task auto-cancelled).
-          const hasFailedGroup = deps.some(depId => {
-            if (typeof depId === 'string' && depId.startsWith('group:')) {
-              const groupName = depId.slice(6);
-              const groupTasks = task.workdir
-                ? db.prepare(`SELECT id, status, title FROM tasks WHERE dep_group=? AND id!=? AND workdir=?`).all(groupName, task.id, task.workdir)
-                : db.prepare(`SELECT id, status, title FROM tasks WHERE dep_group=? AND id!=?`).all(groupName, task.id);
-              // Only cascade if a non-Fix, non-QA task is cancelled (primary dev task failure)
-              return groupTasks.some(gt => gt.status === 'cancelled' && 
-                !gt.title.startsWith('Fix:') && !gt.title.startsWith('QA:') && 
-                !gt.title.startsWith('Quick Dev: Fix:'));
-            }
-            return false;
-          });
-          if (hasFailedGroup) {
-            db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='dep_group_failed', updated_at=datetime('now') WHERE id=?`)
-              .run(task.id);
-            log.warn('Task cascade-cancelled (group dep failed)', { taskId: task.id });
-            continue;
-          }
+          // Cancelled tasks in dep groups should NOT cascade-cancel downstream.
+          // A cancelled task means "this work is not needed" (user decision or QA passed),
+          // not "this group failed". Downstream tasks should proceed.
+          // Only cascade if the task was cancelled due to a REAL failure (error_max_turns etc.)
+          // and that failure is in the primary dev task, not in Fix/QA.
+          // DISABLED: cascade-cancel logic was incorrectly blocking entire sprint chains.
+          // If a task genuinely fails, the user should manually cancel downstream.
+          // const hasFailedGroup = false;
+          // (cascade-cancel disabled — see comment above)
+          const hasFailedGroup = false;
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
