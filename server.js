@@ -5150,7 +5150,14 @@ function sharedRenderMarkdown(md) {
   // Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
   // Headers (with id slugs for anchor links — matches GitHub/markdown slug spec)
-  const slugify = (text) => text.replace(/&amp;/g, '').replace(/&lt;/g, '').replace(/&gt;/g, '').replace(/&quot;/g, '').replace(/&#39;/g, '').toLowerCase().replace(/<[^>]*>/g, '').replace(/[^\w\s-]/g, '').replace(/\s/g, '-');
+  const slugify = (text) => text
+    .replace(/<code[^>]*>\[?NEW\]?<\/code>/gi, '')  // strip [NEW] badges from inline code
+    .replace(/&amp;/g, '').replace(/&lt;/g, '').replace(/&gt;/g, '').replace(/&quot;/g, '').replace(/&#39;/g, '')
+    .toLowerCase()
+    .replace(/<[^>]*>/g, '')       // strip remaining HTML tags
+    .replace(/[^\w\s-]/g, '')     // strip non-word chars
+    .replace(/^\s+|\s+$/g, '')    // trim
+    .replace(/\s/g, '-');          // each space to dash
   html = html.replace(/^#### (.+)$/gm, (_, t) => `<h4 id="${slugify(t)}">${t}</h4>`);
   html = html.replace(/^### (.+)$/gm, (_, t) => `<h3 id="${slugify(t)}">${t}</h3>`);
   html = html.replace(/^## (.+)$/gm, (_, t) => `<h2 id="${slugify(t)}">${t}</h2>`);
