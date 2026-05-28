@@ -291,7 +291,7 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     model: 'opus',
     effort: 'xhigh',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story skill from ${workdir}/.claude/skills/bmad-dev-story/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.\n\n## CRUD ROUND-TRIP VERIFICATION \u2014 MANDATORY\nIf your implementation includes any form that creates/edits/saves documents (Stock Entry, Material Request, Patient Encounter, etc.):\n1. After implementing, test the FULL round-trip: fill form \u2192 submit \u2192 verify document created in backend \u2192 verify it appears in list view\n2. Use Playwright or curl to actually submit with realistic data \u2014 do NOT just verify the form renders\n3. If the submit fails, fix it before marking the task complete\nA form that renders but fails on save is NOT done.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story skill from ${workdir}/.claude/skills/bmad-dev-story/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.\n\n## SCREENSHOT VERIFICATION \u2014 MANDATORY\nWhen taking Playwright screenshots for verification:\n1. BEFORE every screenshot, log the current URL: console.log('VERIFY_URL:', await page.url());\n2. If the URL contains /login, /signin, /Account/Login \u2192 YOUR AUTH FAILED. Do NOT screenshot. Fix auth first.\n3. Login page screenshots = TASK FAILURE. The server will reject your task if all screenshots are login pages.\n4. Every screenshot must prove a specific acceptance criterion \u2014 not just show a page loaded.\n5. If storageState is expired/invalid, regenerate it: cd the workdir and run npx playwright test --project=setup\n\n## CRUD ROUND-TRIP VERIFICATION \u2014 MANDATORY\nIf your implementation includes any form that creates/edits/saves documents (Stock Entry, Material Request, Patient Encounter, etc.):\n1. After implementing, test the FULL round-trip: fill form \u2192 submit \u2192 verify document created in backend \u2192 verify it appears in list view\n2. Use Playwright or curl to actually submit with realistic data \u2014 do NOT just verify the form renders\n3. If the submit fails, fix it before marking the task complete\nA form that renders but fails on save is NOT done.`
   },
   'retrospective': {
     label: '🔮 Retrospective',
@@ -1997,6 +1997,39 @@ async function startTask(task) {
             openclawNotify.taskFailed && openclawNotify.taskFailed(task, _reason, getProjectName(task.workdir));
             return; // Don't proceed to done_review
           }
+
+          // 🚫 Login-page screenshot detection — reject tasks where screenshots are all login pages
+          // This catches agents that execute Playwright but fail auth and screenshot useless login pages
+          if (_mustVerifyBrowser && fullText) {
+            const _combinedOutput = (fullText || '') + '\n' + (toolCommandBodies || '');
+            // Detect login page indicators in output (URLs visited, page titles, visible text)
+            const _loginIndicators = [
+              /page\.url\(\).*[\/\\](login|signin|sign-in|account\/login)/i,
+              /navigated.*to.*[\/\\](login|signin|sign-in)/i,
+              /title.*['"].*(?:log\s*in|sign\s*in|authentication)/i,
+              /text.*['"].*(?:forgotten.*password|remember.*me|create.*account|register)/i,
+              /screenshot.*login/i,
+              /login.*redirect/i,
+              /stuck.*(?:on|at).*login/i,
+              /auth.*(?:failed|expired|invalid).*(?:redirect|screenshot|page)/i,
+            ];
+            const _loginHits = _loginIndicators.filter(rx => rx.test(_combinedOutput)).length;
+            // Check if screenshots were taken (count page.screenshot calls)
+            const _screenshotCount = (_combinedOutput.match(/page\.screenshot\s*\(/g) || []).length;
+            // Check for evidence of successful post-login navigation
+            const _hasPostLoginEvidence = /(?:page\.url\(\)|navigated|goto).*(?!.*login).*(?:dashboard|settings|home|feature|component|screen)/i.test(_combinedOutput);
+            // FAIL if: multiple login indicators AND screenshots taken AND no post-login evidence
+            if (_loginHits >= 2 && _screenshotCount > 0 && !_hasPostLoginEvidence) {
+              const _reason = `QA_LOGIN_SCREENSHOTS: Task screenshots appear to be login/auth pages (${_loginHits} login indicators detected, ${_screenshotCount} screenshots, no post-login navigation evidence). Screenshots must prove acceptance criteria — not show login screens. Fix auth (use storageState or regenerate) and re-verify.`;
+              log.warn(`[taskWorker] task ${task.id} ("${task.title}") FAILED login-screenshot detection: loginHits=${_loginHits} screenshots=${_screenshotCount} postLogin=${_hasPostLoginEvidence}`);
+              db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(_reason, task.id);
+              wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+              openclawNotify.taskFailed && openclawNotify.taskFailed(task, _reason, getProjectName(task.workdir));
+              return; // Don't proceed to done_review
+            }
+          }
+
           // ✅ Success — AI-completed tasks go to done_review for user approval (auto-moves to done after 24h)
           db.prepare(`UPDATE tasks SET status='done_review', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(task.id);
