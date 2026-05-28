@@ -5149,11 +5149,12 @@ function sharedRenderMarkdown(md) {
   });
   // Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
-  // Headers
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Headers (with id slugs for anchor links — matches GitHub/markdown slug spec)
+  const slugify = (text) => text.replace(/&amp;/g, '').replace(/&lt;/g, '').replace(/&gt;/g, '').replace(/&quot;/g, '').replace(/&#39;/g, '').toLowerCase().replace(/<[^>]*>/g, '').replace(/[^\w\s-]/g, '').replace(/\s/g, '-');
+  html = html.replace(/^#### (.+)$/gm, (_, t) => `<h4 id="${slugify(t)}">${t}</h4>`);
+  html = html.replace(/^### (.+)$/gm, (_, t) => `<h3 id="${slugify(t)}">${t}</h3>`);
+  html = html.replace(/^## (.+)$/gm, (_, t) => `<h2 id="${slugify(t)}">${t}</h2>`);
+  html = html.replace(/^# (.+)$/gm, (_, t) => `<h1 id="${slugify(t)}">${t}</h1>`);
   // Bold/italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -5168,8 +5169,13 @@ function sharedRenderMarkdown(md) {
   html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
   // Ordered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Links (internal anchors stay on page, external open in new tab)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) => {
+    if (href.startsWith('#')) {
+      return `<a href="${href}">${text}</a>`;
+    }
+    return `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
+  });
   // Tables
   html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
     const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
@@ -5203,6 +5209,7 @@ function sharedDocPage({ name, projectName, modStr, expiryStr, content, token, s
   --font:'Inter',system-ui,-apple-system,sans-serif;
   --mono:'JetBrains Mono','Fira Code','Consolas',monospace;
 }
+html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 header{background:var(--s1);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10}

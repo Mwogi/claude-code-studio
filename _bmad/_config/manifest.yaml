@@ -1,19 +1,19 @@
 installation:
-  version: 6.6.0
+  version: 6.8.0
   installDate: 2026-03-18T18:04:20.998Z
-  lastUpdated: 2026-04-30T03:00:41.702Z
+  lastUpdated: 2026-05-26T03:00:38.176Z
 modules:
   - name: core
-    version: 6.6.0
+    version: 6.8.0
     installDate: 2026-03-18T18:04:20.998Z
-    lastUpdated: 2026-04-30T03:00:41.696Z
+    lastUpdated: 2026-05-26T03:00:38.175Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
-    version: 6.6.0
+    version: 6.8.0
     installDate: 2026-03-18T18:04:20.827Z
-    lastUpdated: 2026-04-30T03:00:41.702Z
+    lastUpdated: 2026-05-26T03:00:38.176Z
     source: built-in
     npmPackage: null
     repoUrl: null

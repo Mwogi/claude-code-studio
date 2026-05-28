@@ -265,3 +265,110 @@ Daily automated sync log tracking BMAD METHOD repository updates.
 ## 2026-05-12 03:00 UTC — No Update
 - Installed: 6.6.0 | Latest: 6.6.0
 - No update needed
+
+## 2026-05-13 03:00 UTC — No Update
+- Installed: 6.6.0 | Latest: 6.6.0
+- Status: No update needed
+
+## 2026-05-14 03:00 UTC — No Update
+- Installed: 6.6.0 | Latest: 6.6.0
+- No action needed
+
+## 2026-05-15 03:00 UTC — No Update
+- Installed: 6.6.0 | Latest: 6.6.0
+- No action needed
+
+## 2026-05-16 03:00 UTC — Daily Sync Check
+- **Latest npm version:** 6.6.0
+- **Installed version:** 6.6.0
+- **Result:** No update needed — versions match
+- **Projects checked:** N/A (no upgrade required)
+
+## 2026-05-17 03:00 UTC — Daily Sync Check
+- **Installed version:** 6.6.0
+- **Latest npm version:** 6.6.0
+- **Result:** No update needed. Versions match.
+
+## 2026-05-18 — v6.6.0 → v6.7.0 ✅ Upgraded
+
+- **Previous:** 6.6.0 | **New:** 6.7.0
+- **Projects updated:** All 6 (Claude Studio + hmis_frontend + hmis + helpdesk + devbox + hmis-lite)
+  - hmis-lite jumped from 6.5.0 → 6.7.0
+- **New skills (2):**
+  - `bmad-prd` — Consolidated PRD skill (create/update/validate). Replaces deprecated `bmad-create-prd`, `bmad-edit-prd`, `bmad-validate-prd` (removed in v7)
+  - `bmad-investigate` — Forensic case investigation with evidence-graded findings (bug traces, incident analysis, code exploration)
+- **Modified skills:**
+  - `bmad-product-brief` — Description updated (now includes "validate" intent)
+  - `bmad-create-prd`, `bmad-edit-prd`, `bmad-validate-prd` — Marked DEPRECATED, consolidated into `bmad-prd`
+- **Agents:** No changes
+- **Workflows:** No changes
+- **Broken paths in server.js:** None (all paths use `.claude/skills/` — correct)
+- **server.js integration recommendations:**
+  - ⚠️ `bmad-prd` is new and NOT in BMAD_WORKFLOWS — consider adding as a unified PRD workflow replacing separate create/edit/validate entries
+  - ⚠️ `bmad-investigate` is new and NOT in BMAD_WORKFLOWS — consider adding for bug investigation tasks
+  - Deprecated skills (`bmad-create-prd`, `bmad-edit-prd`, `bmad-validate-prd`) still work but will be removed in v7 — plan migration to `bmad-prd`
+- **kanban.html:** No new workflow dropdown entries needed (new skills are not phase-based)
+
+## 2026-05-19 — Patch Update 6.7.0 → 6.7.1
+
+- **Version:** 6.7.0 → 6.7.1 (patch)
+- **New agents/workflows/skills:** None (manifests unchanged)
+- **Broken path references:** None
+- **server.js integration:** No changes needed
+- **Projects updated (all successful):**
+  - `/home/ubuntu/claude-code-studio` (Claude Studio itself)
+  - `/home/ubuntu/frappe-bench/apps/hmis_frontend` (HMIS Frontend)
+  - `/home/ubuntu/frappe-bench/apps/hmis` (HMIS Backend)
+  - `/home/ubuntu/frappe-bench/apps/helpdesk` (Helpdesk)
+  - `/home/ubuntu/projects/devbox` (Tiberbu DevBox)
+  - `/home/ubuntu/projects/hmis-lite` (HMIS Lite)
+- **kanban.html:** No changes needed
+
+## 2026-05-20 03:00 UTC — No Update
+- Installed: 6.7.1 | Latest: 6.7.1 — no update needed
+
+## 2026-05-21 03:00 UTC — No Update
+- Installed: 6.7.1 | Latest: 6.7.1 — no update needed
+
+## 2026-05-22 03:00 UTC — No Update
+- **Installed:** 6.7.1 | **Latest:** 6.7.1
+- No update needed. All installations current.
+
+## 2026-05-23 03:00 UTC — No Update Needed
+- **Installed:** 6.7.1 | **Latest:** 6.7.1
+- No action taken.
+
+## 2026-05-24 03:00 UTC — No Update Needed
+- Latest npm version: 6.7.1
+- Installed version: 6.7.1
+- Action: None required
+
+## 2026-05-25 03:00 UTC — No Update Needed
+- Latest npm version: 6.7.1
+- Installed version: 6.7.1
+- Action: None required
+
+## 2026-05-26 03:00 UTC — Upgraded to 6.8.0
+- Previous: 6.7.1 → New: 6.8.0
+- **Skills renamed:**
+  - `bmad-distillator` → `bmad-spec` (new path: `.claude/skills/bmad-spec/SKILL.md`)
+  - `bmad-create-ux-design` → `bmad-ux` (new path: `.claude/skills/bmad-ux/SKILL.md`)
+- **No new workflows/agents added** (just renames)
+- **Projects updated:** hmis_frontend, hmis, helpdesk, devbox, hmis-lite (all 5 successful)
+- **⚠️ Broken paths in server.js:**
+  1. Line 181: `skills: ['bmad-create-ux-design']` → should be `'bmad-ux'`
+  2. Line 183: prompt references `.claude/skills/bmad-create-ux-design/SKILL.md` → should be `.claude/skills/bmad-ux/SKILL.md`
+  3. Line 314: `skills: ['bmad-distillator']` → should be `'bmad-spec'`
+  4. Line 316: prompt references `_bmad/core/bmad-distillator/SKILL.md` → should be `.claude/skills/bmad-spec/SKILL.md`
+- **kanban.html:** Dropdown labels still say "UX Design" and "Distillator" — workflow keys (`ux-design`, `distillator`) still work if server.js is fixed, but consider renaming dropdown labels
+- **Recommendation:** Update server.js BMAD_WORKFLOWS entries for `ux-design` and `distillator` to reference new skill names and paths
+
+## 2026-05-27 03:00 UTC — No Update
+- Latest npm version: 6.8.0
+- Installed version: 6.8.0
+- Status: versions match, no action taken
+
+## 2026-05-28 03:00 UTC — No Update
+- Latest npm version: 6.8.0
+- Installed version: 6.8.0
+- Status: versions match, no action needed
