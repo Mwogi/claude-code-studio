@@ -3495,90 +3495,89 @@ function autoActivateNextEpic(task) {
 }
 
 /**
- * 🔍 OpenClaw Chain Validation: When a depends_on chain fully completes
- * (the final fix/QA task finishes with no further dependents), notify OpenClaw
- * to do a human-level end-to-end review of the entire chain's output.
- * This ensures BMAD's QA is supplemented by a higher-level validation pass.
+ * 🔍 OpenClaw Chain Validation: When a task chain fully completes
+ * (dev → QA → fix cycle ends), notify OpenClaw to do a human-level
+ * end-to-end review of the implementation.
+ * 
+ * Detection: A task is "terminal" when:
+ * - It's a fix task (quick-dev) that just completed, OR
+ * - It's a QA task (backend-qa/playwright-qa) that passed with no P0/P1 (no fix spawned)
+ * AND no further tasks reference this task in depends_on.
  */
 function autoOpenClawChainValidation(task) {
-  if (!task.depends_on && !task.chain_id) return;
-  
-  // Check: is this task the LAST in its dependency chain?
-  // i.e., no other task depends_on this task's id or dep_group
-  const taskId = task.id;
-  const depGroup = task.dep_group || null;
-  
-  // Find tasks that depend on this task
-  const dependents = db.prepare(`
-    SELECT id, status FROM tasks 
-    WHERE (depends_on LIKE ? OR depends_on LIKE ?)
-    AND status NOT IN ('done', 'done_review', 'archived', 'cancelled')
-  `).all(`%"${taskId}"%`, depGroup ? `%"group:${depGroup}"%` : `%__NOMATCH__%`);
-  
-  if (dependents.length > 0) return; // Not the final task yet
-  
-  // This is a terminal task. Gather the full chain context.
   const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
-  const wfType = wfMatch ? wfMatch[1] : 'task';
+  const wfType = wfMatch ? wfMatch[1] : '';
   
-  // Only trigger for fix tasks or QA tasks that passed (terminal nodes)
-  const terminalTypes = new Set(['quick-dev', 'dev-story']);
-  // Also trigger when a QA task passes (no fix needed = terminal)
-  const isQaPassed = ['backend-qa', 'playwright-qa', 'adversarial-review'].includes(wfType);
+  // Only trigger for terminal workflow types
+  const isFixTask = wfType === 'quick-dev';
+  const isQaTask = ['backend-qa', 'playwright-qa', 'adversarial-review'].includes(wfType);
   
-  if (!terminalTypes.has(wfType) && !isQaPassed) return;
+  if (!isFixTask && !isQaTask) return;
   
-  // Find the root task of this chain (the original depends_on source)
-  let chainTasks = [];
-  if (task.depends_on) {
-    try {
-      const deps = JSON.parse(task.depends_on);
-      // Walk up the dependency tree
-      const visited = new Set([taskId]);
-      const queue = [...deps.map(d => d.replace('group:', '').replace('"', ''))]; 
-      while (queue.length > 0 && chainTasks.length < 20) {
-        const depId = queue.shift();
-        if (visited.has(depId)) continue;
-        visited.add(depId);
-        const found = db.prepare(`SELECT id, title, status, depends_on, notes, workdir FROM tasks WHERE id=? OR dep_group=?`).all(depId, depId);
-        chainTasks.push(...found);
-      }
-    } catch {}
+  // For QA tasks: only trigger if no fix task was auto-created
+  // (auto-fix creates within the same completion handler, so check after a delay)
+  if (isQaTask) {
+    // Check if a fix task was just created for this QA task
+    const fixTask = db.prepare(`
+      SELECT id FROM tasks 
+      WHERE title LIKE ? AND created_at > datetime('now', '-2 minutes')
+      AND notes LIKE '%quick-dev%'
+    `).get(`%${task.title.substring(0, 40)}%`);
+    if (fixTask) return; // Fix was spawned — wait for fix to complete
   }
-  chainTasks.push({ id: task.id, title: task.title, status: 'done_review', notes: task.notes, workdir: task.workdir });
   
-  // Build validation message for OpenClaw
+  // Find the original dev task this chain started from
+  // Pattern: dev task title is embedded in QA/Fix task titles
+  let rootTitle = task.title;
+  // Strip prefixes: "Fix: Dev: ..." or "QA: Dev: ..." or "Fix: QA: Dev: ..."
+  rootTitle = rootTitle.replace(/^(Fix:|QA:|Quick Dev:)\s*/gi, '');
+  rootTitle = rootTitle.replace(/^(Fix:|QA:|Quick Dev:|Dev:)\s*/gi, '');
+  rootTitle = rootTitle.replace(/^(Fix:|QA:|Quick Dev:|Dev:)\s*/gi, '');
+  rootTitle = rootTitle.replace(/\s*\u2014 issues from QA$/i, '');
+  const searchTitle = rootTitle.substring(0, 50);
+  
+  // Find all related tasks (dev + QA + fix chain)
+  const relatedTasks = db.prepare(`
+    SELECT id, title, status, notes FROM tasks
+    WHERE title LIKE ? AND workdir = ?
+    ORDER BY created_at ASC
+  `).all(`%${searchTitle}%`, task.workdir || '');
+  
   const projName = getProjectName(task.workdir);
-  const chainSummary = chainTasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
+  const chainSummary = relatedTasks.map(t => {
+    const wf = ((t.notes || '').match(/\[bmad-workflow:([\w-]+)\]/) || [])[1] || 'task';
+    return `- [${t.status}] (${wf}) ${t.title}`;
+  }).join('\n');
   
   const validationMessage = `🔍 **Chain Validation Required** — [${projName}]
 
-The following task chain has completed all BMAD steps (dev → QA → fix):
+A BMAD task chain has completed (dev → QA → fix cycle finished):
 
 **Final task:** ${task.title}
-**Workflow:** ${wfType}
 **Workdir:** ${task.workdir}
 
-**Chain tasks:**
+**Chain:**
 ${chainSummary}
 
-**Action needed:** Do a human-level end-to-end review:
-1. Check if the module/feature actually works (not just renders)
-2. Verify backend API connectivity (not mock data)
-3. Test real user flows
-4. Screenshot key pages and verify they show real data
-5. If issues found, create a fix task with specific instructions
+**YOUR JOB:** Do a human-level end-to-end review:
+1. Actually open the module/feature and check it WORKS (not just renders)
+2. Verify backend API connectivity (real data, not mock)
+3. Test real user flows end-to-end
+4. If issues found, create a fix task with specific instructions
 
-This is an automated validation checkpoint. The BMAD QA only checked surface-level rendering.`;
+Do NOT trust the QA verdict — verify yourself.`;
   
-  // Send to OpenClaw via the bridge
+  // Send to OpenClaw via the notify module (delivers to Discord/configured channel)
+  openclawNotify.notify(validationMessage, projName, task.workdir);
+  
+  // Also emit via bridge (if chain_validation_needed is in enabled events)
   openclawBridge.emitEvent({
     type: 'chain_validation_needed',
     taskId: task.id,
     title: task.title,
     workdir: task.workdir || null,
     message: validationMessage,
-    chainTasks: chainTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
+    chainTasks: relatedTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
   });
   
   log.info(`[chain-validation] Triggered OpenClaw validation for chain ending at task ${task.id}: ${task.title}`);
