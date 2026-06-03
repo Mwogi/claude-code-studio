@@ -2048,6 +2048,8 @@ async function startTask(task) {
           try { autoCreateFixFromQA(task, fullText); } catch (e) { log.warn(`[auto-fix] ${e.message}`); }
           // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
           try { autoActivateNextEpic(task); } catch (e) { log.warn(`[auto-epic] ${e.message}`); }
+          // 🔍 OpenClaw chain validation: when final task in a depends_on chain completes
+          try { autoOpenClawChainValidation(task); } catch (e) { log.warn(`[chain-validation] ${e.message}`); }
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
           // Notify Telegram about completed task
@@ -3490,6 +3492,96 @@ function autoActivateNextEpic(task) {
   
   // Trigger queue processing
   setTimeout(processQueue, 3000);
+}
+
+/**
+ * 🔍 OpenClaw Chain Validation: When a depends_on chain fully completes
+ * (the final fix/QA task finishes with no further dependents), notify OpenClaw
+ * to do a human-level end-to-end review of the entire chain's output.
+ * This ensures BMAD's QA is supplemented by a higher-level validation pass.
+ */
+function autoOpenClawChainValidation(task) {
+  if (!task.depends_on && !task.chain_id) return;
+  
+  // Check: is this task the LAST in its dependency chain?
+  // i.e., no other task depends_on this task's id or dep_group
+  const taskId = task.id;
+  const depGroup = task.dep_group || null;
+  
+  // Find tasks that depend on this task
+  const dependents = db.prepare(`
+    SELECT id, status FROM tasks 
+    WHERE (depends_on LIKE ? OR depends_on LIKE ?)
+    AND status NOT IN ('done', 'done_review', 'archived', 'cancelled')
+  `).all(`%"${taskId}"%`, depGroup ? `%"group:${depGroup}"%` : `%__NOMATCH__%`);
+  
+  if (dependents.length > 0) return; // Not the final task yet
+  
+  // This is a terminal task. Gather the full chain context.
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfType = wfMatch ? wfMatch[1] : 'task';
+  
+  // Only trigger for fix tasks or QA tasks that passed (terminal nodes)
+  const terminalTypes = new Set(['quick-dev', 'dev-story']);
+  // Also trigger when a QA task passes (no fix needed = terminal)
+  const isQaPassed = ['backend-qa', 'playwright-qa', 'adversarial-review'].includes(wfType);
+  
+  if (!terminalTypes.has(wfType) && !isQaPassed) return;
+  
+  // Find the root task of this chain (the original depends_on source)
+  let chainTasks = [];
+  if (task.depends_on) {
+    try {
+      const deps = JSON.parse(task.depends_on);
+      // Walk up the dependency tree
+      const visited = new Set([taskId]);
+      const queue = [...deps.map(d => d.replace('group:', '').replace('"', ''))]; 
+      while (queue.length > 0 && chainTasks.length < 20) {
+        const depId = queue.shift();
+        if (visited.has(depId)) continue;
+        visited.add(depId);
+        const found = db.prepare(`SELECT id, title, status, depends_on, notes, workdir FROM tasks WHERE id=? OR dep_group=?`).all(depId, depId);
+        chainTasks.push(...found);
+      }
+    } catch {}
+  }
+  chainTasks.push({ id: task.id, title: task.title, status: 'done_review', notes: task.notes, workdir: task.workdir });
+  
+  // Build validation message for OpenClaw
+  const projName = getProjectName(task.workdir);
+  const chainSummary = chainTasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
+  
+  const validationMessage = `🔍 **Chain Validation Required** — [${projName}]
+
+The following task chain has completed all BMAD steps (dev → QA → fix):
+
+**Final task:** ${task.title}
+**Workflow:** ${wfType}
+**Workdir:** ${task.workdir}
+
+**Chain tasks:**
+${chainSummary}
+
+**Action needed:** Do a human-level end-to-end review:
+1. Check if the module/feature actually works (not just renders)
+2. Verify backend API connectivity (not mock data)
+3. Test real user flows
+4. Screenshot key pages and verify they show real data
+5. If issues found, create a fix task with specific instructions
+
+This is an automated validation checkpoint. The BMAD QA only checked surface-level rendering.`;
+  
+  // Send to OpenClaw via the bridge
+  openclawBridge.emitEvent({
+    type: 'chain_validation_needed',
+    taskId: task.id,
+    title: task.title,
+    workdir: task.workdir || null,
+    message: validationMessage,
+    chainTasks: chainTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
+  });
+  
+  log.info(`[chain-validation] Triggered OpenClaw validation for chain ending at task ${task.id}: ${task.title}`);
 }
 
 function autoArchiveProcess() {
