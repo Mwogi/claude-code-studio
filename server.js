@@ -291,7 +291,18 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     model: 'opus',
     effort: 'xhigh',
     maxTurns: 100,
-    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story skill from ${workdir}/.claude/skills/bmad-dev-story/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.\n\n## SCREENSHOT VERIFICATION \u2014 MANDATORY\nWhen taking Playwright screenshots for verification:\n1. BEFORE every screenshot, log the current URL: console.log('VERIFY_URL:', await page.url());\n2. If the URL contains /login, /signin, /Account/Login \u2192 YOUR AUTH FAILED. Do NOT screenshot. Fix auth first.\n3. Login page screenshots = TASK FAILURE. The server will reject your task if all screenshots are login pages.\n4. Every screenshot must prove a specific acceptance criterion \u2014 not just show a page loaded.\n5. If storageState is expired/invalid, regenerate it: cd the workdir and run npx playwright test --project=setup\n\n## CRUD ROUND-TRIP VERIFICATION \u2014 MANDATORY\nIf your implementation includes any form that creates/edits/saves documents (Stock Entry, Material Request, Patient Encounter, etc.):\n1. After implementing, test the FULL round-trip: fill form \u2192 submit \u2192 verify document created in backend \u2192 verify it appears in list view\n2. Use Playwright or curl to actually submit with realistic data \u2014 do NOT just verify the form renders\n3. If the submit fails, fix it before marking the task complete\nA form that renders but fails on save is NOT done.`
+    prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nFollow the dev-story skill from ${workdir}/.claude/skills/bmad-dev-story/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nSTORY FILES: Look for your story file in ${workdir}/_bmad-output/implementation-artifacts/ (story-*.md matching this task title).\nAlso check the sprint status at ${workdir}/_bmad-output/sprint-status.yaml for context on what's done and what's next.\n\nRead the story file FIRST — it contains your acceptance criteria, subtask checklist, and dev notes.\nDuring implementation:\n- Check off subtasks as you complete them\n- Update the Change Log with what you changed\n- Update the File List with all files created/modified\n- Update Completion Notes with a summary when done\n\nImplement the story fully. All acceptance criteria must pass.\n\n## SCREENSHOT VERIFICATION \u2014 MANDATORY\nWhen taking Playwright screenshots for verification:\n1. BEFORE every screenshot, log the current URL: console.log('VERIFY_URL:', await page.url());\n2. If the URL contains /login, /signin, /Account/Login \u2192 YOUR AUTH FAILED. Do NOT screenshot. Fix auth first.\n3. Login page screenshots = TASK FAILURE. The server will reject your task if all screenshots are login pages.\n4. Every screenshot must prove a specific acceptance criterion \u2014 not just show a page loaded.\n5. If storageState is expired/invalid, regenerate it: cd the workdir and run npx playwright test --project=setup\n\n## CRUD ROUND-TRIP VERIFICATION \u2014 MANDATORY\nIf your implementation includes any form that creates/edits/saves documents (Stock Entry, Material Request, Patient Encounter, etc.):\n1. After implementing, test the FULL round-trip: fill form \u2192 submit \u2192 verify document created in backend \u2192 verify it appears in list view\n2. Use Playwright or curl to actually submit with realistic data \u2014 do NOT just verify the form renders\n3. If the submit fails, fix it before marking the task complete\nA form that renders but fails on save is NOT done.
+
+## MODULE COMPLETENESS — MANDATORY
+Every page in a module MUST:
+1. Have working CRUD operations (Create button, Edit, Delete where applicable)
+2. Display REAL data from the backend API (no hardcoded/mock data)
+3. Show proper empty states with a clear "Add" or "Create" action button
+4. Successfully complete a full round-trip: Create → appears in list → can view detail → can edit
+5. If a submodule has no backend endpoint for create/update, CREATE THE BACKEND ENDPOINT
+6. NEVER mark a module complete if it is read-only when it should support data entry
+
+A read-only list page without a way to add records is NOT a complete feature.`
   },
   'retrospective': {
     label: '🔮 Retrospective',
@@ -3559,13 +3570,25 @@ A BMAD task chain has completed (dev → QA → fix cycle finished):
 **Chain:**
 ${chainSummary}
 
-**YOUR JOB:** Do a human-level end-to-end review:
-1. Actually open the module/feature and check it WORKS (not just renders)
-2. Verify backend API connectivity (real data, not mock)
-3. Test real user flows end-to-end
-4. If issues found, create a fix task with specific instructions
+**YOUR JOB — STRICT END-TO-END VALIDATION:**
+1. Open EVERY page in the module and verify it loads real data (not mock/hardcoded)
+2. **CRUD TEST**: For EACH form/page that allows create/edit:
+   - Actually CREATE a record via Playwright (fill form → submit)
+   - Verify the record appears in the list view
+   - Verify the API returned success (not error)
+3. If ANY form throws an error on submit → CREATE A FIX TASK
+4. If ANY page shows only empty state with no way to add data → REPORT AS GAP
+5. If ANY page uses mock/hardcoded data instead of API → CREATE A FIX TASK
+6. Check error console for API 4xx/5xx responses
 
-Do NOT trust the QA verdict — verify yourself.`;
+**FAILURE CRITERIA (create fix task if ANY apply):**
+- Form renders but submit throws error
+- Page shows empty state with no "Add" button or action
+- Mock/hardcoded data instead of real API calls
+- Missing CRUD operations (read-only when it should be interactive)
+- Backend API returns error for standard operations
+
+Do NOT mark as passed just because pages render. EVERY interactive feature must be tested.`;
   
   // Send to OpenClaw via the notify module (delivers to Discord/configured channel)
   openclawNotify.notify(validationMessage, projName, task.workdir);
