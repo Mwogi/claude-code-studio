@@ -2067,7 +2067,15 @@ async function startTask(task) {
           // 🛡️ Handle adversarial review completion (PASS/FAIL verdict)
           try { handleAdversarialReviewCompletion(task, fullText); } catch (e) { log.warn(`[adversarial-review-completion] ${e.message}`); }
           // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
-          try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
+          // For dev-story tasks: QA is spawned AFTER adversarial review passes (in handleAdversarialReviewCompletion)
+          // For other workflows (quick-dev, quick-spec): spawn QA immediately (no review gate)
+          {
+            const _wfM = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+            const _wfT = _wfM ? _wfM[1] : '';
+            if (!DEV_WORKFLOWS_NEEDING_REVIEW_GATE.has(_wfT)) {
+              try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
+            }
+          }
           // 🔧 Auto-create fix tasks from QA reports (server-side, no auth needed)
           try { autoCreateFixFromQA(task, fullText); } catch (e) { log.warn(`[auto-fix] ${e.message}`); }
           // 🔄 Auto-epic progression: when last task in a chain completes, activate next epic
@@ -3201,9 +3209,22 @@ function handleAdversarialReviewCompletion(task, fullText) {
   const failMatch = /##\s*VERDICT:\s*FAIL/i.test(output);
   
   if (passMatch && !failMatch) {
-    // \u2705 PASS — source task stays in done_review, normal flow continues
+    // ✅ PASS — source task stays in done_review, normal flow continues
     log.info(`[adversarial-review] Review PASSED for task #${sourceTask.task_number} "${sourceTask.title}"`);
     openclawNotify.notify(`✅ **Review Gate PASSED**: Task #${sourceTask.task_number}: ${sourceTask.title} (${getProjectName(task.workdir)})`);
+
+    // 🧪 NOW spawn QA task (only after review passes, not on dev completion)
+    // This prevents QA from running on unreviewed code and avoids duplicate QA tasks
+    try {
+      // Re-read the source task to get fresh full text (from its session)
+      const sourceSession = sourceTask.session_id ? db.prepare(`SELECT id FROM sessions WHERE id=?`).get(sourceTask.session_id) : null;
+      let sourceFullText = '';
+      if (sourceSession) {
+        const msgs = db.prepare(`SELECT content FROM messages WHERE session_id=? AND role='assistant' ORDER BY created_at DESC LIMIT 5`).all(sourceSession.id);
+        sourceFullText = msgs.map(m => m.content).join('\n');
+      }
+      autoCreateQATask(sourceTask, sourceFullText);
+    } catch (e) { log.warn(`[adversarial-review] Failed to spawn QA after review pass: ${e.message}`); }
 
     return;
   }
@@ -3394,6 +3415,15 @@ function autoCreateQATask(task, fullText) {
   
   // Don't create QA for a QA task (prevent infinite loop)
   if (task.title.startsWith('QA:') || task.title.startsWith('🧪')) return;
+  
+  // Dedup: don't create another QA task if one already exists for this source task
+  const existingQA = db.prepare(
+    `SELECT id FROM tasks WHERE workdir=? AND dep_group=? AND notes LIKE '%[bmad-workflow:playwright-qa]%' OR notes LIKE '%[bmad-workflow:backend-qa]%' AND workdir=? AND dep_group=? AND status NOT IN ('archived','cancelled')`
+  ).get(task.workdir, task.dep_group || '', task.workdir, task.dep_group || '');
+  if (existingQA) {
+    log.info(`[auto-qa] Skipping QA creation for task #${task.task_number} — QA task ${existingQA.id} already exists`);
+    return;
+  }
   
   // Depth limit: Fix tasks get ONE QA pass max. Check task lineage via description.
   // Fix tasks (depth=1) get QA. QA on fix tasks (depth=2) does NOT spawn more fixes.
