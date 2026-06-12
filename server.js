@@ -3050,15 +3050,30 @@ function autoAdversarialReviewGate(task, fullText) {
   const reviewId = genId();
   const taskNum = stmts.nextTaskNumber.get(workdir).next_num;
   
-  // Get the git diff for context
+  // Get the git diff for context — find all commits from this task (not just HEAD~1)
   let diffSummary = '';
+  let diffRange = 'HEAD~1..HEAD';
   try {
     const { execSync: _exec } = require('child_process');
-    // Get the diff of committed changes (last commit vs its parent)
-    const lastCommitDiff = _exec('git diff HEAD~1..HEAD --stat', { cwd: workdir, timeout: 10000 }).toString().trim();
+    // Find the range of commits from this task by looking for the first non-task commit
+    // Task commits typically have the task title or "safety-net" in them
+    const recentLogs = _exec('git log --oneline -15', { cwd: workdir, timeout: 10000 }).toString().trim();
+    const taskSlug = slugify(task.title).substring(0, 30);
+    const lines = recentLogs.split('\n');
+    let taskCommitCount = 0;
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      if (lower.includes('safety-net') || lower.includes(taskSlug) || lower.includes('review-gate') || lower.includes('s1.2') || lower.includes(task.title.substring(0, 20).toLowerCase())) {
+        taskCommitCount++;
+      } else {
+        break;
+      }
+    }
+    if (taskCommitCount > 1) diffRange = `HEAD~${taskCommitCount}..HEAD`;
+    const lastCommitDiff = _exec(`git diff ${diffRange} --stat`, { cwd: workdir, timeout: 10000 }).toString().trim();
     diffSummary = lastCommitDiff || '(no diff available — check git log)';
   } catch (e) {
-    diffSummary = '(could not generate diff — run `git diff HEAD~1..HEAD` manually)';
+    diffSummary = '(could not generate diff — run `git log --oneline -10` to find the right range)';
   }
   
   // Find the story file
@@ -3079,22 +3094,30 @@ function autoAdversarialReviewGate(task, fullText) {
 ### Source Task
 - Task #${task.task_number}: ${task.title}
 - Workflow: ${wfType}
+- Review Attempt: ${reviewAttempt + 1} of ${MAX_REVIEW_RETRIES}
 
 ### YOUR MISSION
 You are an adversarial code reviewer. Your job is to find **real, consequential problems** — not style nitpicks.
 You must produce a structured verdict: **PASS** or **FAIL**.
 
+${reviewAttempt > 0 ? `### ⚠️ THIS IS A RETRY (Attempt ${reviewAttempt + 1})
+The dev agent was given specific feedback from the previous review and has made fixes.
+**Your job is to verify the PREVIOUSLY IDENTIFIED issues are fixed.**
+If the previously-identified blocking issues have been resolved, you MUST pass — even if you find new minor/moderate issues.
+Only FAIL if:
+- A previously-identified blocking issue is STILL not fixed, OR
+- You find a NEW issue that is genuinely **critical** (security vulnerability, data loss, crash) — not just "could be better"
+
+Do NOT keep raising new lower-severity issues on retries. The goal is convergence, not perfection.
+` : ''}
 ### REVIEW SCOPE
-Review the FULL git diff of the most recent commit(s) from this task.
+Review the FULL git diff of the implementation commits from this task.
 
 Run these commands to get context:
 \`\`\`bash
-# See what was changed
-git log --oneline -5
-git diff HEAD~1..HEAD
-
-# If multiple commits from this task, adjust the range:
-# git log --oneline -10 to find the right starting point
+# See what was changed (use the full range, not just HEAD~1)
+git log --oneline -10
+git diff ${diffRange}
 \`\`\`
 
 ### DIFF SUMMARY (from auto-commit)
