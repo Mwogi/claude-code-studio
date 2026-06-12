@@ -269,6 +269,13 @@ Generate sprint-status.yaml following the template at ${workdir}/.claude/skills/
     effort: 'xhigh',
     prompt: (title, workdir) => `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-dev/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nRun the code review skill from ${workdir}/.claude/skills/bmad-code-review/SKILL.md\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a senior developer review using the validation checklist.`
   },
+  'adversarial-review-gate': {
+    label: '🛡️ Adversarial Review Gate',
+    agent: 'developer',
+    skills: [],
+    model: 'sonnet',
+    prompt: (title, workdir) => `You are an adversarial code reviewer acting as a quality gate. Your job is to find real problems — not nitpick style.\n\nProject: ${title}\nDirectory: ${workdir}\n\nYour review instructions are in the task description. Follow them exactly.`
+  },
   'correct-course': {
     label: '🔄 Correct Course',
     agent: 'scrum-master',
@@ -762,6 +769,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_number INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN dep_group TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN review_source_task_id TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN review_attempt INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_dep_group ON tasks(dep_group)`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
@@ -1461,7 +1470,7 @@ async function startTask(task) {
           'correct-course': 'bmad_implementation', 'sprint-status': 'bmad_implementation',
           'document-project': 'bmad_implementation', 'generate-context': 'bmad_implementation', 'shard': 'bmad_implementation',
           'distillator': 'bmad_implementation', 'advanced-elicitation': 'bmad_brainstorm',
-          'adversarial-review': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'backend-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+          'adversarial-review': 'bmad_qa', 'adversarial-review-gate': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'backend-qa': 'bmad_qa', 'edge-case-review': 'bmad_qa',
           'editorial-prose': 'bmad_qa', 'editorial-structure': 'bmad_qa', 'index-docs': 'bmad_implementation',
           'write-document': 'bmad_implementation', 'validate-doc': 'bmad_qa', 'mermaid-generate': 'bmad_implementation',
           'explain-concept': 'bmad_implementation', 'bmad-help': 'bmad_implementation',
@@ -1481,7 +1490,7 @@ async function startTask(task) {
           'quick-flow-solo-dev': 'Solo Dev', 'prfaq': 'PRFAQ',
           'retrospective': 'Retro', 'correct-course': 'Course Correction',
           'sprint-status': 'Sprint Status', 'generate-context': 'Gen Context',
-          'document-project': 'Docs', 'adversarial-review': 'Adversarial Review',
+          'document-project': 'Docs', 'adversarial-review': 'Adversarial Review', 'adversarial-review-gate': 'Review Gate',
           'edge-case-review': 'Edge Case Review', 'distillator': 'Distill',
           'advanced-elicitation': 'Elicitation',
         };
@@ -1524,7 +1533,7 @@ async function startTask(task) {
     // Also generate story file for implementation/QA workflows
     let storyPath = null;
     const STORY_WORKFLOWS = ['quick-dev', 'dev-story', 'quick-spec', 'quick-flow-solo-dev',
-      'code-review', 'adversarial-review', 'playwright-qa', 'e2e-tests', 'edge-case-review', 'correct-course'];
+      'code-review', 'adversarial-review', 'adversarial-review-gate', 'playwright-qa', 'e2e-tests', 'edge-case-review', 'correct-course'];
     if (task._bmadWorkflow) {
       const wf = task._bmadWorkflow;
       if (wf.outputDir) {
@@ -1742,7 +1751,7 @@ async function startTask(task) {
         'quick-dev': 'bmad_implementation', 'quick-spec': 'bmad_implementation',
         'quick-flow-solo-dev': 'bmad_implementation',
         'code-review': 'bmad_qa', 'e2e-tests': 'bmad_qa', 'playwright-qa': 'bmad_qa', 'backend-qa': 'bmad_qa',
-        'adversarial-review': 'bmad_qa', 'edge-case-review': 'bmad_qa',
+        'adversarial-review': 'bmad_qa', 'adversarial-review-gate': 'bmad_qa', 'edge-case-review': 'bmad_qa',
         'solutioning': 'bmad_architecture', 'readiness-check': 'bmad_architecture',
         'sprint-planning': 'bmad_architecture',
         'planning': 'bmad_prd', 'edit-prd': 'bmad_prd', 'validate-prd': 'bmad_prd', 'ux-design': 'bmad_prd',
@@ -2053,6 +2062,10 @@ async function startTask(task) {
           try { autoBmadPipelineChain(task); } catch (e) { log.warn(`[auto-pipeline] ${e.message}`); }
           // 🔗 Auto-chain: create-story → dev-story (server-enforced, not agent-dependent)
           try { autoChainCreateStoryToDev(task); } catch (e) { log.warn(`[auto-chain] ${e.message}`); }
+          // 🛡️ Adversarial review gate for dev-story tasks (runs in parallel with QA)
+          try { autoAdversarialReviewGate(task, fullText); } catch (e) { log.warn(`[adversarial-review] ${e.message}`); }
+          // 🛡️ Handle adversarial review completion (PASS/FAIL verdict)
+          try { handleAdversarialReviewCompletion(task, fullText); } catch (e) { log.warn(`[adversarial-review-completion] ${e.message}`); }
           // 🧪 Auto-create QA task for dev workflows (server-enforced, not agent-dependent)
           try { autoCreateQATask(task, fullText); } catch (e) { log.warn(`[auto-qa] ${e.message}`); }
           // 🔧 Auto-create fix tasks from QA reports (server-side, no auth needed)
@@ -2992,6 +3005,255 @@ function purgeOldScreenshots() {
  */
 const DEV_WORKFLOWS_NEEDING_QA = new Set(['quick-dev', 'dev-story', 'quick-spec', 'quick-flow-solo-dev']);
 
+// ============================================================
+// 🛡️ ADVERSARIAL CODE REVIEW GATE
+// Runs after dev-story tasks complete (post auto-commit).
+// Spawns a sonnet-based adversarial reviewer that checks the
+// full git diff. On FAIL, the original dev task is re-queued
+// with review feedback. Max 3 review cycles.
+// ============================================================
+const MAX_REVIEW_RETRIES = 3;
+const DEV_WORKFLOWS_NEEDING_REVIEW_GATE = new Set(['dev-story']);
+
+/**
+ * Auto-create an adversarial review gate task when a dev-story task completes.
+ * The review task inspects the full git diff and project patterns,
+ * then produces a structured PASS/FAIL verdict.
+ */
+function autoAdversarialReviewGate(task, fullText) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfType = wfMatch ? wfMatch[1] : '';
+  
+  if (!DEV_WORKFLOWS_NEEDING_REVIEW_GATE.has(wfType)) return;
+  
+  // Don't create review for review tasks (prevent infinite loop)
+  if ((task.notes || '').includes('[bmad-workflow:adversarial-review-gate]')) return;
+  // Don't create review for fix tasks — they'll get their own review via the parent cycle
+  if (/\bFix:\s/.test(task.title)) return;
+  
+  // Check review attempt count — if already exceeded max, skip
+  const reviewAttempt = task.review_attempt || 0;
+  if (reviewAttempt >= MAX_REVIEW_RETRIES) {
+    log.warn(`[adversarial-review] task ${task.id}: max review retries (${MAX_REVIEW_RETRIES}) reached — skipping review gate`);
+    return;
+  }
+  
+  const workdir = task.workdir || WORKDIR;
+  const reviewId = genId();
+  const taskNum = stmts.nextTaskNumber.get(workdir).next_num;
+  
+  // Get the git diff for context
+  let diffSummary = '';
+  try {
+    const { execSync: _exec } = require('child_process');
+    // Get the diff of committed changes (last commit vs its parent)
+    const lastCommitDiff = _exec('git diff HEAD~1..HEAD --stat', { cwd: workdir, timeout: 10000 }).toString().trim();
+    diffSummary = lastCommitDiff || '(no diff available — check git log)';
+  } catch (e) {
+    diffSummary = '(could not generate diff — run `git diff HEAD~1..HEAD` manually)';
+  }
+  
+  // Find the story file
+  const slug = slugify(task.title);
+  const storyFile = `_bmad-output/implementation-artifacts/story-${task.task_number || 0}-${slug}.md`;
+  
+  // Build project-specific pattern references
+  const patternFiles = [
+    'docs/testing-info.md',
+    '_bmad-output/planning-artifacts/architecture-*.md',
+    'CLAUDE.md',
+    '.claude/settings.json'
+  ];
+  
+  const reviewTitle = `\u{1F6E1}\u{FE0F} Review Gate: ${task.title.substring(0, 70)}`;
+  const reviewDesc = `## Adversarial Code Review Gate (Attempt ${reviewAttempt + 1}/${MAX_REVIEW_RETRIES})
+
+### Source Task
+- Task #${task.task_number}: ${task.title}
+- Workflow: ${wfType}
+
+### YOUR MISSION
+You are an adversarial code reviewer. Your job is to find **real, consequential problems** — not style nitpicks.
+You must produce a structured verdict: **PASS** or **FAIL**.
+
+### REVIEW SCOPE
+Review the FULL git diff of the most recent commit(s) from this task.
+
+Run these commands to get context:
+\`\`\`bash
+# See what was changed
+git log --oneline -5
+git diff HEAD~1..HEAD
+
+# If multiple commits from this task, adjust the range:
+# git log --oneline -10 to find the right starting point
+\`\`\`
+
+### DIFF SUMMARY (from auto-commit)
+\`\`\`
+${diffSummary.substring(0, 2000)}
+\`\`\`
+
+### WHAT TO CHECK
+1. **Correctness** — Does the code actually do what the story requires? Logic errors? Missing cases?
+2. **Error handling** — Are errors swallowed? Missing try/catch? Unhandled promise rejections?
+3. **Security** — SQL injection? XSS? Auth bypass? Exposed secrets?
+4. **Breaking changes** — Does this break existing interfaces, APIs, or contracts?
+5. **Data integrity** — Race conditions? Missing validations? Corrupt state possible?
+6. **Missing implementation** — Are there TODOs, stub functions, or incomplete features marked as done?
+7. **Project patterns** — Does it follow established patterns? (Check architecture docs)
+
+### WHAT TO IGNORE (do NOT fail for these)
+- Code style preferences (formatting, naming conventions unless truly confusing)
+- Missing tests (QA handles this separately)
+- Performance optimizations (unless obviously O(n²) on large data)
+- Documentation gaps
+- Import ordering
+
+### PROJECT-SPECIFIC PATTERNS
+Load and reference these files for project conventions:
+${patternFiles.map(f => `- \`${f}\``).join('\n')}
+
+Also read the story file for acceptance criteria: \`${storyFile}\`
+
+### OUTPUT FORMAT (MANDATORY)
+Your final output MUST end with exactly one of these verdict blocks:
+
+**If passing:**
+\`\`\`
+## VERDICT: PASS
+All acceptance criteria implemented correctly. No blocking issues found.
+\`\`\`
+
+**If failing:**
+\`\`\`
+## VERDICT: FAIL
+
+### Blocking Issues
+1. [File:line] Issue description — why it's a problem
+2. [File:line] Issue description — why it's a problem
+...
+
+### Required Fixes
+- Specific fix instruction 1
+- Specific fix instruction 2
+\`\`\`
+
+**Rules for FAIL:**
+- You MUST have at least one genuinely blocking issue (not a nitpick)
+- Each issue must reference a specific file and line
+- Each issue must explain WHY it's a problem (not just what it is)
+- You must provide actionable fix instructions
+
+**Rules for PASS:**
+- Minor issues are OK — PASS means "no blocking problems"
+- You can note minor suggestions after the PASS verdict, but the verdict itself is PASS
+- If you find only style issues or minor improvements, verdict is PASS`;
+
+  const reviewNotes = `[bmad-workflow:adversarial-review-gate][review-source:${task.id}]`;
+  
+  stmts.createTask.run(
+    reviewId, reviewTitle, reviewDesc, reviewNotes, 'bmad_workflow',
+    (task.sort_order || 0) + 0.5,
+    null, workdir, 'sonnet',
+    'auto', 'single', 40,
+    null, null, task.chain_id || null, null,
+    null, null, null, taskNum, task.dep_group || null
+  );
+  
+  // Store the link: review task → source task
+  try {
+    db.prepare(`UPDATE tasks SET review_source_task_id=? WHERE id=?`).run(task.id, reviewId);
+  } catch (e) { log.warn(`[adversarial-review] failed to set review_source_task_id: ${e.message}`); }
+  
+  log.info(`[adversarial-review] Created review gate task #${taskNum} "${reviewTitle}" for dev task #${task.task_number} (attempt ${reviewAttempt + 1})`);
+  wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+}
+
+/**
+ * Handle adversarial review gate completion.
+ * Parses the PASS/FAIL verdict and either:
+ * - PASS: lets the original task stay in done_review (normal flow continues)
+ * - FAIL: re-queues the original dev task with review feedback for a retry
+ */
+function handleAdversarialReviewCompletion(task, fullText) {
+  const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
+  const wfType = wfMatch ? wfMatch[1] : '';
+  
+  if (wfType !== 'adversarial-review-gate') return;
+  
+  // Find the source task
+  const sourceMatch = (task.notes || '').match(/\[review-source:([^\]]+)\]/);
+  if (!sourceMatch) {
+    log.warn(`[adversarial-review] Review task ${task.id} has no review-source tag`);
+    return;
+  }
+  const sourceTaskId = sourceMatch[1];
+  const sourceTask = db.prepare(`SELECT * FROM tasks WHERE id=?`).get(sourceTaskId);
+  if (!sourceTask) {
+    log.warn(`[adversarial-review] Source task ${sourceTaskId} not found`);
+    return;
+  }
+  
+  // Parse verdict from output
+  const output = fullText || '';
+  const passMatch = /##\s*VERDICT:\s*PASS/i.test(output);
+  const failMatch = /##\s*VERDICT:\s*FAIL/i.test(output);
+  
+  if (passMatch && !failMatch) {
+    // \u2705 PASS — source task stays in done_review, normal flow continues
+    log.info(`[adversarial-review] Review PASSED for task #${sourceTask.task_number} "${sourceTask.title}"`);
+    openclawNotify.notify(`✅ **Review Gate PASSED**: Task #${sourceTask.task_number}: ${sourceTask.title} (${getProjectName(task.workdir)})`);
+
+    return;
+  }
+  
+  if (failMatch) {
+    // \u274c FAIL — re-queue source task with feedback
+    const currentAttempt = sourceTask.review_attempt || 0;
+    const nextAttempt = currentAttempt + 1;
+    
+    if (nextAttempt >= MAX_REVIEW_RETRIES) {
+      // Max retries reached — move to blocked for human review
+      log.warn(`[adversarial-review] Review FAILED for task #${sourceTask.task_number} — max retries (${MAX_REVIEW_RETRIES}) reached, blocking for human review`);
+      db.prepare(`UPDATE tasks SET status='blocked', failure_reason='adversarial_review_max_retries', updated_at=datetime('now') WHERE id=?`)
+        .run(sourceTaskId);
+      openclawNotify.notify(`🛑 **Review Gate BLOCKED** (max retries): Task #${sourceTask.task_number}: ${sourceTask.title} — needs human review (${getProjectName(task.workdir)})`);
+      wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+      return;
+    }
+    
+    // Extract the feedback section
+    let feedback = '';
+    const feedbackMatch = output.match(/##\s*VERDICT:\s*FAIL[\s\S]*/i);
+    if (feedbackMatch) {
+      feedback = feedbackMatch[0].substring(0, 3000);
+    }
+    
+    // Re-queue the source task with review feedback appended to description
+    const existingDesc = sourceTask.description || '';
+    const feedbackBlock = `\n\n---\n## \u{1F6E1}\u{FE0F} ADVERSARIAL REVIEW FEEDBACK (Attempt ${nextAttempt}/${MAX_REVIEW_RETRIES})\n\nThe adversarial code reviewer found blocking issues. Fix them before your work can pass.\n\n${feedback}\n\n### IMPORTANT\n- Fix ALL listed blocking issues\n- Run the relevant tests after fixing\n- The review gate will run again after you complete this retry`;
+    
+    // Truncate if too long (keep last feedback, trim middle of description)
+    let newDesc = existingDesc + feedbackBlock;
+    if (newDesc.length > 8000) {
+      // Keep first 2000 chars (original requirements) + last 4000 chars (latest feedback)
+      newDesc = existingDesc.substring(0, 2000) + '\n\n[...truncated...]\n\n' + feedbackBlock;
+    }
+    
+    db.prepare(`UPDATE tasks SET status='bmad_workflow', failure_reason='adversarial_review_fail', review_attempt=?, description=?, session_id=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+      .run(nextAttempt, newDesc, sourceTaskId);
+    
+    log.info(`[adversarial-review] Review FAILED for task #${sourceTask.task_number} — re-queuing (attempt ${nextAttempt}/${MAX_REVIEW_RETRIES})`);
+    openclawNotify.notify(`❌ **Review Gate FAILED** (attempt ${nextAttempt}/${MAX_REVIEW_RETRIES}): Task #${sourceTask.task_number}: ${sourceTask.title} — re-queued with feedback (${getProjectName(task.workdir)})`);
+    wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+    return;
+  }
+  
+  // Ambiguous verdict — treat as pass with warning
+  log.warn(`[adversarial-review] Review task ${task.id} had ambiguous verdict (no clear PASS/FAIL) — treating as PASS`);
+}
+
 /**
  * Auto-chain: When a create-story task completes, automatically transition it to dev-story
  * so the implementation actually happens. Previously this relied on the AI agent making a
@@ -3516,25 +3778,37 @@ function autoActivateNextEpic(task) {
  * AND no further tasks reference this task in depends_on.
  */
 function autoOpenClawChainValidation(task) {
+  // Guard: NEVER trigger chain validation for tasks that ARE chain validations
+  // This prevents infinite recursion (validation → new validation → new validation...)
+  if ((task.title || '').includes('Chain Validation')) return;
+  
   const wfMatch = (task.notes || '').match(/\[bmad-workflow:([\w-]+)\]/);
   const wfType = wfMatch ? wfMatch[1] : '';
   
   // Only trigger for terminal workflow types
   const isFixTask = wfType === 'quick-dev';
-  const isQaTask = ['backend-qa', 'playwright-qa', 'adversarial-review'].includes(wfType);
+  const isQaTask = ['backend-qa', 'playwright-qa', 'adversarial-review', 'adversarial-review-gate'].includes(wfType);
   
   if (!isFixTask && !isQaTask) return;
   
-  // For QA tasks: only trigger if no fix task was auto-created
-  // (auto-fix creates within the same completion handler, so check after a delay)
+  // For QA tasks: only trigger if no fix task exists for this chain (active or recent)
   if (isQaTask) {
-    // Check if a fix task was just created for this QA task
+    // Check if a fix task exists that is active OR was recently created
     const fixTask = db.prepare(`
       SELECT id FROM tasks 
-      WHERE title LIKE ? AND created_at > datetime('now', '-2 minutes')
+      WHERE title LIKE ? 
+      AND notes LIKE '%quick-dev%'
+      AND status NOT IN ('done','done_review','cancelled','archived')
+    `).get(`%${task.title.substring(0, 40)}%`);
+    if (fixTask) return; // Fix is still active — wait for fix to complete
+    
+    // Also check if a fix was created recently (might not have status updated yet)
+    const recentFix = db.prepare(`
+      SELECT id FROM tasks 
+      WHERE title LIKE ? AND created_at > datetime('now', '-5 minutes')
       AND notes LIKE '%quick-dev%'
     `).get(`%${task.title.substring(0, 40)}%`);
-    if (fixTask) return; // Fix was spawned — wait for fix to complete
+    if (recentFix) return;
   }
   
   // Find the original dev task this chain started from
@@ -3590,20 +3864,9 @@ ${chainSummary}
 
 Do NOT mark as passed just because pages render. EVERY interactive feature must be tested.`;
   
-  // Send to OpenClaw via the notify module (delivers to Discord/configured channel)
-  openclawNotify.notify(validationMessage, projName, task.workdir);
-  
-  // Also emit via bridge (if chain_validation_needed is in enabled events)
-  openclawBridge.emitEvent({
-    type: 'chain_validation_needed',
-    taskId: task.id,
-    title: task.title,
-    workdir: task.workdir || null,
-    message: validationMessage,
-    chainTasks: relatedTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
-  });
-  
-  log.info(`[chain-validation] Triggered OpenClaw validation for chain ending at task ${task.id}: ${task.title}`);
+  // Chain validation disabled — notifications were repetitive and not useful.
+  // The normal BMAD pipeline (dev → QA → fix) already handles validation.
+  log.info(`[chain-validation] Chain completed (notifications disabled): ${task.id}: ${task.title}`);
 }
 
 function autoArchiveProcess() {
@@ -5809,7 +6072,7 @@ app.post('/api/tasks', (req, res) => {
   }
 
   // ── Normalize status to valid kanban columns ──────────────────────────────
-  const VALID_KANBAN = new Set(['backlog','todo','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','awaiting_input','in_progress','done_review','done','archived','cancelled']);
+  const VALID_KANBAN = new Set(['backlog','todo','bmad_workflow','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','awaiting_input','in_progress','done_review','done','blocked','archived','cancelled']);
   if (status === 'open') status = 'backlog';
   if (!VALID_KANBAN.has(status)) status = 'backlog';
 
