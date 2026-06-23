@@ -23,6 +23,17 @@
       ],
       "createdAt": "2026-04-08T08:26:02.003Z",
       "updatedAt": "2026-04-13T21:42:05.143Z"
+    },
+    {
+      "id": "user-64520ca7",
+      "username": "salim",
+      "displayName": "Salim Mwaura",
+      "passwordHash": "$2a$12$ZMOubNG2/h2eFcCcuF1p1Ou.0RUDk7G/YR8XwjWw0E1vuay4G6ve2",
+      "projects": [
+        "proj-mp4a2gkss7im8o"
+      ],
+      "createdAt": "2026-06-19T11:36:17.017Z",
+      "updatedAt": "2026-06-19T11:36:17.017Z"
     }
   ]
 }

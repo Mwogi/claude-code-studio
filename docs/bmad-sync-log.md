@@ -470,3 +470,61 @@ Daily automated sync log tracking BMAD METHOD repository updates.
 - **Installed version:** 6.8.0
 - **Action:** None — versions match
 - **Projects checked:** N/A (no upgrade triggered)
+
+## 2026-06-17 03:00 UTC — No Update Needed
+- Latest npm version: 6.8.0
+- Installed version: 6.8.0
+- Status: Versions match, no action taken
+
+## 2026-06-18 (03:00 UTC) — No Update
+- Latest npm version: 6.8.0
+- Installed version: 6.8.0
+- Result: No update needed
+
+## 2026-06-19 (03:00 UTC) — Daily Sync Check
+- **Latest npm version:** 6.8.0
+- **Installed version:** 6.8.0
+- **Result:** No update needed
+
+## 2026-06-20 03:00 UTC — No Update Needed
+- Installed: 6.8.0 | Latest: 6.8.0
+- Status: Up to date, no action taken
+
+## 2026-06-21 03:00 UTC — Daily Sync Check
+- **Latest npm version:** 6.8.0
+- **Installed version:** 6.8.0
+- **Result:** No update needed — versions match
+- **Projects checked:** N/A (no upgrade required)
+
+## 2026-06-22 03:00 UTC — Daily Sync Check
+- **Latest npm version:** 6.8.0
+- **Installed version:** 6.8.0
+- **Result:** No update needed
+- **Projects checked:** N/A (no upgrade required)
+
+## 2026-06-23 03:00 UTC — Daily Sync Check ✅ UPGRADE
+- **Latest npm version:** 6.9.0
+- **Installed version (before):** 6.8.0
+- **Upgraded to:** 6.9.0
+- **New skills:**
+  - `bmad-forge-idea` (core) — Pressure-test ideas through persona-driven interrogation
+  - `bmad-architecture` (bmm) — New consolidated architecture skill (replaces `bmad-create-architecture`)
+- **Updated skills:**
+  - `bmad-brainstorming` — description simplified
+  - `bmad-party-mode` — now supports custom personas and party authoring
+  - `bmad-prfaq` — description refined
+- **Deprecated:**
+  - `bmad-create-architecture` — consolidated into `bmad-architecture`, removal in v7
+- **Agent/workflow manifests:** No changes
+- **server.js path check:** All referenced paths still valid (deprecated `bmad-create-architecture` still exists on disk)
+- **Kanban dropdown:** Missing entries for `bmad-forge-idea` and `bmad-architecture` (optional to add)
+- **Recommendations:**
+  - Consider updating `solutioning` workflow in server.js to reference `bmad-architecture` instead of deprecated `bmad-create-architecture` before v7 removes it
+  - Optionally add `bmad-forge-idea` to kanban dropdown if interactive brainstorming workflows are desired
+- **Projects updated:**
+  - `/home/ubuntu/claude-code-studio/` (6.8.0 → 6.9.0)
+  - `/home/ubuntu/frappe-bench/apps/hmis_frontend` (6.8.0 → 6.9.0)
+  - `/home/ubuntu/frappe-bench/apps/hmis` (6.8.0 → 6.9.0)
+  - `/home/ubuntu/frappe-bench/apps/helpdesk` (6.8.0 → 6.9.0)
+  - `/home/ubuntu/projects/devbox` (6.8.0 → 6.9.0)
+  - `/home/ubuntu/projects/hmis-lite` (6.5.0 → 6.9.0 — big jump!)

@@ -185,9 +185,9 @@ const BMAD_WORKFLOWS = {
   solutioning: {
     label: '🏗️ Solutioning → Architecture + Epics',
     agent: 'architect',
-    skills: ['bmad-create-architecture', 'bmad-create-epics-and-stories', 'bmad-party-mode'],
+    skills: ['bmad-architecture', 'bmad-create-epics-and-stories', 'bmad-party-mode'],
     model: 'opus',
-    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd-${slug}.md if it exists. If not found, try ${workdir}/_bmad-output/planning-artifacts/prd.md as fallback.\n\nIMPORTANT: NEVER overwrite existing files.\n1. Run the architecture skill from ${workdir}/.claude/skills/bmad-create-architecture/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/architecture-${slug}.md\n2. Run the epics skill from ${workdir}/.claude/skills/bmad-create-epics-and-stories/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/epics-${slug}.md`; }
+    prompt: (title, workdir) => { const slug = deriveDomainSlug(title); return `Read your agent persona from ${workdir}/.claude/skills/bmad-agent-architect/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nRead the PRD from ${workdir}/_bmad-output/planning-artifacts/prd-${slug}.md if it exists. If not found, try ${workdir}/_bmad-output/planning-artifacts/prd.md as fallback.\n\nIMPORTANT: NEVER overwrite existing files.\n1. Run the architecture skill from ${workdir}/.claude/skills/bmad-architecture/SKILL.md (create intent) and save to ${workdir}/_bmad-output/planning-artifacts/architecture-${slug}.md\n2. Run the epics skill from ${workdir}/.claude/skills/bmad-create-epics-and-stories/SKILL.md and save to ${workdir}/_bmad-output/planning-artifacts/epics-${slug}.md`; }
   },
   'readiness-check': {
     label: '✅ Implementation Readiness Check',
@@ -338,14 +338,14 @@ A read-only list page without a way to add records is NOT a complete feature.`
     agent: 'master',
     skills: ['bmad-advanced-elicitation'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/_bmad/core/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
+    prompt: (title, workdir) => `Read the bmad-advanced-elicitation skill from ${workdir}/.claude/skills/bmad-advanced-elicitation/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nApply iterative elicitation techniques to refine and deepen the content described in the task.`
   },
   'adversarial-review': {
     label: '😈 Adversarial Review (Find Problems)',
     agent: 'master',
     skills: ['bmad-review-adversarial-general'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/_bmad/core/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
+    prompt: (title, workdir) => `Read the bmad-review-adversarial-general skill from ${workdir}/.claude/skills/bmad-review-adversarial-general/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform a cynical adversarial review of the artifact described in the task. Find at least 10 issues — focus on what's missing, not just what's wrong.`
   },
   'playwright-qa': {
     label: '🎭 Playwright QA (Browser Testing)',
@@ -368,28 +368,28 @@ A read-only list page without a way to add records is NOT a complete feature.`
     agent: 'master',
     skills: ['bmad-review-edge-case-hunter'],
     model: 'opus',
-    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/_bmad/core/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
+    prompt: (title, workdir) => `Read the bmad-review-edge-case-hunter skill from ${workdir}/.claude/skills/bmad-review-edge-case-hunter/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nWalk every branching path and boundary condition in the artifact described. Report only unhandled edge cases as JSON findings.`
   },
   'editorial-prose': {
     label: '✍️ Editorial Review — Prose',
     agent: 'master',
     skills: ['bmad-editorial-review-prose'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/_bmad/core/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
+    prompt: (title, workdir) => `Read the bmad-editorial-review-prose skill from ${workdir}/.claude/skills/bmad-editorial-review-prose/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform clinical copy-editing on the document described in the task. Output a three-column fix table: Original | Revised | Changes.`
   },
   'editorial-structure': {
     label: '🏗️ Editorial Review — Structure',
     agent: 'master',
     skills: ['bmad-editorial-review-structure'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/_bmad/core/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
+    prompt: (title, workdir) => `Read the bmad-editorial-review-structure skill from ${workdir}/.claude/skills/bmad-editorial-review-structure/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPerform structural editing on the document — propose cuts, merges, moves, and condensing. Estimate total reduction.`
   },
   'index-docs': {
     label: '📇 Index Documents',
     agent: 'master',
     skills: ['bmad-index-docs'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/_bmad/core/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
+    prompt: (title, workdir) => `Read the bmad-index-docs skill from ${workdir}/.claude/skills/bmad-index-docs/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nScan the project docs directory and generate an organized index.md with links and descriptions. Save to ${workdir}/docs/index.md`
   },
   // ── Technical Writer Agent Workflows ──
   'write-document': {
@@ -425,7 +425,37 @@ A read-only list page without a way to add records is NOT a complete feature.`
     agent: 'master',
     skills: ['bmad-help'],
     model: 'sonnet',
-    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/_bmad/core/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
+    prompt: (title, workdir) => `Read the bmad-help skill from ${workdir}/.claude/skills/bmad-help/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInspect the project state, detect what's been done, and recommend the next required or optional steps.`
+  },
+  // ── New BMAD 6.9 Workflows ──
+  'investigate': {
+    label: '🔍 Investigate (Bug/Code Forensics)',
+    agent: 'developer',
+    skills: ['bmad-investigate'],
+    model: 'opus',
+    effort: 'xhigh',
+    prompt: (title, workdir) => `Read the bmad-investigate skill from ${workdir}/.claude/skills/bmad-investigate/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nInvestigate the issue described in the task. Produce a structured case file with evidence-graded findings. Save output to ${workdir}/_bmad-output/implementation-artifacts/`
+  },
+  'forge-idea': {
+    label: '🔥 Forge Idea (Pressure-Test Thinking)',
+    agent: 'analyst',
+    skills: ['bmad-forge-idea'],
+    model: 'opus',
+    prompt: (title, workdir) => `Read the bmad-forge-idea skill from ${workdir}/.claude/skills/bmad-forge-idea/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nPressure-test the idea described in the task through persona-driven interrogation until it hardens, proves out, or dies cheaply.`
+  },
+  'checkpoint-preview': {
+    label: '📋 Checkpoint Review (Human-in-the-Loop)',
+    agent: 'master',
+    skills: ['bmad-checkpoint-preview'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-checkpoint-preview skill from ${workdir}/.claude/skills/bmad-checkpoint-preview/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nGuide the user through reviewing the change described in the task — from purpose and context into details.`
+  },
+  'customize-bmad': {
+    label: '⚙️ Customize BMAD (Override Skills/Agents)',
+    agent: 'master',
+    skills: ['bmad-customize'],
+    model: 'sonnet',
+    prompt: (title, workdir) => `Read the bmad-customize skill from ${workdir}/.claude/skills/bmad-customize/SKILL.md and config from ${workdir}/_bmad/bmm/config.yaml\n\nProject: ${title}\nDirectory: ${workdir}\n\nHelp customize the BMAD skill/agent described in the task by authoring the correct TOML override file.`
   }
 };
 
